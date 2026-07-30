@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/xgtian/aginex/internal/app"
-	"github.com/xgtian/aginex/internal/config"
-	"github.com/xgtian/aginex/internal/platform/database"
+	"github.com/xgtian-root/aginex/internal/app"
+	"github.com/xgtian-root/aginex/internal/config"
+	"github.com/xgtian-root/aginex/internal/platform/database"
 )
 
 func main() {

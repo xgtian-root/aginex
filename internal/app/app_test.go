@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgtian/aginex/internal/config"
-	"github.com/xgtian/aginex/internal/platform/database"
+	"github.com/xgtian-root/aginex/internal/config"
+	"github.com/xgtian-root/aginex/internal/platform/database"
 )
 
 func TestLoginAndProductLifecycle(t *testing.T) {

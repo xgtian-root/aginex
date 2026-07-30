@@ -10,7 +10,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/xgtian/aginex/internal/config"
+	"github.com/xgtian-root/aginex/internal/config"
 )
 
 func FromConfig(ctx context.Context, cfg config.Storage, publicURL string) (Storage, error) {

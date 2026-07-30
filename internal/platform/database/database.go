@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/xgtian/aginex/internal/config"
+	"github.com/xgtian-root/aginex/internal/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

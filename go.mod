@@ -1,4 +1,4 @@
-module github.com/xgtian/aginex
+module github.com/xgtian-root/aginex
 
 go 1.25.0
 

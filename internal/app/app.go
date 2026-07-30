@@ -16,11 +16,11 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/xgtian/aginex/internal/auth"
-	"github.com/xgtian/aginex/internal/config"
-	"github.com/xgtian/aginex/internal/domain"
-	"github.com/xgtian/aginex/internal/platform/migrate"
-	"github.com/xgtian/aginex/internal/platform/storage"
+	"github.com/xgtian-root/aginex/internal/auth"
+	"github.com/xgtian-root/aginex/internal/config"
+	"github.com/xgtian-root/aginex/internal/domain"
+	"github.com/xgtian-root/aginex/internal/platform/migrate"
+	"github.com/xgtian-root/aginex/internal/platform/storage"
 	"gorm.io/gorm"
 )
 

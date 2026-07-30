@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/xgtian/aginex/internal/config"
-	"github.com/xgtian/aginex/internal/domain"
-	"github.com/xgtian/aginex/internal/platform/password"
+	"github.com/xgtian-root/aginex/internal/config"
+	"github.com/xgtian-root/aginex/internal/domain"
+	"github.com/xgtian-root/aginex/internal/platform/password"
 	"gorm.io/gorm"
 )
 

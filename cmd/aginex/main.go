@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/xgtian/aginex/internal/cli"
+	"github.com/xgtian-root/aginex/internal/cli"
 )
 
 func main() {

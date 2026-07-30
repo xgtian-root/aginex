@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/xgtian/aginex/internal/domain"
-	"github.com/xgtian/aginex/internal/platform/storage"
+	"github.com/xgtian-root/aginex/internal/domain"
+	"github.com/xgtian-root/aginex/internal/platform/storage"
 )
 
 type uploadIntentInput struct {
