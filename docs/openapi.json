@@ -1,0 +1,545 @@
+{
+  "components": {
+    "schemas": {
+      "ErrorDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "location": {
+            "description": "Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'",
+            "type": "string"
+          },
+          "message": {
+            "description": "Error message text",
+            "type": "string"
+          },
+          "value": {
+            "description": "The value at the given location"
+          }
+        },
+        "type": "object"
+      },
+      "ErrorModel": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/schemas/ErrorModel.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "detail": {
+            "description": "A human-readable explanation specific to this occurrence of the problem.",
+            "examples": [
+              "Property foo is required but is missing."
+            ],
+            "type": "string"
+          },
+          "errors": {
+            "description": "Optional list of individual error details",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "instance": {
+            "description": "A URI reference that identifies the specific occurrence of the problem.",
+            "examples": [
+              "https://example.com/error-log/abc123"
+            ],
+            "format": "uri",
+            "type": "string"
+          },
+          "status": {
+            "description": "HTTP status code",
+            "examples": [
+              400
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "description": "A short, human-readable summary of the problem type. This value should not change between occurrences of the error.",
+            "examples": [
+              "Bad Request"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "default": "about:blank",
+            "description": "A URI reference to human-readable documentation for the error.",
+            "examples": [
+              "https://example.com/errors/example"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "HealthOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/schemas/HealthOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "status": {
+            "examples": [
+              "ok"
+            ],
+            "type": "string"
+          },
+          "time": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "time"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Aginex API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/audit-logs": {
+      "get": {
+        "operationId": "listAuditLogs",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "List audit events",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Sign in with a local account",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Revoke the current session",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Get the current principal and permissions",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/dashboard/summary": {
+      "get": {
+        "operationId": "getDashboardSummary",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Get workspace summary metrics",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/files": {
+      "get": {
+        "operationId": "listFiles",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "List file metadata",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/upload-intents": {
+      "post": {
+        "operationId": "createUploadIntent",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Create a direct upload intent",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/{id}": {
+      "delete": {
+        "operationId": "deleteFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Delete a file and its metadata",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/{id}/confirm": {
+      "post": {
+        "operationId": "confirmUpload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Verify and confirm an uploaded object",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/{id}/url": {
+      "get": {
+        "operationId": "getFileURL",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Create a temporary file access URL",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/health/live": {
+      "get": {
+        "operationId": "get-api-v1-health-live",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get API v1 health live"
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "operationId": "get-api-v1-health-ready",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get API v1 health ready"
+      }
+    },
+    "/api/v1/permissions": {
+      "get": {
+        "operationId": "listPermissions",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "List permission definitions",
+        "tags": [
+          "Access"
+        ]
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "operationId": "listProducts",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "List and search products",
+        "tags": [
+          "Products"
+        ]
+      },
+      "post": {
+        "operationId": "createProduct",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Create a product",
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/api/v1/products/{id}": {
+      "delete": {
+        "operationId": "deleteProduct",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Delete a product",
+        "tags": [
+          "Products"
+        ]
+      },
+      "get": {
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Get a product",
+        "tags": [
+          "Products"
+        ]
+      },
+      "put": {
+        "operationId": "updateProduct",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "Update a product",
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/api/v1/roles": {
+      "get": {
+        "operationId": "listRoles",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "List roles and grants",
+        "tags": [
+          "Access"
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "operationId": "listUsers",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Problem details response"
+          }
+        },
+        "summary": "List users",
+        "tags": [
+          "Access"
+        ]
+      }
+    }
+  }
+}

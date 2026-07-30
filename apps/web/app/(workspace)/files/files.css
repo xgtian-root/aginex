@@ -1,0 +1,57 @@
+.upload-strip {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  border-left: 0.35rem solid var(--signal);
+  padding: 1rem 1.25rem;
+}
+
+.upload-strip > div {
+  display: grid;
+}
+
+.upload-strip span {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+}
+
+.file-picker {
+  position: relative;
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.file-picker:has(input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.file-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+@media (max-width: 48rem) {
+  .upload-strip {
+    grid-template-columns: 1fr;
+  }
+}

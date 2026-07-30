@@ -1,0 +1,33 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Go
+/bin/
+/coverage/
+*.test
+*.out
+
+# Node
+node_modules/
+.pnpm-store/
+.next/
+dist/
+playwright-report/
+test-results/
+
+# Local data
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Tool caches
+.DS_Store
+.idea/
+.vscode/
+.turbo/
+.cache/
+*.tsbuildinfo

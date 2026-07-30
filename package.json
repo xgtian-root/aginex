@@ -1,0 +1,12 @@
+{
+  "name": "aginex",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "dev:web": "pnpm --filter @aginex/web dev",
+    "build:web": "pnpm --filter @aginex/web build",
+    "check:web": "pnpm --filter @aginex/web check",
+    "test:web": "pnpm --filter @aginex/web test",
+    "generate:contracts": "go run ./cmd/openapi -output docs/openapi.json && pnpm --filter @aginex/web generate:client"
+  }
+}

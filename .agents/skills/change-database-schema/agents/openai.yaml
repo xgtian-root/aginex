@@ -1,0 +1,3 @@
+interface:
+  display_name: "Change Database Schema"
+  short_description: "Help with Change Database Schema tasks"

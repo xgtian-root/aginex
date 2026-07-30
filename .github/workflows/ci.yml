@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: aginex
+          POSTGRES_USER: aginex
+          POSTGRES_PASSWORD: aginex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aginex -d aginex"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: aginex
+          MYSQL_USER: aginex
+          MYSQL_PASSWORD: aginex
+          MYSQL_ROOT_PASSWORD: aginex-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uaginex -paginex"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.x"
+          cache: true
+      - run: go test ./...
+        env:
+          AGINEX_TEST_POSTGRES_DSN: postgres://aginex:aginex@localhost:5432/aginex?sslmode=disable
+          AGINEX_TEST_MYSQL_DSN: aginex:aginex@tcp(localhost:3306)/aginex?parseTime=true
+      - run: go vet ./...
+      - run: go run ./cmd/aginex skills validate
+      - run: go run ./cmd/openapi -output docs/openapi.json
+      - run: git diff --exit-code docs/openapi.json
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @aginex/web generate:client
+      - run: git diff --exit-code apps/web/lib/api.generated.ts
+      - run: pnpm check:web
+      - run: pnpm test:web
+      - run: pnpm build:web
