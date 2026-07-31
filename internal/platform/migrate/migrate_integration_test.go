@@ -35,12 +35,48 @@ func TestDatabaseMigrationMatrix(t *testing.T) {
 			if err := Up(db, item.driver); err != nil {
 				t.Fatal(err)
 			}
+			assertAuditActorIdentifierWidth(t, db, item.driver)
 			if err := DownToZero(db, item.driver); err != nil {
 				t.Fatal(err)
 			}
 			if err := Up(db, item.driver); err != nil {
 				t.Fatal(err)
 			}
+			assertAuditActorIdentifierWidth(t, db, item.driver)
 		})
+	}
+}
+
+func assertAuditActorIdentifierWidth(t *testing.T, db *sql.DB, driver string) {
+	t.Helper()
+	var (
+		query string
+		width sql.NullInt64
+	)
+	switch driver {
+	case "postgres":
+		query = `
+			SELECT character_maximum_length
+			FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'audit_logs'
+			  AND column_name = 'actor_id'
+		`
+	case "mysql":
+		query = `
+			SELECT character_maximum_length
+			FROM information_schema.columns
+			WHERE table_schema = DATABASE()
+			  AND table_name = 'audit_logs'
+			  AND column_name = 'actor_id'
+		`
+	default:
+		t.Fatalf("unsupported driver %q", driver)
+	}
+	if err := db.QueryRow(query).Scan(&width); err != nil {
+		t.Fatal(err)
+	}
+	if !width.Valid || width.Int64 != 160 {
+		t.Fatalf("audit_logs.actor_id width = %#v, want 160", width)
 	}
 }

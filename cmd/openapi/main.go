@@ -7,28 +7,18 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/xgtian-root/aginex/internal/app"
-	"github.com/xgtian-root/aginex/internal/config"
-	"github.com/xgtian-root/aginex/internal/platform/database"
+	"github.com/xgtian-root/aginex/internal/composition"
 )
 
 func main() {
 	output := flag.String("output", "docs/openapi.json", "OpenAPI output file")
 	flag.Parse()
 
-	cfg, err := config.Load()
-	if err != nil {
-		exit(err)
-	}
-	db, err := database.Open(cfg.Database)
-	if err != nil {
-		exit(err)
-	}
-	instance, err := app.New(cfg, db)
-	if err != nil {
-		exit(err)
-	}
-	document, err := json.MarshalIndent(instance.OpenAPI(), "", "  ")
+	document, err := json.MarshalIndent(
+		composition.Definition().BuildOpenAPI(),
+		"",
+		"  ",
+	)
 	if err != nil {
 		exit(err)
 	}

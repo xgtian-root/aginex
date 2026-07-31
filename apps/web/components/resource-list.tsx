@@ -2,20 +2,19 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
-import { api, type Page } from "@/lib/api";
 import "@/components/page-header.css";
 
 type Row = Record<string, unknown>;
 
 export function ResourceList({
-  endpoint,
+  load,
   queryKey,
   eyebrow,
   title,
   description,
   columns,
 }: {
-  endpoint: string;
+  load: () => Promise<{ items: object[] | null }>;
   queryKey: string;
   eyebrow: string;
   title: string;
@@ -28,7 +27,7 @@ export function ResourceList({
 }) {
   const result = useQuery({
     queryKey: [queryKey],
-    queryFn: () => api<Page<Row>>(endpoint),
+    queryFn: load,
   });
 
   return (
@@ -55,17 +54,20 @@ export function ResourceList({
                 </tr>
               </thead>
               <tbody>
-                {result.data.items.map((row, index) => (
-                  <tr key={String(row.id ?? index)}>
-                    {columns.map((column) => (
-                      <td data-label={column.label} key={column.key}>
-                        {column.format
-                          ? column.format(row[column.key], row)
-                          : String(row[column.key] ?? "—")}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {(result.data.items ?? []).map((item, index) => {
+                  const row = item as Row;
+                  return (
+                    <tr key={String(row.id ?? index)}>
+                      {columns.map((column) => (
+                        <td data-label={column.label} key={column.key}>
+                          {column.format
+                            ? column.format(row[column.key], row)
+                            : String(row[column.key] ?? "—")}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

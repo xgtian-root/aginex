@@ -1,16 +1,37 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/xgtian-root/aginex/framework/audit"
+	"gorm.io/gorm"
+)
 
 type User struct {
-	ID           string `gorm:"primaryKey;size:36"`
-	Email        string `gorm:"uniqueIndex;size:320"`
-	DisplayName  string `gorm:"size:200"`
-	PasswordHash string `json:"-"`
-	Status       string `gorm:"size:32"`
-	Roles        []Role `gorm:"many2many:user_roles"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID          string `gorm:"primaryKey;size:36"`
+	Email       string `gorm:"uniqueIndex;size:320"`
+	DisplayName string `gorm:"size:200"`
+	Status      string `gorm:"size:32"`
+	Roles       []Role `gorm:"many2many:user_roles"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
+}
+
+const (
+	IdentityProviderPassword = "password"
+	IdentityStatusActive     = "active"
+)
+
+type UserIdentity struct {
+	ID             string `gorm:"primaryKey;size:36"`
+	UserID         string `gorm:"index;size:36"`
+	Provider       string `gorm:"size:64"`
+	Subject        string `gorm:"size:320"`
+	CredentialHash string `gorm:"type:text" json:"-"`
+	Status         string `gorm:"size:32"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type Role struct {
@@ -41,15 +62,20 @@ type Session struct {
 }
 
 type AuditLog struct {
-	ID         string    `gorm:"primaryKey;size:36" json:"id"`
-	ActorID    *string   `gorm:"size:36" json:"actorId"`
-	Action     string    `gorm:"size:160" json:"action"`
-	Resource   string    `gorm:"size:120" json:"resource"`
-	ResourceID string    `gorm:"size:160" json:"resourceId"`
-	Summary    string    `gorm:"type:text" json:"summary"`
-	RequestID  string    `gorm:"size:64" json:"requestId"`
-	IPAddress  string    `gorm:"size:64" json:"ipAddress"`
-	CreatedAt  time.Time `gorm:"index" json:"createdAt"`
+	ID         string                `gorm:"primaryKey;size:36" json:"id"`
+	ActorID    *string               `gorm:"size:160" json:"actorId"`
+	ActorKind  string                `gorm:"size:32;not null;default:user" json:"actorKind"`
+	Action     string                `gorm:"size:160" json:"action"`
+	Resource   string                `gorm:"size:120" json:"resource"`
+	ResourceID string                `gorm:"size:160" json:"resourceId"`
+	Result     string                `gorm:"size:32;not null;default:success" json:"result"`
+	Source     string                `gorm:"size:64;not null;default:http" json:"source"`
+	Summary    string                `gorm:"type:text" json:"summary"`
+	RequestID  string                `gorm:"size:64" json:"requestId"`
+	IPAddress  string                `gorm:"size:64" json:"ipAddress"`
+	Before     audit.SanitizedFields `gorm:"column:sanitized_before;not null" json:"before"`
+	After      audit.SanitizedFields `gorm:"column:sanitized_after;not null" json:"after"`
+	CreatedAt  time.Time             `gorm:"index" json:"createdAt"`
 }
 
 type Product struct {
@@ -63,17 +89,21 @@ type Product struct {
 }
 
 type FileObject struct {
-	ID           string    `gorm:"primaryKey;size:36" json:"id"`
-	Provider     string    `gorm:"size:32" json:"provider"`
-	Bucket       string    `gorm:"size:240" json:"bucket"`
-	ObjectKey    string    `gorm:"uniqueIndex;size:700" json:"objectKey"`
-	OriginalName string    `gorm:"size:500" json:"originalName"`
-	ContentType  string    `gorm:"size:160" json:"contentType"`
-	Size         int64     `json:"size"`
-	ETag         string    `gorm:"column:etag;size:240" json:"etag"`
-	OwnerID      string    `gorm:"index;size:36" json:"ownerId"`
-	Visibility   string    `gorm:"size:32" json:"visibility"`
-	Status       string    `gorm:"size:32" json:"status"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID           string     `gorm:"primaryKey;size:36" json:"id"`
+	Provider     string     `gorm:"size:32" json:"provider"`
+	Bucket       string     `gorm:"size:240" json:"bucket"`
+	ObjectKey    string     `gorm:"uniqueIndex;size:700" json:"objectKey"`
+	OriginalName string     `gorm:"size:500" json:"originalName"`
+	ContentType  string     `gorm:"size:160" json:"contentType"`
+	Size         int64      `json:"size"`
+	ETag         string     `gorm:"column:etag;size:240" json:"etag"`
+	SHA256       string     `gorm:"column:sha256;size:64" json:"sha256"`
+	Width        int        `json:"width"`
+	Height       int        `json:"height"`
+	OwnerID      string     `gorm:"index;size:36" json:"ownerId"`
+	Visibility   string     `gorm:"size:32" json:"visibility"`
+	Status       string     `gorm:"size:32" json:"status"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
+	DeletedAt    *time.Time `gorm:"index" json:"deletedAt,omitempty"`
 }

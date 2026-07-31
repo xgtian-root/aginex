@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -41,6 +43,21 @@ func TestLocalStorageContract(t *testing.T) {
 	if info.Size != int64(len(content)) || info.ContentType != "image/png" {
 		t.Fatalf("info = %#v", info)
 	}
+	reader, err := store.Open(context.Background(), "users/avatar.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if !bytes.Equal(opened, content) {
+		t.Fatalf("opened content = %q", opened)
+	}
 	signed, err := store.SignRead(context.Background(), "users/avatar.png", time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -50,6 +67,9 @@ func TestLocalStorageContract(t *testing.T) {
 	}
 	if err := store.Delete(context.Background(), "users/avatar.png"); err != nil {
 		t.Fatal(err)
+	}
+	if err := store.Delete(context.Background(), "users/avatar.png"); err != nil {
+		t.Fatalf("repeated delete must be idempotent: %v", err)
 	}
 	if _, err := store.Stat(context.Background(), "users/avatar.png"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("stat after delete = %v", err)

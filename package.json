@@ -7,6 +7,19 @@
     "build:web": "pnpm --filter @aginex/web build",
     "check:web": "pnpm --filter @aginex/web check",
     "test:web": "pnpm --filter @aginex/web test",
+    "e2e": "playwright test",
+    "e2e:list": "playwright test --list",
     "generate:contracts": "go run ./cmd/openapi -output docs/openapi.json && pnpm --filter @aginex/web generate:client"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "@redocly/openapi-core>js-yaml": "4.3.0",
+      "minimatch>brace-expansion": "5.0.8",
+      "next>postcss": "8.5.25",
+      "next>sharp": "0.35.0"
+    }
   }
 }

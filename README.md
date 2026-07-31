@@ -12,8 +12,8 @@
 <p align="center">
   <a href="https://github.com/xgtian-root/aginex/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/xgtian-root/aginex/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/xgtian-root/aginex/blob/main/LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Go 1.25+" src="https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white">
-  <img alt="Node.js 22" src="https://img.shields.io/badge/Node.js-22-5FA04E?logo=nodedotjs&logoColor=white">
+  <img alt="Go 1.25.12+" src="https://img.shields.io/badge/Go-1.25.12%2B-00ADD8?logo=go&logoColor=white">
+  <img alt="Node.js 22.23.2" src="https://img.shields.io/badge/Node.js-22.23.2-5FA04E?logo=nodedotjs&logoColor=white">
 </p>
 
 > [!IMPORTANT]
@@ -52,36 +52,99 @@ This gives human maintainers and coding agents the same guardrails:
 | Audit | Actor, action, resource, request, and timestamp records |
 | Business example | Searchable, paginated product CRUD |
 | Files | Upload intent, direct upload, verification, signed reads, and deletion |
+| Reliability | Database-backed idempotency, a durable PostgreSQL worker, and protected job inspection/retry APIs |
 | Admin UI | Login, dashboard, products, users, roles, audit, and files pages |
 | API contract | `/api/v1`, RFC 9457-style problem responses, OpenAPI, generated TypeScript client |
-| Tooling | `dev`, `doctor`, `check`, contract generation, and Skill validation commands |
+| Delivery | Non-root API, worker, migrate/operations, and standalone web images |
+| Tooling | `dev`, `doctor`, `check`, contract generation, security gates, SBOMs, and Skill validation |
 
 ## Architecture
 
 ```text
-Browser
-   │
-   ├── Next.js admin application ────────┐
-   │                                     │ generated TypeScript client
-   └──────────────────────────────► Go API (/api/v1)
-                                           │
-                              ┌────────────┼────────────┐
-                              │            │            │
-                         SQL database   Audit log   Object storage
-                       SQLite/Postgres/            Local/S3/OSS
-                            MySQL
+Browser ──► Next.js web ── generated client ──► Go API (/api/v1)
+                                                   │
+                                  ┌────────────────┴──────────────┐
+                                  ▼                               ▼
+                         SQL database                       Object storage
+              business/audit/session/idempotency            Local/S3/OSS
+                       SQLite/Postgres/MySQL                       ▲
+                                  ▲                               │
+                 ┌────────────────┴───────────────┐               │
+        migrate/operations CLI      PostgreSQL worker ─────────────┘
+                                      durable jobs
 ```
 
 The service layer stays database-dialect neutral. Schema differences live in
 explicit Goose migrations, while cloud-specific SDKs stay behind storage
 interfaces.
 
+## Extending Aginex
+
+A derived application defines one immutable module set and reuses it for API,
+worker, migrations, bootstrap, and OpenAPI generation:
+
+```go
+definition, err := application.Define(
+	posta.PostmarksModule{},
+	posta.PublicationModule{},
+)
+if err != nil {
+	return err
+}
+
+recorder, err := observability.NewRecorder(deploymentSink)
+if err != nil {
+	return err
+}
+definition, err = definition.WithObservability(recorder)
+```
+
+`application.Define()` is intentionally zero-business: it includes the shared
+identity, session, RBAC, audit, health, jobs administration, storage, and
+request-safety primitives, but it does not add a product model, dashboard, or
+file-object API/schema. This repository's starter distribution opts in
+explicitly:
+
+```go
+definition, err := application.Define(
+	application.FilesModule(),
+	application.StarterExampleModule(),
+)
+```
+
+`FilesModule` is the official optional file-object HTTP/schema module.
+`StarterExampleModule` contains only the sample products resource and its
+product-backed dashboard; derived applications normally replace it with their
+own business modules.
+
+Each `module.Module` registers its routes and middleware, permission and
+authentication definitions, object/query authorization policies, typed API
+contracts, migration bundles, durable job handlers, readiness checks, and
+lifecycle hooks. Registration is deterministic and side-effect free. A
+protected operation cannot start unless all of those cross-references are
+complete, and a successful response is rejected if its handler did not consume
+the declared `all`, `actor`, object, or query authorization mode.
+
+Module handlers resolve a `services.Runtime` from their context. It contains
+the portable GORM database, atomic `Writes` unit of work, public object-store
+contract, optional transactional job queue, and shared observability recorder.
+All business mutations must run through `Runtime.Writes.Run` and return a
+sanitized `audit.Event`; a failed audit insert rolls the business transaction
+back. Raw Gin handlers are therefore a trusted low-level adapter, not an
+alternative write path.
+
+`ResourceDefinition` is generator and validation metadata, not a reflective
+CRUD engine. POSTA remains responsible for its postmark, post office,
+calibration, publication, quota, moderation, and notification rules. Aginex
+provides the security, transaction, storage, task, contract, migration, and
+telemetry boundaries those rules build on.
+
 ## Quick start
 
 ### Prerequisites
 
-- Go 1.25 or newer
-- Node.js 22
+- Go 1.25.12 or newer
+- Node.js 22.23.2
 - pnpm 10.33.2
 - Docker (optional, for PostgreSQL, MySQL, or MinIO)
 
@@ -107,12 +170,23 @@ AGINEX_BOOTSTRAP_ADMIN_PASSWORD=change-me-before-production
 pnpm install
 ```
 
-### 3. Start the API and web app
+### 3. Initialize the database and administrator
 
 ```bash
 set -a
 source .env
 set +a
+go run ./cmd/aginex migrate up
+go run ./cmd/aginex bootstrap
+```
+
+Both commands are explicit and repeat-safe. API and worker startup never
+changes schema or bootstrap data; those processes only check that their
+required database versions are current.
+
+### 4. Start the API and web app
+
+```bash
 go run ./cmd/aginex dev
 ```
 
@@ -123,23 +197,29 @@ The default development endpoints are:
 | Admin application | <http://localhost:3000> |
 | API | <http://localhost:8080/api/v1> |
 | Interactive API documentation | <http://localhost:8080/docs> |
-| Health check | <http://localhost:8080/healthz> |
+| Liveness check | <http://localhost:8080/api/v1/health/live> |
+| Readiness check | <http://localhost:8080/api/v1/health/ready> |
 
 Sign in with `AGINEX_BOOTSTRAP_ADMIN_EMAIL` and
-`AGINEX_BOOTSTRAP_ADMIN_PASSWORD`. The administrator is created on the first
-successful bootstrap.
+`AGINEX_BOOTSTRAP_ADMIN_PASSWORD`. The explicit bootstrap command creates the
+administrator on its first successful run and records every successful run in
+the append-only audit log.
 
 ## Development commands
 
 | Command | Purpose |
 |---|---|
 | `go run ./cmd/aginex dev` | Run the API and web development servers together |
+| `go run ./cmd/aginex migrate up` | Apply all pending database migrations |
+| `go run ./cmd/aginex bootstrap` | Synchronize built-in permissions and the initial administrator with an audit event |
 | `go run ./cmd/aginex doctor` | Check the local toolchain and project structure |
 | `go run ./cmd/aginex check` | Run backend tests, Skill validation, frontend checks, tests, and build |
 | `go run ./cmd/aginex check --skip-build` | Run the verification gate without the production web build |
 | `go run ./cmd/aginex generate client` | Regenerate OpenAPI and the TypeScript API client |
 | `go run ./cmd/aginex skills validate` | Validate all canonical Agent Skills |
+| `go run ./cmd/worker` | Run the durable PostgreSQL worker |
 | `pnpm dev:web` | Run only the Next.js development server |
+| `pnpm e2e` | Run Chromium workflows against explicitly migrated and bootstrapped API/web processes |
 
 Run individual checks when narrowing down a failure:
 
@@ -151,6 +231,12 @@ pnpm test:web
 pnpm build:web
 ```
 
+The browser gate uses PostgreSQL jobs so it can verify that a file deletion
+creates a durable cleanup task. CI provisions that database automatically.
+For a local run, configure `AGINEX_DATABASE_DRIVER=postgres` and
+`AGINEX_JOBS_DRIVER=postgres`, run `migrate up` and `bootstrap`, install
+Chromium with `pnpm exec playwright install chromium`, then run `pnpm e2e`.
+
 ## Configuration
 
 Aginex reads configuration from environment variables. The CLI does not load
@@ -161,15 +247,23 @@ Aginex reads configuration from environment variables. The CLI does not load
 | `AGINEX_ENV` | `development` | Runtime environment |
 | `AGINEX_HTTP_ADDRESS` | `:8080` | API listen address |
 | `AGINEX_API_PUBLIC_URL` | `http://localhost:8080` | Externally reachable API base URL |
-| `AGINEX_WEB_ORIGIN` | `http://localhost:3000` | Allowed browser origin |
+| `AGINEX_WEB_ORIGINS` | `http://localhost:3000` | Comma-separated browser-origin allowlist |
+| `AGINEX_TRUSTED_PROXIES` | empty | Comma-separated proxy IPs or CIDRs whose forwarding headers are trusted; all-address ranges such as `0.0.0.0/0` and `::/0` are rejected |
 | `AGINEX_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres`, or `mysql` |
 | `AGINEX_DATABASE_DSN` | `data/aginex.db` | Driver-specific connection string |
-| `AGINEX_SESSION_SECRET` | — | Session secret; at least 32 bytes in production |
-| `AGINEX_SESSION_COOKIE` | `aginex_session` | Browser cookie name |
+| `AGINEX_SESSION_SECRET` | — | Session secret; at least 32 non-placeholder, non-repeated bytes in production |
+| `AGINEX_SESSION_COOKIE` | `aginex_session` | Fixed browser cookie name; overrides are rejected to keep runtime and OpenAPI aligned |
 | `AGINEX_SESSION_TTL` | `24h` | Session lifetime as a Go duration |
 | `AGINEX_SESSION_SECURE` | `false` | Require HTTPS for the session cookie |
-| `AGINEX_BOOTSTRAP_ADMIN_EMAIL` | — | Initial local administrator email |
-| `AGINEX_BOOTSTRAP_ADMIN_PASSWORD` | — | Initial local administrator password |
+| `AGINEX_SESSION_SAME_SITE` | `lax` | `lax`, `strict`, or `none` |
+| `AGINEX_CSRF_COOKIE` | `aginex_csrf` | Fixed double-submit CSRF cookie name |
+| `AGINEX_CSRF_HEADER` | `X-CSRF-Token` | Fixed required header documented for browser write operations |
+| `AGINEX_IDEMPOTENCY_DRIVER` | `database` | `database` or explicit `disabled` mode |
+| `AGINEX_IDEMPOTENCY_TTL` | `24h` | Retention window for safe replay responses |
+| `AGINEX_JOBS_DRIVER` | `disabled` | `disabled` or `postgres`; worker and production `FilesModule` compositions require `postgres` |
+| `AGINEX_JOBS_WORKER_ID` | `aginex-worker` | Unique identity for each worker replica |
+| `AGINEX_BOOTSTRAP_ADMIN_EMAIL` | — | Initial local administrator email used by `aginex bootstrap` |
+| `AGINEX_BOOTSTRAP_ADMIN_PASSWORD` | — | Initial local administrator password used by `aginex bootstrap`; example and whitespace-padded values are rejected in production |
 | `AGINEX_STORAGE_DRIVER` | `local` | `local`, `s3`, or `oss` |
 | `AGINEX_STORAGE_LOCAL_ROOT` | `data/uploads` | Local object root |
 | `AGINEX_STORAGE_BUCKET` | — | Cloud storage bucket |
@@ -177,7 +271,11 @@ Aginex reads configuration from environment variables. The CLI does not load
 | `AGINEX_STORAGE_ENDPOINT` | — | S3-compatible or OSS endpoint |
 | `AGINEX_STORAGE_ACCESS_KEY_ID` | — | Cloud access key ID |
 | `AGINEX_STORAGE_ACCESS_KEY_SECRET` | — | Cloud access key secret |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8080/api/v1` | Browser-facing API URL |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | Browser-facing API origin, compiled into the web build |
+
+See [`.env.example`](.env.example) for HTTP limits, CSRF, rate-limit, job,
+idempotency, and storage settings. Production rollout and read-only container
+examples are in the [operations guide](docs/operations.md).
 
 ### Optional development services
 
@@ -234,7 +332,9 @@ apps/web/                           Next.js admin application
 cmd/aginex/                         Developer CLI
 cmd/openapi/                        OpenAPI generator
 cmd/server/                         Go API executable
+cmd/worker/                         Durable background worker
 docs/                               Product, dependency, and API documentation
+framework/                          Reusable module, authorization, job, and HTTP contracts
 internal/app/                       HTTP application and business endpoints
 internal/auth/                      Authentication and authorization services
 internal/platform/migrate/          Goose migrations for all SQL dialects
@@ -249,17 +349,20 @@ milestones are:
 - OIDC Authorization Code + PKCE and identity linking
 - Complete user and role mutations and product editing workflows
 - `aginex new` and resource generation
-- Browser end-to-end tests and live storage provider contract tests
-- Release packaging, security scans, and stable public documentation
+- Browser end-to-end tests and a mandatory live OSS release gate
+- Idempotency cleanup scheduling and operator dashboards for durable jobs
+- Stable release documentation
 
 See the [v1 product requirements](docs/v1-product-requirements.md) for detailed
-scope and acceptance criteria.
+scope and acceptance criteria. Existing pre-release applications should also
+follow the [breaking remediation upgrade guide](docs/prestable-upgrade.md).
 
 ## Documentation
 
 - [Documentation index (中文)](docs/README.md)
 - [v1 product requirements (中文)](docs/v1-product-requirements.md)
 - [Third-party library decisions (中文)](docs/third-party-libraries.md)
+- [Production operations](docs/operations.md)
 - [Generated OpenAPI contract](docs/openapi.json)
 
 ## Contributing

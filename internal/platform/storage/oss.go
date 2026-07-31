@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,8 +16,16 @@ type OSS struct {
 	policy Policy
 }
 
-func NewOSS(client *oss.Client, bucket string, policy Policy) *OSS {
-	return &OSS{client: client, bucket: bucket, policy: policy}
+func NewOSS(cfg *oss.Config, bucket string, policy Policy) *OSS {
+	configured := cfg.Copy()
+	additionalHeaders := append([]string(nil), configured.AdditionalHeaders...)
+	if !containsHeader(additionalHeaders, "content-length") {
+		additionalHeaders = append(additionalHeaders, "content-length")
+	}
+	configured.
+		WithSignatureVersion(oss.SignatureVersionV4).
+		WithAdditionalHeaders(additionalHeaders)
+	return &OSS{client: oss.NewClient(&configured), bucket: bucket, policy: policy}
 }
 
 func (o *OSS) CreateUpload(ctx context.Context, request UploadRequest) (SignedRequest, error) {
@@ -27,7 +37,12 @@ func (o *OSS) CreateUpload(ctx context.Context, request UploadRequest) (SignedRe
 		expires = 10 * time.Minute
 	}
 	result, err := o.client.Presign(ctx, &oss.PutObjectRequest{
-		Bucket: oss.Ptr(o.bucket), Key: oss.Ptr(request.Key), ContentType: oss.Ptr(request.ContentType),
+		Bucket:      oss.Ptr(o.bucket),
+		Key:         oss.Ptr(request.Key),
+		ContentType: oss.Ptr(request.ContentType),
+		RequestCommon: oss.RequestCommon{Headers: map[string]string{
+			"Content-Length": strconv.FormatInt(request.Size, 10),
+		}},
 	}, oss.PresignExpires(expires))
 	if err != nil {
 		return SignedRequest{}, err
@@ -35,6 +50,14 @@ func (o *OSS) CreateUpload(ctx context.Context, request UploadRequest) (SignedRe
 	return SignedRequest{
 		URL: result.URL, Method: result.Method, Headers: result.SignedHeaders, ExpiresAt: result.Expiration,
 	}, nil
+}
+
+func (o *OSS) CheckReadiness(ctx context.Context) error {
+	_, err := o.client.GetBucketInfo(
+		ctx,
+		&oss.GetBucketInfoRequest{Bucket: oss.Ptr(o.bucket)},
+	)
+	return err
 }
 
 func (o *OSS) SignRead(ctx context.Context, key string, expires time.Duration) (SignedRequest, error) {
@@ -68,6 +91,19 @@ func (o *OSS) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 	}, nil
 }
 
+func (o *OSS) Open(ctx context.Context, key string) (io.ReadCloser, error) {
+	if err := ValidateKey(key); err != nil {
+		return nil, err
+	}
+	result, err := o.client.GetObject(ctx, &oss.GetObjectRequest{
+		Bucket: oss.Ptr(o.bucket), Key: oss.Ptr(key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Body, nil
+}
+
 func (o *OSS) Delete(ctx context.Context, key string) error {
 	if err := ValidateKey(key); err != nil {
 		return err
@@ -76,4 +112,13 @@ func (o *OSS) Delete(ctx context.Context, key string) error {
 		Bucket: oss.Ptr(o.bucket), Key: oss.Ptr(key),
 	})
 	return err
+}
+
+func containsHeader(headers []string, expected string) bool {
+	for _, header := range headers {
+		if strings.EqualFold(header, expected) {
+			return true
+		}
+	}
+	return false
 }

@@ -55,18 +55,7 @@ CREATE TABLE audit_logs (
     created_at DATETIME NOT NULL
 );
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
-CREATE TABLE products (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    sku TEXT NOT NULL UNIQUE,
-    price_cents INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'draft',
-    created_at DATETIME NOT NULL,
-    updated_at DATETIME NOT NULL
-);
-
 -- +goose Down
-DROP TABLE products;
 DROP TABLE audit_logs;
 DROP TABLE sessions;
 DROP TABLE role_permissions;

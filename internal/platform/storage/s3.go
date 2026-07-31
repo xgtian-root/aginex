@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"io"
 	"strings"
 	"time"
 
@@ -29,7 +30,10 @@ func (s *S3) CreateUpload(ctx context.Context, request UploadRequest) (SignedReq
 		expires = 10 * time.Minute
 	}
 	result, err := s.presigner.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(s.bucket), Key: aws.String(request.Key), ContentType: aws.String(request.ContentType),
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(request.Key),
+		ContentLength: aws.Int64(request.Size),
+		ContentType:   aws.String(request.ContentType),
 	}, func(options *s3.PresignOptions) {
 		options.Expires = expires
 	})
@@ -39,6 +43,13 @@ func (s *S3) CreateUpload(ctx context.Context, request UploadRequest) (SignedReq
 	return SignedRequest{
 		URL: result.URL, Method: result.Method, Headers: flattenHeaders(result.SignedHeader), ExpiresAt: time.Now().UTC().Add(expires),
 	}, nil
+}
+
+func (s *S3) CheckReadiness(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(s.bucket),
+	})
+	return err
 }
 
 func (s *S3) SignRead(ctx context.Context, key string, expires time.Duration) (SignedRequest, error) {
@@ -72,6 +83,19 @@ func (s *S3) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 		Key: key, Size: aws.ToInt64(result.ContentLength), ContentType: aws.ToString(result.ContentType),
 		ETag: strings.Trim(aws.ToString(result.ETag), `"`), ModifiedAt: aws.ToTime(result.LastModified),
 	}, nil
+}
+
+func (s *S3) Open(ctx context.Context, key string) (io.ReadCloser, error) {
+	if err := ValidateKey(key); err != nil {
+		return nil, err
+	}
+	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Body, nil
 }
 
 func (s *S3) Delete(ctx context.Context, key string) error {

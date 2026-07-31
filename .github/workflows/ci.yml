@@ -4,16 +4,61 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25.12"
+  GOTOOLCHAIN: local
+  NODE_VERSION: "22.23.2"
+  PNPM_VERSION: "10.33.2"
+  TRIVY_VERSION: "v0.70.0"
+
 jobs:
+  contracts:
+    name: OpenAPI and generated client contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Regenerate both contract artifacts
+        run: pnpm generate:contracts
+      - name: Reject contract drift
+        run: git diff --exit-code -- docs/openapi.json apps/web/lib/api.generated.ts
+
   go:
-    runs-on: ubuntu-latest
+    name: Go, migrations, and storage contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     services:
       postgres:
-        image: postgres:18-alpine
+        image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
         env:
           POSTGRES_DB: aginex
           POSTGRES_USER: aginex
@@ -26,7 +71,7 @@ jobs:
           --health-timeout 3s
           --health-retries 20
       mysql:
-        image: mysql:8.4
+        image: mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
         env:
           MYSQL_DATABASE: aginex
           MYSQL_USER: aginex
@@ -39,35 +84,299 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 30
+    env:
+      AGINEX_TEST_POSTGRES_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex?sslmode=disable
+      AGINEX_TEST_MYSQL_DSN: aginex:aginex@tcp(127.0.0.1:3306)/aginex?parseTime=true
+      AGINEX_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      AGINEX_TEST_S3_BUCKET: aginex-contract
+      AGINEX_TEST_S3_REGION: us-east-1
+      AGINEX_TEST_S3_ACCESS_KEY_ID: aginex-ci
+      AGINEX_TEST_S3_ACCESS_KEY_SECRET: aginex-ci-secret-key
+      AGINEX_REQUIRE_S3_CONTRACT: "true"
+      AGINEX_TEST_OSS_ENDPOINT: ${{ github.event_name != 'pull_request' && secrets.AGINEX_TEST_OSS_ENDPOINT || '' }}
+      AGINEX_TEST_OSS_BUCKET: ${{ github.event_name != 'pull_request' && secrets.AGINEX_TEST_OSS_BUCKET || '' }}
+      AGINEX_TEST_OSS_REGION: ${{ github.event_name != 'pull_request' && secrets.AGINEX_TEST_OSS_REGION || '' }}
+      AGINEX_TEST_OSS_ACCESS_KEY_ID: ${{ github.event_name != 'pull_request' && secrets.AGINEX_TEST_OSS_ACCESS_KEY_ID || '' }}
+      AGINEX_TEST_OSS_ACCESS_KEY_SECRET: ${{ github.event_name != 'pull_request' && secrets.AGINEX_TEST_OSS_ACCESS_KEY_SECRET || '' }}
+      AGINEX_REQUIRE_OSS_CONTRACT: ${{ github.event_name != 'pull_request' && vars.AGINEX_REQUIRE_OSS_CONTRACT || 'false' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v6
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          go-version: "1.25.x"
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
           cache: true
-      - run: go test ./...
-        env:
-          AGINEX_TEST_POSTGRES_DSN: postgres://aginex:aginex@localhost:5432/aginex?sslmode=disable
-          AGINEX_TEST_MYSQL_DSN: aginex:aginex@tcp(localhost:3306)/aginex?parseTime=true
-      - run: go vet ./...
-      - run: go run ./cmd/aginex skills validate
-      - run: go run ./cmd/openapi -output docs/openapi.json
-      - run: git diff --exit-code docs/openapi.json
+      - name: Start pinned MinIO test service
+        run: >-
+          docker run --detach --rm
+          --name aginex-ci-minio
+          --publish 127.0.0.1:9000:9000
+          --env MINIO_ROOT_USER=aginex-ci
+          --env MINIO_ROOT_PASSWORD=aginex-ci-secret-key
+          minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          server /data --address :9000
+      - name: Wait for MinIO and create contract bucket
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null
+          docker run --rm --network host \
+            --env MC_HOST_contract=http://aginex-ci:aginex-ci-secret-key@127.0.0.1:9000 \
+            minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727 \
+            mb --ignore-existing contract/aginex-contract
+      - name: Verify module checksums
+        run: go mod verify
+      - name: Test
+        run: go test -p 1 ./...
+      - name: Race test
+        run: go test -race -p 1 ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Validate Agent Skills
+        run: go run ./cmd/aginex skills validate
+      - name: Stop MinIO test service
+        if: always()
+        run: docker rm --force aginex-ci-minio 2>/dev/null || true
 
   web:
-    runs-on: ubuntu-latest
+    name: Web contract and production build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          version: 10.33.2
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
         with:
-          node-version: "22"
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @aginex/web generate:client
-      - run: git diff --exit-code apps/web/lib/api.generated.ts
-      - run: pnpm check:web
-      - run: pnpm test:web
-      - run: pnpm build:web
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Audit dependencies
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+        run: pnpm audit --audit-level high
+      - name: Typecheck and lint
+        run: pnpm check:web
+      - name: Test
+        run: pnpm test:web
+      - name: Build standalone web application
+        env:
+          NEXT_PUBLIC_API_URL: https://api.example.invalid
+        run: |
+          pnpm build:web
+          test -f apps/web/.next/standalone/apps/web/server.js
+
+  e2e:
+    name: Browser end-to-end workflows
+    needs: [contracts, go, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+        env:
+          POSTGRES_DB: aginex
+          POSTGRES_USER: aginex
+          POSTGRES_PASSWORD: aginex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aginex -d aginex"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      AGINEX_ENV: test
+      AGINEX_HTTP_ADDRESS: 127.0.0.1:8080
+      AGINEX_API_PUBLIC_URL: http://127.0.0.1:8080
+      AGINEX_WEB_ORIGINS: http://127.0.0.1:3000
+      AGINEX_SESSION_SECRET: e2e-only-${{ github.run_id }}-${{ github.run_attempt }}-not-a-production-secret
+      AGINEX_SESSION_SECURE: "false"
+      AGINEX_DATABASE_DRIVER: postgres
+      AGINEX_DATABASE_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex?sslmode=disable
+      AGINEX_IDEMPOTENCY_DRIVER: database
+      AGINEX_JOBS_DRIVER: postgres
+      AGINEX_JOBS_WORKER_ID: aginex-e2e-worker
+      AGINEX_STORAGE_DRIVER: local
+      AGINEX_STORAGE_LOCAL_ROOT: /tmp/aginex-e2e-uploads
+      AGINEX_BOOTSTRAP_ADMIN_EMAIL: e2e-admin@example.com
+      AGINEX_BOOTSTRAP_ADMIN_PASSWORD: correct e2e administrator password
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8080
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Apply migrations and bootstrap administrator
+        run: |
+          go run ./cmd/aginex migrate up
+          go run ./cmd/aginex bootstrap
+      - name: Run browser workflows
+        run: pnpm e2e
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  security:
+    name: Dependency, static, secret, and configuration security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Go vulnerability analysis
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+      - name: Go static security analysis
+        run: >-
+          go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          -exclude-dir=.cache -exclude-dir=node_modules
+          -quiet -severity high -confidence high ./...
+      - name: Repository vulnerability, secret, and misconfiguration scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          cache-dir: .cache/trivy-source
+
+  images:
+    name: Image ${{ matrix.target }}
+    needs: [contracts, go, web, e2e, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [api, worker, migrate, web]
+    env:
+      IMAGE_REF: aginex-ci-${{ matrix.target }}:${{ github.sha }}
+      OPS_IMAGE_REF: aginex-ci-ops:${{ github.sha }}-${{ matrix.target }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Read commit timestamp
+        id: metadata
+        run: echo "created=$(git show --no-patch --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build target
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.target }}
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_REF }}
+          build-args: |
+            VERSION=0.1.0-ci
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.metadata.outputs.created }}
+            NEXT_PUBLIC_API_URL=https://api.example.invalid
+          cache-from: type=gha,scope=aginex-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=aginex-${{ matrix.target }}
+      - name: Build operations helper for runtime smoke
+        if: matrix.target == 'api' || matrix.target == 'worker'
+        run: >-
+          docker buildx build
+          --file Dockerfile
+          --target migrate
+          --load
+          --tag "$OPS_IMAGE_REF"
+          --build-arg VERSION=0.1.0-ci
+          --build-arg COMMIT=${{ github.sha }}
+          --build-arg BUILD_DATE=${{ steps.metadata.outputs.created }}
+          .
+      - name: Require hardened runtime metadata
+        run: |
+          runtime_user="$(docker image inspect --format '{{ .Config.User }}' "$IMAGE_REF")"
+          case "$runtime_user" in
+            ""|0|0:0|root|root:root)
+              echo "image runs as an unsafe user: $runtime_user" >&2
+              exit 1
+              ;;
+          esac
+          stop_signal="$(docker image inspect --format '{{ .Config.StopSignal }}' "$IMAGE_REF")"
+          test "$stop_signal" = "SIGTERM"
+      - name: Smoke test read-only runtime and SIGTERM
+        run: bash scripts/ci-image-smoke.sh "${{ matrix.target }}" "$IMAGE_REF" "$OPS_IMAGE_REF"
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ env.IMAGE_REF }}
+          format: cyclonedx
+          output: sbom-${{ matrix.target }}.cdx.json
+          exit-code: "0"
+          cache: "false"
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-${{ matrix.target }}
+          path: sbom-${{ matrix.target }}.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Gate image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          skip-setup-trivy: true
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          cache-dir: .cache/trivy-image-${{ matrix.target }}

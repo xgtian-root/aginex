@@ -4,7 +4,8 @@ import { ArrowRight, Braces, CheckCircle2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useState } from "react";
 import { toast } from "sonner";
-import { ApiError, api, type User } from "@/lib/api";
+import { ApiError, login } from "@/lib/api";
+import { safeLocalRedirect } from "@/lib/navigation";
 import "./login.css";
 
 export default function LoginPage() {
@@ -27,15 +28,12 @@ function LoginForm() {
     setError("");
     const data = new FormData(event.currentTarget);
     try {
-      await api<User>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({
-          email: data.get("email"),
-          password: data.get("password"),
-        }),
+      await login({
+        email: String(data.get("email")),
+        password: String(data.get("password")),
       });
       toast.success("Signed in. Your workspace is ready.");
-      router.replace(search.get("next") || "/dashboard");
+      router.replace(safeLocalRedirect(search.get("next")));
     } catch (caught) {
       setError(
         caught instanceof ApiError

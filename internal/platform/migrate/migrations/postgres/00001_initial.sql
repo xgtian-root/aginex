@@ -55,18 +55,7 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
-CREATE TABLE products (
-    id UUID PRIMARY KEY,
-    name VARCHAR(240) NOT NULL,
-    sku VARCHAR(120) NOT NULL UNIQUE,
-    price_cents BIGINT NOT NULL DEFAULT 0 CHECK (price_cents >= 0),
-    status VARCHAR(32) NOT NULL DEFAULT 'draft',
-    created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL
-);
-
 -- +goose Down
-DROP TABLE products;
 DROP TABLE audit_logs;
 DROP TABLE sessions;
 DROP TABLE role_permissions;

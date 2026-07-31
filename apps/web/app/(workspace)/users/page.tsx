@@ -1,6 +1,7 @@
 "use client";
 
 import { ResourceList } from "@/components/resource-list";
+import { listUsers } from "@/lib/api";
 import "../products/products.css";
 
 export default function UsersPage() {
@@ -21,8 +22,8 @@ export default function UsersPage() {
         },
       ]}
       description="Operators who can enter this instance. Public registration stays disabled by design."
-      endpoint="/users"
       eyebrow="Identity"
+      load={listUsers}
       queryKey="users"
       title="People"
     />
