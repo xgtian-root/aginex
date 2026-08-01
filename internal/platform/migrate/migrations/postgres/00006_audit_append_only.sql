@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE FUNCTION aginex_prevent_audit_mutation()
+CREATE OR REPLACE FUNCTION aginex_prevent_audit_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$

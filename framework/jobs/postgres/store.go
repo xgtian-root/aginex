@@ -137,7 +137,7 @@ func (store *Store) Enqueue(
 			scheduled_at, attempts, max_attempts, created_by_kind, created_by_id,
 			request_id, traceparent, created_at, updated_at
 		) VALUES (
-			?, ?, ?, CAST(? AS JSONB), ?, ?, 'pending',
+			?, ?, ?, ?::jsonb, ?, ?, 'pending',
 			?, 0, ?, ?, ?, ?, ?, ?, ?
 		)
 		ON CONFLICT (type, idempotency_key) DO NOTHING

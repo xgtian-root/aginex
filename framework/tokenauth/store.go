@@ -491,12 +491,6 @@ func lockRefreshUser(
 	if result.Error != nil {
 		return fmt.Errorf("lock refresh user: %w", result.Error)
 	}
-	if result.RowsAffected != 1 {
-		return fmt.Errorf(
-			"%w: refresh user lock is unavailable",
-			ErrInvalidState,
-		)
-	}
 	return nil
 }
 
