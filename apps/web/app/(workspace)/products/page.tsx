@@ -5,11 +5,15 @@ import { Plus, Search, Trash2, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { ApiError, api, type Page, type Product } from "@/lib/api";
+import {
+  ApiError,
+  createProduct as createProductRequest,
+  deleteProduct as deleteProductRequest,
+  listProducts,
+  type ProductDraft,
+} from "@/lib/api";
 import "@/components/page-header.css";
 import "./products.css";
-
-type ProductDraft = Omit<Product, "id" | "createdAt" | "updatedAt">;
 
 export default function ProductsPage() {
   const client = useQueryClient();
@@ -17,16 +21,11 @@ export default function ProductsPage() {
   const [creating, setCreating] = useState(false);
   const products = useQuery({
     queryKey: ["products", search],
-    queryFn: () =>
-      api<Page<Product>>(`/products?search=${encodeURIComponent(search)}`),
+    queryFn: () => listProducts(search),
   });
 
   const createProduct = useMutation({
-    mutationFn: (input: ProductDraft) =>
-      api<Product>("/products", {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
+    mutationFn: (input: ProductDraft) => createProductRequest(input),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["products"] });
       client.invalidateQueries({ queryKey: ["dashboard-summary"] });
@@ -43,8 +42,7 @@ export default function ProductsPage() {
   });
 
   const deleteProduct = useMutation({
-    mutationFn: (id: string) =>
-      api<void>(`/products/${id}`, { method: "DELETE" }),
+    mutationFn: deleteProductRequest,
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["products"] });
       toast.success("Product deleted.");

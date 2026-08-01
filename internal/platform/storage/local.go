@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -48,6 +49,23 @@ func (l *Local) CreateUpload(_ context.Context, request UploadRequest) (SignedRe
 	}, nil
 }
 
+func (l *Local) CheckReadiness(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("local storage readiness context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	probe, err := os.CreateTemp(l.root, ".aginex-readiness-*")
+	if err != nil {
+		return err
+	}
+	name := probe.Name()
+	closeErr := probe.Close()
+	removeErr := os.Remove(name)
+	return errors.Join(closeErr, removeErr)
+}
+
 func (l *Local) SignRead(_ context.Context, key string, expires time.Duration) (SignedRequest, error) {
 	if err := ValidateKey(key); err != nil {
 		return SignedRequest{}, err
@@ -84,7 +102,11 @@ func (l *Local) Delete(_ context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	return os.Remove(objectPath)
+	err = os.Remove(objectPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 func (l *Local) Put(key string, body []byte, contentType string) error {
@@ -101,7 +123,7 @@ func (l *Local) Put(key string, body []byte, contentType string) error {
 	return os.WriteFile(objectPath, body, 0o640)
 }
 
-func (l *Local) Open(key string) (*os.File, error) {
+func (l *Local) Open(_ context.Context, key string) (io.ReadCloser, error) {
 	objectPath, err := l.path(key)
 	if err != nil {
 		return nil, err

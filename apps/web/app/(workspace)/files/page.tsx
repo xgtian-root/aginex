@@ -7,29 +7,26 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import {
   ApiError,
-  api,
-  type FileObject,
-  type Page,
-  type SignedRequest,
+  confirmUpload,
+  createUploadIntent,
+  csrfHeaders,
+  deleteFile as deleteFileRequest,
+  getFileURL,
+  listFiles,
 } from "@/lib/api";
 import "@/components/page-header.css";
 import "../products/products.css";
 import "./files.css";
-
-type PreparedUpload = {
-  file: FileObject;
-  upload: SignedRequest;
-};
 
 export default function FilesPage() {
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const files = useQuery({
     queryKey: ["files"],
-    queryFn: () => api<Page<FileObject>>("/files"),
+    queryFn: listFiles,
   });
   const deleteFile = useMutation({
-    mutationFn: (id: string) => api<void>(`/files/${id}`, { method: "DELETE" }),
+    mutationFn: deleteFileRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["files"] });
       toast.success("File deleted.");
@@ -54,30 +51,31 @@ export default function FilesPage() {
     }
     setUploading(true);
     try {
-      const prepared = await api<PreparedUpload>("/files/upload-intents", {
-        method: "POST",
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          size: file.size,
-          visibility: "private",
-        }),
+      const prepared = await createUploadIntent({
+        filename: file.name,
+        contentType: file.type as "image/jpeg" | "image/png" | "image/webp",
+        size: file.size,
+        visibility: "private",
       });
       const localUpload = prepared.upload.url.includes(
         "/api/v1/files/local-upload/",
       );
+      const uploadHeaders = new Headers(prepared.upload.headers);
+      if (localUpload) {
+        for (const [name, value] of Object.entries(await csrfHeaders())) {
+          uploadHeaders.set(name, value);
+        }
+      }
       const response = await fetch(prepared.upload.url, {
         method: prepared.upload.method,
-        headers: prepared.upload.headers,
+        headers: uploadHeaders,
         body: file,
         credentials: localUpload ? "include" : "omit",
       });
       if (!response.ok) {
         throw new Error(`Object upload returned ${response.status}.`);
       }
-      await api<FileObject>(`/files/${prepared.file.id}/confirm`, {
-        method: "POST",
-      });
+      await confirmUpload(prepared.file.id);
       input.value = "";
       queryClient.invalidateQueries({ queryKey: ["files"] });
       toast.success("Image uploaded and verified.");
@@ -94,7 +92,7 @@ export default function FilesPage() {
 
   async function openFile(id: string) {
     try {
-      const signed = await api<SignedRequest>(`/files/${id}/url`);
+      const signed = await getFileURL(id);
       window.open(signed.url, "_blank", "noopener,noreferrer");
     } catch {
       toast.error("A temporary file URL could not be created.");

@@ -4,21 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, ArrowUpRight, Boxes, Users } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { api } from "@/lib/api";
+import { getDashboardSummary } from "@/lib/api";
 import "./dashboard.css";
 import "@/components/page-header.css";
-
-type Summary = {
-  products: number;
-  users: number;
-  eventsLast24Hours: number;
-  generatedAt: string;
-};
 
 export default function DashboardPage() {
   const summary = useQuery({
     queryKey: ["dashboard-summary"],
-    queryFn: () => api<Summary>("/dashboard/summary"),
+    queryFn: getDashboardSummary,
   });
 
   const metrics = [

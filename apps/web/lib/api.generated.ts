@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/auth/csrf": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Issue a double-submit CSRF token */
+    get: operations["getCSRFToken"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/auth/login": {
     parameters: {
       query?: never;
@@ -72,6 +89,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/auth/sessions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke all browser sessions owned by the current user */
+    delete: operations["revokeAllSessions"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/dashboard/summary": {
     parameters: {
       query?: never;
@@ -96,9 +130,43 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List file metadata */
+    /** List file metadata in the caller's authorized scope */
     get: operations["listFiles"];
     put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/files/local-content/{key+}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read content from the development local-storage provider */
+    get: operations["localContent"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/files/local-upload/{key+}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Upload content to the development local-storage provider */
+    put: operations["localUpload"];
     post?: never;
     delete?: never;
     options?: never;
@@ -133,7 +201,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Delete a file and its metadata */
+    /** Schedule file deletion */
     delete: operations["deleteFile"];
     options?: never;
     head?: never;
@@ -181,8 +249,8 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get API v1 health live */
-    get: operations["get-api-v1-health-live"];
+    /** Check whether the API process is alive */
+    get: operations["live"];
     put?: never;
     post?: never;
     delete?: never;
@@ -198,10 +266,44 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get API v1 health ready */
-    get: operations["get-api-v1-health-ready"];
+    /** Check whether the API is ready to serve traffic */
+    get: operations["ready"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/jobs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List durable job metadata for operators */
+    get: operations["listJobs"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/jobs/{id}/retry": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Move a dead durable job back to pending */
+    post: operations["retryDeadJob"];
     delete?: never;
     options?: never;
     head?: never;
@@ -300,64 +402,408 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    ErrorDetail: {
-      /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-      location?: string;
-      /** @description Error message text */
-      message?: string;
-      /** @description The value at the given location */
-      value?: unknown;
+    AuditLogResponse: {
+      action: string;
+      actorId?: string;
+      /** @enum {string} */
+      actorKind: "user" | "system" | "service";
+      after?: {
+        [key: string]: unknown;
+      };
+      before?: {
+        [key: string]: unknown;
+      };
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: uuid */
+      id: string;
+      ipAddress: string;
+      requestId: string;
+      resource: string;
+      resourceId: string;
+      /** @enum {string} */
+      result: "success" | "failure";
+      source: string;
+      summary: string;
     };
-    ErrorModel: {
+    CSRFTokenResponse: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
-       * @example https://example.com/schemas/ErrorModel.json
+       * @example https://example.com/schemas/CSRFTokenResponse.json
        */
       readonly $schema?: string;
-      /**
-       * @description A human-readable explanation specific to this occurrence of the problem.
-       * @example Property foo is required but is missing.
-       */
-      detail?: string;
-      /** @description Optional list of individual error details */
-      errors?: components["schemas"]["ErrorDetail"][] | null;
-      /**
-       * Format: uri
-       * @description A URI reference that identifies the specific occurrence of the problem.
-       * @example https://example.com/error-log/abc123
-       */
-      instance?: string;
-      /**
-       * Format: int64
-       * @description HTTP status code
-       * @example 400
-       */
-      status?: number;
-      /**
-       * @description A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
-       * @example Bad Request
-       */
-      title?: string;
-      /**
-       * Format: uri
-       * @description A URI reference to human-readable documentation for the error.
-       * @default about:blank
-       * @example https://example.com/errors/example
-       */
-      type: string;
+      headerName: string;
+      token: string;
     };
-    HealthOutputBody: {
+    DashboardSummaryResponse: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
-       * @example https://example.com/schemas/HealthOutputBody.json
+       * @example https://example.com/schemas/DashboardSummaryResponse.json
        */
       readonly $schema?: string;
-      /** @example ok */
-      status: string;
+      /** Format: int64 */
+      eventsLast24Hours: number;
+      /** Format: date-time */
+      generatedAt: string;
+      /** Format: int64 */
+      products: number;
+      /** Format: int64 */
+      users: number;
+    };
+    FileResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/FileResponse.json
+       */
+      readonly $schema?: string;
+      contentType: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: int64 */
+      height: number;
+      /** Format: uuid */
+      id: string;
+      originalName: string;
+      /** @enum {string} */
+      provider: "local" | "s3" | "oss";
+      sha256: string;
+      /** Format: int64 */
+      size: number;
+      /** @enum {string} */
+      status:
+        | "pending"
+        | "ready"
+        | "invalid"
+        | "deleting"
+        | "delete_failed"
+        | "deleted";
+      /** Format: date-time */
+      updatedAt: string;
+      /** @enum {string} */
+      visibility: "private" | "public";
+      /** Format: int64 */
+      width: number;
+    };
+    HealthResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/HealthResponse.json
+       */
+      readonly $schema?: string;
+      commit: string;
+      /** @enum {string} */
+      status: "ok" | "ready";
       /** Format: date-time */
       time: string;
+      version: string;
+    };
+    JobResponse: {
+      /** Format: int64 */
+      attempts: number;
+      /** Format: date-time */
+      completedAt?: string;
+      /** Format: date-time */
+      createdAt: string;
+      createdById: string;
+      /** @enum {string} */
+      createdByKind: "user" | "system";
+      hasError: boolean;
+      /** Format: date-time */
+      heartbeatAt?: string;
+      /** Format: uuid */
+      id: string;
+      /** Format: date-time */
+      lockedAt?: string;
+      lockedBy?: string;
+      /** Format: int64 */
+      maxAttempts: number;
+      requestId?: string;
+      /** Format: date-time */
+      scheduledAt: string;
+      /** @enum {string} */
+      state: "pending" | "running" | "succeeded" | "failed" | "dead";
+      type: string;
+      /** Format: date-time */
+      updatedAt: string;
+      /** Format: int64 */
+      version: number;
+    };
+    JobRetryResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/JobRetryResponse.json
+       */
+      readonly $schema?: string;
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      state: "pending";
+    };
+    LoginRequest: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/LoginRequest.json
+       */
+      readonly $schema?: string;
+      /** Format: email */
+      email: string;
+      password: string;
+    };
+    PageAuditLogResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PageAuditLogResponse.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["AuditLogResponse"][];
+      /** Format: int64 */
+      page: number;
+      /** Format: int64 */
+      pageSize: number;
+      /** Format: int64 */
+      total: number;
+    };
+    PageFileResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PageFileResponse.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["FileResponse"][];
+      /** Format: int64 */
+      page: number;
+      /** Format: int64 */
+      pageSize: number;
+      /** Format: int64 */
+      total: number;
+    };
+    PageJobResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PageJobResponse.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["JobResponse"][];
+      /** Format: int64 */
+      page: number;
+      /** Format: int64 */
+      pageSize: number;
+      /** Format: int64 */
+      total: number;
+    };
+    PagePermissionResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PagePermissionResponse.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["PermissionResponse"][];
+      /** Format: int64 */
+      page: number;
+      /** Format: int64 */
+      pageSize: number;
+      /** Format: int64 */
+      total: number;
+    };
+    PageProductResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PageProductResponse.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["ProductResponse"][];
+      /** Format: int64 */
+      page: number;
+      /** Format: int64 */
+      pageSize: number;
+      /** Format: int64 */
+      total: number;
+    };
+    PageRoleResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PageRoleResponse.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["RoleResponse"][];
+      /** Format: int64 */
+      page: number;
+      /** Format: int64 */
+      pageSize: number;
+      /** Format: int64 */
+      total: number;
+    };
+    PageUserListResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PageUserListResponse.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["UserListResponse"][];
+      /** Format: int64 */
+      page: number;
+      /** Format: int64 */
+      pageSize: number;
+      /** Format: int64 */
+      total: number;
+    };
+    PermissionResponse: {
+      code: string;
+      /** Format: date-time */
+      createdAt: string;
+      description: string;
+      /** Format: uuid */
+      id: string;
+    };
+    Problem: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/Problem.json
+       */
+      readonly $schema?: string;
+      code: string;
+      detail: string;
+      details?: {
+        [key: string]: unknown;
+      };
+      /** Format: uri-reference */
+      instance: string;
+      requestId: string;
+      /** Format: int64 */
+      status: number;
+      title: string;
+      /** Format: uri */
+      type: string;
+    };
+    ProductRequest: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ProductRequest.json
+       */
+      readonly $schema?: string;
+      name: string;
+      /** Format: int64 */
+      priceCents: number;
+      sku: string;
+      /** @enum {string} */
+      status: "draft" | "active" | "archived";
+    };
+    ProductResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ProductResponse.json
+       */
+      readonly $schema?: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /** Format: int64 */
+      priceCents: number;
+      sku: string;
+      /** @enum {string} */
+      status: "draft" | "active" | "archived";
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    RoleResponse: {
+      /** Format: date-time */
+      createdAt: string;
+      description: string;
+      /** Format: uuid */
+      id: string;
+      name: string;
+      permissions: components["schemas"]["PermissionResponse"][];
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    SignedRequestResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/SignedRequestResponse.json
+       */
+      readonly $schema?: string;
+      /** Format: date-time */
+      expiresAt: string;
+      headers: {
+        [key: string]: string;
+      };
+      method: string;
+      /** Format: uri */
+      url: string;
+    };
+    UploadIntentRequest: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/UploadIntentRequest.json
+       */
+      readonly $schema?: string;
+      /** @enum {string} */
+      contentType: "image/jpeg" | "image/png" | "image/webp";
+      filename: string;
+      /** Format: int64 */
+      size: number;
+      /** @enum {string} */
+      visibility: "private" | "public";
+    };
+    UploadIntentResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/UploadIntentResponse.json
+       */
+      readonly $schema?: string;
+      file: components["schemas"]["FileResponse"];
+      upload: components["schemas"]["SignedRequestResponse"];
+    };
+    UserListResponse: {
+      /** Format: date-time */
+      createdAt: string;
+      displayName: string;
+      /** Format: email */
+      email: string;
+      /** Format: uuid */
+      id: string;
+      roles: string[];
+      /** @enum {string} */
+      status: "active" | "disabled";
+    };
+    UserResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/UserResponse.json
+       */
+      readonly $schema?: string;
+      /** Format: date-time */
+      createdAt: string;
+      displayName: string;
+      /** Format: email */
+      email: string;
+      /** Format: uuid */
+      id: string;
+      permissions: string[];
+      /** @enum {string} */
+      status: "active" | "disabled";
     };
   };
   responses: never;
@@ -370,6 +816,85 @@ export type $defs = Record<string, never>;
 export interface operations {
   listAuditLogs: {
     parameters: {
+      query?: {
+        /** @description One-based page number. */
+        page?: number;
+        /** @description Number of records per page. */
+        pageSize?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PageAuditLogResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  getCSRFToken: {
+    parameters: {
       query?: never;
       header?: never;
       path?: never;
@@ -382,46 +907,145 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["CSRFTokenResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   login: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+      };
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LoginRequest"];
+      };
+    };
     responses: {
       /** @description OK */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["UserResponse"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   logout: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+      };
       path?: never;
       cookie?: never;
     };
@@ -434,12 +1058,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
@@ -457,14 +1110,102 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["UserResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  revokeAllSessions: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
         content?: never;
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
@@ -482,20 +1223,56 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["DashboardSummaryResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   listFiles: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description One-based page number. */
+        page?: number;
+        /** @description Number of records per page. */
+        pageSize?: number;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -507,52 +1284,150 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["PageFileResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
-  createUploadIntent: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Created */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Problem details response */
-      default: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  deleteFile: {
+  localContent: {
     parameters: {
       query?: never;
       header?: never;
       path: {
-        id: string;
+        key: string;
       };
       cookie?: never;
     };
     requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/*": string;
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  localUpload: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+      };
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "image/*": string;
+      };
+    };
     responses: {
       /** @description No Content */
       204: {
@@ -561,19 +1436,323 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  createUploadIntent: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+        /** @description Optional opaque key used to deduplicate a retried write. If the module is disabled, sending this header fails explicitly. */
+        "Idempotency-Key"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UploadIntentRequest"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadIntentResponse"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  deleteFile: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+        /** @description Optional opaque key used to deduplicate a retried write. If the module is disabled, sending this header fails explicitly. */
+        "Idempotency-Key"?: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
         content?: never;
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   confirmUpload: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+        /** @description Optional opaque key used to deduplicate a retried write. If the module is disabled, sending this header fails explicitly. */
+        "Idempotency-Key"?: string;
+      };
       path: {
         id: string;
       };
@@ -586,14 +1765,108 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["FileResponse"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
@@ -613,18 +1886,76 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["SignedRequestResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
-  "get-api-v1-health-live": {
+  live: {
     parameters: {
       query?: never;
       header?: never;
@@ -639,21 +1970,30 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["HealthOutputBody"];
+          "application/json": components["schemas"]["HealthResponse"];
         };
       };
-      /** @description Error */
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          "application/problem+json": components["schemas"]["ErrorModel"];
+          "application/problem+json": components["schemas"]["Problem"];
         };
       };
     };
   };
-  "get-api-v1-health-ready": {
+  ready: {
     parameters: {
       query?: never;
       header?: never;
@@ -668,16 +2008,216 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["HealthOutputBody"];
+          "application/json": components["schemas"]["HealthResponse"];
         };
       };
-      /** @description Error */
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          "application/problem+json": components["schemas"]["ErrorModel"];
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  listJobs: {
+    parameters: {
+      query?: {
+        /** @description One-based page number. */
+        page?: number;
+        /** @description Number of records per page. */
+        pageSize?: number;
+        /** @description Filter by durable job state. Defaults to the dead-letter state. */
+        state?: "pending" | "running" | "succeeded" | "failed" | "dead";
+        /** @description Filter by exact versioned handler type. */
+        type?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PageJobResponse"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  retryDeadJob: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+        /** @description Optional opaque key used to deduplicate a retried write. If the module is disabled, sending this header fails explicitly. */
+        "Idempotency-Key"?: string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobRetryResponse"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
         };
       };
     };
@@ -696,20 +2236,78 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["PagePermissionResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   listProducts: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description One-based page number. */
+        page?: number;
+        /** @description Number of records per page. */
+        pageSize?: number;
+        /** @description Search product name or SKU. */
+        search?: string;
+        /** @description Filter by product status. */
+        status?: "draft" | "active" | "archived";
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -721,39 +2319,155 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["PageProductResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   createProduct: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+        /** @description Optional opaque key used to deduplicate a retried write. If the module is disabled, sending this header fails explicitly. */
+        "Idempotency-Key"?: string;
+      };
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProductRequest"];
+      };
+    };
     responses: {
       /** @description Created */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["ProductResponse"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
@@ -773,48 +2487,187 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["ProductResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   updateProduct: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+        /** @description Optional opaque key used to deduplicate a retried write. If the module is disabled, sending this header fails explicitly. */
+        "Idempotency-Key"?: string;
+      };
       path: {
         id: string;
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProductRequest"];
+      };
+    };
     responses: {
       /** @description OK */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["ProductResponse"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   deleteProduct: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+        /** @description Optional opaque key used to deduplicate a retried write. If the module is disabled, sending this header fails explicitly. */
+        "Idempotency-Key"?: string;
+      };
       path: {
         id: string;
       };
@@ -829,12 +2682,77 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
@@ -852,20 +2770,74 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["PageRoleResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };
   listUsers: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description One-based page number. */
+        page?: number;
+        /** @description Number of records per page. */
+        pageSize?: number;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -877,14 +2849,63 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["PageUserListResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
       /** @description Problem details response */
       default: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
       };
     };
   };

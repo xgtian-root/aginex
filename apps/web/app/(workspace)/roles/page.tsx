@@ -1,6 +1,7 @@
 "use client";
 
 import { ResourceList } from "@/components/resource-list";
+import { listRoles } from "@/lib/api";
 import "../products/products.css";
 
 export default function RolesPage() {
@@ -17,8 +18,8 @@ export default function RolesPage() {
         },
       ]}
       description="Roles group explicit resource:action grants. Navigation and API enforcement share the same permission codes."
-      endpoint="/roles"
       eyebrow="Authorization"
+      load={listRoles}
       queryKey="roles"
       title="Access"
     />

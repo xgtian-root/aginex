@@ -15,7 +15,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { api, type User } from "@/lib/api";
+import { getCurrentUser, logout } from "@/lib/api";
 
 const navigation = [
   {
@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: () => api<User>("/auth/me"),
+    queryFn: getCurrentUser,
     retry: false,
   });
 
@@ -79,7 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const active = allowed.find((item) => pathname.startsWith(item.href));
 
   async function signOut() {
-    await api<void>("/auth/logout", { method: "POST" });
+    await logout();
     router.replace("/login");
   }
 

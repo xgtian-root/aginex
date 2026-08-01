@@ -1,12 +1,12 @@
 package storage
 
 import (
-	"context"
 	"errors"
 	"net/url"
 	"path"
 	"strings"
-	"time"
+
+	frameworkstorage "github.com/xgtian-root/aginex/framework/storage"
 )
 
 var (
@@ -21,34 +21,13 @@ var defaultImageTypes = map[string]struct{}{
 	"image/webp": {},
 }
 
-type UploadRequest struct {
-	Key         string
-	ContentType string
-	Size        int64
-	Expires     time.Duration
-}
-
-type SignedRequest struct {
-	URL       string            `json:"url"`
-	Method    string            `json:"method"`
-	Headers   map[string]string `json:"headers"`
-	ExpiresAt time.Time         `json:"expiresAt"`
-}
-
-type ObjectInfo struct {
-	Key         string    `json:"key"`
-	Size        int64     `json:"size"`
-	ContentType string    `json:"contentType"`
-	ETag        string    `json:"etag"`
-	ModifiedAt  time.Time `json:"modifiedAt"`
-}
-
-type Storage interface {
-	CreateUpload(context.Context, UploadRequest) (SignedRequest, error)
-	SignRead(context.Context, string, time.Duration) (SignedRequest, error)
-	Stat(context.Context, string) (ObjectInfo, error)
-	Delete(context.Context, string) error
-}
+type (
+	UploadRequest    = frameworkstorage.UploadRequest
+	SignedRequest    = frameworkstorage.SignedRequest
+	ObjectInfo       = frameworkstorage.ObjectInfo
+	Storage          = frameworkstorage.ObjectStore
+	ReadinessChecker = frameworkstorage.ReadinessChecker
+)
 
 type Policy struct {
 	MaxBytes     int64

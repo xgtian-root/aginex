@@ -56,7 +56,7 @@ func FromConfig(ctx context.Context, cfg config.Storage, publicURL string) (Stor
 		if cfg.Endpoint != "" {
 			ossCfg = ossCfg.WithEndpoint(cfg.Endpoint)
 		}
-		return NewOSS(oss.NewClient(ossCfg), cfg.Bucket, policy), nil
+		return NewOSS(ossCfg, cfg.Bucket, policy), nil
 	default:
 		return nil, errors.New("unsupported storage driver")
 	}

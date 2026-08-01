@@ -1,6 +1,7 @@
 "use client";
 
 import { ResourceList } from "@/components/resource-list";
+import { listAuditLogs } from "@/lib/api";
 import "../products/products.css";
 
 export default function AuditPage() {
@@ -18,8 +19,8 @@ export default function AuditPage() {
         },
       ]}
       description="A chronological record of security-sensitive and data-changing actions, tied to request IDs."
-      endpoint="/audit-logs"
       eyebrow="Accountability"
+      load={listAuditLogs}
       queryKey="audit-logs"
       title="Audit trail"
     />

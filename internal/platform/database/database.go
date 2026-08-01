@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 func Open(cfg config.Database) (*gorm.DB, error) {
@@ -31,7 +31,7 @@ func Open(cfg config.Database) (*gorm.DB, error) {
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: newSafeLogger(slog.Default()),
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
 		},

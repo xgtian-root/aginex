@@ -107,8 +107,8 @@ MinIO SDK。
 | golangci-lint | Go 静态检查 | P0 |
 | govulncheck | Go 漏洞扫描 | P0 |
 | Biome | TypeScript/React 格式和 lint | P0 |
-| OpenTelemetry Go SDK | Trace、Metric 与厂商无关接口 | P1 |
-| `prometheus/client_golang` | 可选 Prometheus 指标 | P1 |
+| OpenTelemetry Go SDK | 可选的部署侧 OTLP/OTel `observability.Sink` 适配器；框架内置的厂商中立埋点与 W3C 传播不依赖它 | P1 |
+| `prometheus/client_golang` | 可选的部署侧 Prometheus `observability.Sink` 和内部指标监听器 | P1 |
 | Renovate | 依赖升级 PR | P1 |
 | Syft | SBOM | P1 |
 
@@ -142,4 +142,3 @@ MinIO SDK。
 - AWS S3 adapter 通过 AWS/MinIO/R2 配置契约测试。
 - Alibaba OSS adapter 使用官方 v2 SDK并通过真实测试 bucket 验证。
 - 不允许存在已知 Critical 或 High 漏洞。
-
