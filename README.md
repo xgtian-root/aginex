@@ -1,12 +1,12 @@
 # Aginex
 
 <p align="center">
-  <strong>An agent-first admin framework for Go and Next.js.</strong>
+  <strong>A framework for AI agents building auditable business applications with Go and Next.js.</strong>
 </p>
 
 <p align="center">
-  Build auditable business applications with explicit contracts for developers,
-  coding agents, and CI.
+  Read the task, select a Skill, implement against explicit contracts, and
+  verify the result with machine-checkable gates.
 </p>
 
 <p align="center">
@@ -22,26 +22,101 @@
 > shell, contract generation, and Agent Skills are implemented. APIs and
 > project conventions may still change before v1.
 
-## Why Aginex?
+## What is Aginex?
 
-Most admin frameworks document the final code but leave the development process
-implicit. Aginex treats that process as part of the product. Its architecture,
-permissions, API contracts, migrations, verification gates, and common change
-workflows are explicit and machine-checkable.
+Aginex is an agent-first application framework. It gives you, an AI coding
+agent, a constrained and inspectable way to create and evolve administrative
+and operational business software without having to infer the project's
+security model, architectural boundaries, or definition of done.
 
-This gives human maintainers and coding agents the same guardrails:
+The framework combines an executable Go and Next.js baseline with repository
+instructions, task-specific Agent Skills, typed contracts, and verification
+commands. The development workflow is part of the framework, not knowledge
+that exists only in a maintainer's head.
 
-- **One typed stack:** Go and Gin on the backend, Next.js and React on the
-  frontend, with an OpenAPI-generated TypeScript contract between them.
-- **Security by construction:** revocable server-side sessions, API-enforced
-  `resource:action` permissions, origin checks, and an audit event for every
-  successful write.
-- **Portable infrastructure:** SQLite, PostgreSQL, and MySQL support; Local,
-  S3-compatible, and Alibaba Cloud OSS storage behind common interfaces.
-- **Reviewable evolution:** Goose migrations are the schema authority and
-  generated contracts are checked for drift in CI.
-- **Agent-ready workflows:** nine portable Agent Skills describe how to add
-  resources, pages, custom actions, migrations, permissions, uploads, and more.
+Use Aginex when your task needs one or more of these capabilities:
+
+- CRUD resources and business-specific operations such as publish, archive,
+  approve, retry, or moderate.
+- Permission-aware admin pages, dashboards, reports, and settings.
+- Revocable browser sessions, explicit role-based access control, and an audit
+  event for every successful write.
+- SQL schemas that evolve through reviewable Goose migrations on SQLite,
+  PostgreSQL, and MySQL.
+- Image and object workflows backed by local storage, S3-compatible services,
+  or Alibaba Cloud OSS.
+- Durable PostgreSQL jobs, idempotent HTTP operations, health checks, and
+  production-oriented container images.
+- A typed boundary from Go HTTP APIs to a generated TypeScript client used by
+  the Next.js application.
+
+Aginex supplies the security, transaction, storage, job, contract, migration,
+and telemetry boundaries. You supply the application's domain rules. It is not
+a reflective CRUD engine and must not be used to bypass business-specific
+service logic.
+
+## How to use Aginex as an Agent
+
+Start every task from the repository root and follow this sequence:
+
+1. Read [`AGENTS.md`](AGENTS.md) and any nearer `AGENTS.md` that applies to the
+   files you will change.
+2. Classify the task and read the matching Skill in [`.agents/skills/`](.agents/skills/)
+   completely before editing code.
+3. Inspect the existing module, API, migration, permission, audit, generated
+   contract, and test patterns relevant to the task. Preserve application-owned
+   changes and detect generated-file drift before overwriting anything.
+4. Implement the smallest complete vertical change described by the Skill.
+   Keep domain logic in services and use framework interfaces at infrastructure
+   boundaries.
+5. Run the Skill's focused checks, regenerate contracts when required, then run
+   the repository completion gate:
+
+   ```bash
+   go run ./cmd/aginex check
+   ```
+
+6. Report the changed behavior, migrations or generated artifacts, verification
+   performed, and any remaining risk. Do not claim completion while a required
+   gate is failing or skipped.
+
+Select the Skill by task intent, not merely by the file being edited:
+
+| Task intent | Read this Skill |
+|---|---|
+| Create and initialize a new Aginex application | `create-aginex-project` |
+| Add a CRUD entity or business module | `add-business-resource` |
+| Add publish, archive, approve, retry, or another non-CRUD operation | `add-custom-api-operation` |
+| Add a dashboard, report, settings screen, or other admin page | `add-admin-page` |
+| Change a table, column, index, constraint, or data migration | `change-database-schema` |
+| Add or modify roles, permissions, or protected actions | `configure-rbac` |
+| Add an image upload flow or storage integration | `add-image-upload` |
+| Diagnose a bug, CI failure, migration problem, or readiness issue | `test-and-debug` |
+| Upgrade framework dependencies or conventions | `upgrade-aginex` |
+
+If a task crosses several rows, read every applicable Skill and combine their
+completion gates. The Skills encode implementation order, required tests, and
+project-specific constraints; this README is the entry point, not a substitute
+for those instructions.
+
+## Contracts you must preserve
+
+Treat these as non-negotiable unless the task explicitly changes the framework
+contract and updates its tests and documentation:
+
+- Goose SQL migrations are the schema authority. Never introduce `AutoMigrate`.
+- Keep service code database-dialect neutral; support SQLite, PostgreSQL, and
+  MySQL through the migration and platform layers.
+- Browser authentication uses revocable server-side sessions.
+- Permissions are lowercase `resource:action` identifiers and are enforced by
+  the API, not only represented in the UI.
+- Every successful write produces an audit record in the same transactional
+  unit as the business change.
+- Application HTTP APIs live under `/api/v1`, errors use
+  `application/problem+json`, and lists use `{items,page,pageSize,total}`.
+- Cloud SDKs stay behind platform interfaces.
+- Generated and application-owned files must not be overwritten without first
+  checking for drift.
 
 ## What is included?
 
@@ -78,7 +153,7 @@ The service layer stays database-dialect neutral. Schema differences live in
 explicit Goose migrations, while cloud-specific SDKs stay behind storage
 interfaces.
 
-## Extending Aginex
+## How Aginex applications are composed
 
 A derived application defines one immutable module set and reuses it for API,
 worker, migrations, bootstrap, and OpenAPI generation:
@@ -134,12 +209,10 @@ back. Raw Gin handlers are therefore a trusted low-level adapter, not an
 alternative write path.
 
 `ResourceDefinition` is generator and validation metadata, not a reflective
-CRUD engine. POSTA remains responsible for its postmark, post office,
-calibration, publication, quota, moderation, and notification rules. Aginex
-provides the security, transaction, storage, task, contract, migration, and
-telemetry boundaries those rules build on.
+CRUD engine. A derived application remains responsible for its domain rules;
+Aginex provides the boundaries those rules build on.
 
-## Quick start
+## Run the baseline locally
 
 ### Prerequisites
 
@@ -302,27 +375,6 @@ After starting a service, update the matching database or storage variables in
   client is generated to
   [`apps/web/lib/api.generated.ts`](apps/web/lib/api.generated.ts).
 
-## Agent Skills
-
-`AGENTS.md` routes common development tasks to the canonical Skills in
-`.agents/skills/`:
-
-| Task | Skill |
-|---|---|
-| Create a new Aginex project | `create-aginex-project` |
-| Add a CRUD business resource | `add-business-resource` |
-| Add publish, archive, approve, or another custom action | `add-custom-api-operation` |
-| Add a dashboard, report, settings, or other admin page | `add-admin-page` |
-| Change a table, column, index, or data migration | `change-database-schema` |
-| Add or change roles and permissions | `configure-rbac` |
-| Add an image upload flow or storage provider | `add-image-upload` |
-| Diagnose a bug, CI failure, or readiness issue | `test-and-debug` |
-| Upgrade framework dependencies and conventions | `upgrade-aginex` |
-
-These Skills encode project invariants, implementation order, required tests,
-and completion criteria so that changes remain consistent across different
-coding agents.
-
 ## Repository layout
 
 ```text
@@ -365,16 +417,15 @@ follow the [breaking remediation upgrade guide](docs/prestable-upgrade.md).
 - [Production operations](docs/operations.md)
 - [Generated OpenAPI contract](docs/openapi.json)
 
-## Contributing
+## Agent handoff checklist
 
-Issues and pull requests are welcome. Before opening a pull request:
+Before handing a change back to the requester or opening a pull request:
 
-1. Read `AGENTS.md` and the Skill that matches your change.
-2. Keep database, permission, audit, and API invariants intact.
-3. Regenerate contracts when API types change.
-4. Run `go run ./cmd/aginex check`.
-
-Please keep changes focused and include tests for behavior changes.
+1. Confirm that you followed every applicable Skill.
+2. Confirm that database, permission, audit, and API contracts remain intact.
+3. Regenerate OpenAPI and the TypeScript client when API types change.
+4. Include tests for changed behavior.
+5. Run `go run ./cmd/aginex check` and disclose any check you could not run.
 
 ## License
 
