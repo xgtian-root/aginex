@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM docker.io/library/golang:1.25.12-alpine3.24@sha256:56961d79ea8129efddcc0b8643fd8a5416b4e6228cfd477e3fd61deb2672c587 AS go-build
+FROM docker.io/library/golang:1.26.5-alpine3.24@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS go-build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
@@ -62,7 +62,7 @@ COPY --from=go-build --chown=65532:65532 /out/aginex /app/aginex
 ENTRYPOINT ["/app/aginex"]
 CMD ["migrate", "status"]
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web-build
+FROM docker.io/library/node:26.5.0-alpine3.24@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66 AS web-build
 WORKDIR /src
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
@@ -78,7 +78,7 @@ RUN pnpm --filter @aginex/web build \
     && test -f /src/apps/web/.next/standalone/apps/web/server.js \
     && mkdir -p /runtime/next-cache
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web
+FROM docker.io/library/node:26.5.0-alpine3.24@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66 AS web
 WORKDIR /app
 ARG VERSION=0.1.0-dev
 ARG COMMIT=unknown
