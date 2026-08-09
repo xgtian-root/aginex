@@ -36,6 +36,33 @@ func TestGenerateCSRFTokenAndCompare(t *testing.T) {
 	}
 }
 
+func TestReuseOrGenerateCSRFTokenKeepsValidCookieStable(t *testing.T) {
+	existing, err := GenerateCSRFToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/csrf", nil)
+	request.AddCookie(&http.Cookie{Name: "csrf_token", Value: existing})
+
+	reused, err := ReuseOrGenerateCSRFToken(request, "csrf_token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reused != existing {
+		t.Fatalf("token rotated across tabs: got %q, want existing token", reused)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/auth/csrf", nil)
+	request.AddCookie(&http.Cookie{Name: "csrf_token", Value: "invalid"})
+	replacement, err := ReuseOrGenerateCSRFToken(request, "csrf_token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replacement == "invalid" || !EqualCSRFToken(replacement, replacement) {
+		t.Fatalf("invalid cookie was not replaced with a valid token")
+	}
+}
+
 func TestCSRFMiddlewareAuthenticationRules(t *testing.T) {
 	token, err := GenerateCSRFToken()
 	if err != nil {

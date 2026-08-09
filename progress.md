@@ -1,5 +1,118 @@
 # Progress
 
+## 2026-08-09 — Modern Setup Page Redesign
+
+- Loaded the explicitly requested `frontend-design` skill and all linked
+  typography, color, spacing, motion, interaction, responsive, and UX-writing
+  references.
+- Loaded the project-mandated `add-admin-page` guidance and the
+  `planning-with-files` workflow, then recovered the existing shared task logs
+  without replacing prior Setup or internationalization work.
+- Confirmed the worktree is heavily modified and that the Setup page is an
+  untracked, in-progress feature; the redesign will preserve that ownership and
+  constrain edits to the relevant presentation surface.
+- Started phase D1 by locating the Setup page, wizard, and stylesheet and
+  recording a modern editorial-industrial visual direction.
+
+## 2026-08-09 — Web Internationalization
+
+- Loaded the `harden` and `planning-with-files` instructions and recovered the
+  existing task logs.
+- Confirmed the worktree contains extensive in-progress embedded Setup changes;
+  the internationalization work will remain an isolated additive slice.
+- Started Phase I1 with an `en` / `zh-CN` implementation assumption and stable,
+  language-neutral API contracts.
+- The first planning patch missed the existing `# Findings` title; corrected
+  the patch target after a read-only header inspection.
+- Mapped the root layout/provider/workspace-shell boundary and recorded that the
+  project currently has no i18n dependency; one inspection command exposed a
+  zsh route-group quoting error, now avoided by quoting parenthesized paths.
+- Completed the first full copy inventory across Login, Setup, runtime failure,
+  the shell, dashboard, products, files, users, roles, and audit. Recorded the
+  machine-code/user-label boundaries and all current locale-sensitive formatters.
+- Audited the web test/build configuration, API error boundary, Playwright
+  selectors, root redirects, and physical-direction CSS. The implementation can
+  use the existing React/jsdom/Intl stack without new runtime dependencies.
+- Confirmed the installed Next 16 server request APIs are asynchronous and
+  captured the active web diff before choosing the locale server/client seam.
+- Verified the repository's dependency catalog already designates `next-intl`
+  as P0 and adjusted the infrastructure decision accordingly; a first API-code
+  search had a shell-quoting error and the first log patch had out-of-order
+  same-file hunks, both corrected without changing product code.
+- Verified the current official App Router setup for unprefixed locales,
+  request-scoped configuration, client-provider inheritance, cookie-driven
+  switching, and deterministic formatting.
+- Completed Phase I1 after parallel UI, API/Setup, and testing audits. Installed
+  `next-intl` with the workspace's existing pnpm store and began I2 locale
+  infrastructure plus catalog implementation.
+- Added the Next plugin, request-scoped locale/message/timezone configuration,
+  strict next-intl type augmentation, and a root provider with matching document
+  language/direction.
+- Added complete English/Simplified-Chinese catalogs, localized metadata, a
+  persistent language switcher with component coverage, a stable-code problem
+  mapper, and logical-direction/CJK hardening styles.
+- Migrated the shell, runtime-unavailable state, Login, ResourceList, Dashboard,
+  Users, Roles, and Audit; Setup plus Products/Files migrations are running in
+  isolated parallel file sets.
+- The first combined focused test passed 55 pure tests but exposed missing
+  Vitest alias configuration for the new jsdom component test; added a minimal
+  React/alias config before rerunning.
+- The second focused run reached all component tests and exposed missing DOM
+  cleanup between cases; registered explicit cleanup before the next run.
+- Completed I2 and I3: every current Login, Setup, shell, runtime, and workspace
+  surface now uses the English/Simplified-Chinese catalogs, explicit locale
+  formatting, and stable-code localized error presentation.
+- The first complete Web gate passed typecheck and all 93 unit tests. Biome then
+  identified only safe formatting/import changes plus two focused style-policy
+  findings; verification hardening is in progress before the production build.
+- Completed Phase I4. `pnpm check:web`, all 93 Vitest tests, `pnpm build:web`,
+  Playwright discovery (four workflows), `git diff --check`, and the standalone
+  server artifact assertion all pass.
+- Ran a production HTTP smoke against the built application: Simplified-Chinese
+  `Accept-Language` produced `lang="zh-CN"`, Chinese Setup metadata and copy;
+  English produced `lang="en"`; and an exact English locale cookie overrode a
+  Chinese header. The temporary local server was stopped after verification.
+- Final repository searches found no ambient `toLocale*` formatting, raw API
+  `problem.detail` rendering, hard-coded document locale, untranslated visible
+  English copy beyond the Aginex wordmark, or remaining physical-direction CSS
+  properties in the migrated surface.
+
+## 2026-08-09 — Embedded Setup
+
+- Loaded `planning-with-files`, `onboard`, `frontend-design`, all required
+  frontend design references, and `test-and-debug`.
+- Recovered the existing repository plan without unsynced session context and
+  confirmed a clean Git worktree before implementation.
+- Completed the initial read-only architecture pass across backend startup,
+  configuration, migrations/bootstrap, Docker delivery, Next routing, API
+  client behavior, and production constraints.
+- Started Phase S1; no product code has been modified yet.
+- Added bootstrap drift detection and configurable audit execution context;
+  the first focused compile found a string/scope enum mismatch, now corrected
+  with an explicit boundary conversion before rerunning tests.
+- Added an active-administrator readiness query and regression; corrected its
+  test fixture to use the schema's literal disabled status because the domain
+  intentionally exposes only the active constant.
+- Focused backend gate now passes for bootstrap drift, trusted audit context,
+  active-administrator readiness, and the public application definition.
+- Parallel implementation is active in `internal/setup`, `internal/config`,
+  and `apps/web`; shared-file status is being checked before integration edits.
+- Exposed callable `App.Ready` over the same required checks used by the HTTP
+  probe, enabling Setup to validate database, migrations, storage, and module
+  dependencies before sealing configuration. Focused readiness regressions pass.
+- Completed Phase S1 and entered S2. The strict installation store now passes
+  its package tests and cross-compiles; the shared application initializer
+  automatically migrates, drift-bootstraps, verifies an active administrator,
+  starts the App, and runs callable readiness before returning a hot-swap
+  candidate.
+- Added SQLite regressions proving Setup creates a ready administrator-backed
+  application, configured restart does not duplicate bootstrap audit, and a
+  configured empty database is rejected. Focused `cmd/server` tests pass.
+- Wired `cmd/server` to `LoadState`, automatic configured initialization,
+  environment-marker sealing, Setup supervisor construction, and lifecycle
+  ownership. `cmd/server` and `internal/config` pass; `internal/setup` is
+  temporarily blocked by one missing `io` import in its in-progress test file.
+
 ## 2026-07-24
 
 - Confirmed the workspace is empty and is not currently a Git repository.
@@ -380,3 +493,65 @@
   binaries were unavailable. CI contains these gates, so the source is ready
   for a new pre-release but stable publication remains blocked until they pass
   in the release environment.
+# 2026-08-09 Setup runtime integration
+
+- Focused server lifecycle tests now pass for fresh Setup, asynchronous initialization, in-process handler activation, environment-marker persistence, configured startup, and shutdown (`go test ./cmd/server -run 'Test(FreshRuntime|ConfiguredEnvironmentRuntime|SetupInitializer|ConfiguredInitializer|ShutdownRuntime)'`).
+- Focused config, bootstrap/administrator/readiness, and framework application regressions also pass after the runtime integration.
+- `pnpm check:web` initially failed in stale `.next/dev/types/validator.ts`: its cached route constraint only knew `/` after new `/login` and `/setup` layouts were added. Regenerate Next route types before treating this as a source error.
+- `next typegen` regenerated route definitions successfully; Web source validation will be rerun against the refreshed cache.
+- Web typecheck and Biome validation pass after regenerating Next route types.
+- The union OpenAPI document and TypeScript client were regenerated successfully with the embedded Setup contract.
+- Hardened Setup writes beyond the shared CSRF default: an allowlisted Referer can no longer substitute for an explicit Origin header. The focused CSRF/database tests pass.
+- A lifecycle documentation lookup referenced a nonexistent `framework/module/module.go`; the actual hook contract is in `framework/module/types.go`. No source mutation resulted.
+- Frontend final gates pass: generated-client typecheck/Biome, 26 Vitest cases, production Next build, and desktop/mobile Chromium workflow QA. `/`, `/login`, `/setup`, and workspace routes remain dynamic SSR and Setup success performs a hard replacement to `/login`.
+- Full repository Go tests pass (`go test ./... -count=1`) after the embedded Setup, automatic initialization, CLI removal, and delivery edits.
+- Delivery changes now remove the migrate image/CLI paths and default DSN, persist `/data/aginex-config.json`, migrate CI/E2E to API-owned initialization, and document trusted-network Setup plus same-origin routing. Docker execution remains pending because the local daemon is unavailable.
+- Added a committed serial Playwright first-run scenario: it verifies initial Setup mode/no-store, submits PostgreSQL and administrator data through the real wizard, waits for hot activation, confirms application mode and Setup 404/no-store, then continues into the existing authenticated workflows.
+- First Playwright discovery succeeded (3 serial cases), while the scoped Biome check requested only mechanical line wrapping in the new test; run the formatter before the next gate.
+- The new E2E file was formatted successfully. A live local PostgreSQL E2E run is unavailable (`pg_isready` reports no response on 127.0.0.1:5432); CI now owns that real-dialect execution.
+- Port 3000 is already occupied, so the local SQLite browser gate will use isolated port 3100. A read-only `ps -p` inspection was denied by the sandbox; no process was stopped or changed.
+- The first local Playwright launch failed before serving because `go run` tried to read the sandbox-disallowed user Go build cache. Rerun with `GOCACHE=/private/tmp/aginex-go-cache`; the isolated installation directory was still absent at failure time.
+- With the cache corrected, the API constructed Setup and reached its listen path, then the Playwright-managed process exited immediately with a redacted server error before any browser test ran. Inspect port state and isolate whether this is sandbox listener denial or a stale process before retrying; do not reuse the now-created installation directory blindly.
+- Escalated listener permission allowed the real browser gate to run. Its first attempt exposed a test-selector bug only in the SQLite variant: the wizard correctly labels that input `Database path`, while the test always requested `Connection string`. No Setup submission occurred; fix the driver-specific label and rerun with a fresh isolated directory.
+- The corrected real browser run proved first-run Setup, hot activation, application mode, Setup 404/no-store, and unauthenticated redirect. The pre-existing admin workflow then hit an ambiguous `Products` heading selector on a genuinely empty database; make it exact and rerun against a fresh installation.
+- Began cross-tab CSRF hardening from adversarial review: token issuers now reuse a valid shared cookie, and browser writes clear the in-memory token and retry a CSRF-rejected request exactly once while retaining the same idempotency key.
+- Focused Go CSRF/application/setup tests pass. Web typecheck passes; the combined Web gate currently requests one mechanical import-line formatting change in `lib/api.ts` after adding runtime validators.
+- The first new API safety unit run failed in Node before reaching the fetch mock because the production client intentionally defaults to a relative same-origin base. Reset/import the module under an absolute test-only `NEXT_PUBLIC_API_URL`; this is a test harness issue, not a runtime request failure.
+- API safety tests now pass (30 Web tests total), covering malformed mode rejection and one-time cross-tab CSRF recovery.
+- Startup now has context-aware database opening and application construction; schema/storage constructor probes use the total initialization context, MySQL skips unbounded version discovery, and the lifecycle hook contract explicitly marks Start context as call-scoped. Bootstrap credentials are cleared before the long-lived App is built.
+- A combined low-severity frontend hardening patch failed context verification because it mixed `error.tsx` and wizard input anchors in one hunk. No file changed; apply the copy, ARIA, and exact-409 fixes as separate patches.
+- Setup supervisor hardening is complete: exact outer route/method/preflight allowlisting now guarantees business APIs 404 before security/size middleware; Setup caps are 64 KiB body, 32 KiB headers, and 1h CSRF; delayed commit versus timed-out Shutdown now seals Setup and cleans the candidate exactly once. Race tests pass.
+- Context-aware database/app focused Go tests and all 30 Web unit tests pass. Web typecheck passes; Biome requested only mechanical wrapping for the new ARIA markup in `setup-wizard.tsx`.
+- The irreversible config boundary is now fail-closed end to end: config classifies EEXIST and post-publication fsync failure as sealed, the server adapter translates that result, and the supervisor closes Setup into an unavailable application surface while cleaning the untrusted candidate. Config/setup/server race suites pass.
+- A combined Playwright multi-tab/response-loss patch missed the formatter-adjusted anchors and applied nothing. Re-read the current test, then add retry-safe Setup, two-tab CSRF/focus, and accepted-response-loss coverage in smaller hunks.
+- Expanded real E2E passed two-tab database tests, accepted-response loss, hot activation, and primary-tab closure, but exposed that relying only on React Query's focus manager did not refresh a background Setup tab when brought forward in Chromium. Add an explicit window-focus mode refetch and rerun fresh.
+- Headless Chromium still did not emit a page `focus` event for `bringToFront`, even with the explicit listener; all preceding assertions again passed. Dispatch the browser focus event explicitly after bringing the tab forward so the E2E deterministically exercises the real listener rather than Playwright's headless focus semantics.
+- The deterministic focus run now passes the complete first-install/multi-tab/response-loss path and unauthenticated guard. The old admin workflow exposed a second pre-existing strict-selector ambiguity between the toolbar and form `Create product` buttons; scope the submit action to the form before the next retry-safe run.
+- After scoping the product submit action, the configured-restart Playwright run passes all three serial cases (`3 passed`): Setup remains permanently closed, authentication guards still work, and the existing administrator workflow completes against the same installed SQLite instance.
+- Final formatting and first repository-wide gates pass after all hardening edits: `gofmt` over modified Go sources, `go test ./... -count=1`, `pnpm check:web`, and `git diff --check` are green.
+- The final Web unit suite passes all 30 cases and `go mod verify` reports every module verified. The focused race gate has already cleared config, Setup, and server while the heavier application packages continue.
+- The complete focused race matrix passes across config, Setup, server, application, CSRF, and context-aware database opening. `go vet ./...`, the production Web build without `NEXT_PUBLIC_API_URL`, and Playwright discovery of all three serial E2E cases also pass; the guarded routes remain dynamic SSR.
+- Regenerating the union OpenAPI and TypeScript client is byte-deterministic: pre/post SHA-256 remains `6e237be6b074bef81203789f6642061f2f0fe84dd5237c6a8c4e4b5883fddfab` and `e4d6f2cd29a88a1d93ae291e1b2520ac4c346b43e0a9bc3317e318bc50b4bec6`; `git diff --check` remains clean.
+- Final shell syntax validation passes. The first CI YAML parse used a keyword unsupported by macOS Ruby 2.6 and failed in the validator itself, so it will be repeated with that runtime's compatible one-argument API.
+- The Ruby 2.6-compatible CI workflow parse passes. Final source review confirms workers use configured-only `config.Load` and never migrate/bootstrap, while the shipped production composition's Files jobs gate makes non-PostgreSQL Setup fail before configuration is sealed; derived development/test compositions retain SQLite/MySQL.
+- Acceptance-matrix review confirms strict corrupt/unknown-version/wide-mode/symlink/partial-environment config coverage, standard no-store 404 isolation on both mode surfaces, explicit-Origin CSRF writes, detached 202 initialization, sealed-conflict fail-closed behavior, and environment markers that contain no DSN.
+- Final polish now clamps Setup progress to monotonic stage order, corrects the unavailable page so it never claims configuration was unchanged, and tells operators that the shipped production distribution requires PostgreSQL. The focused Setup/server race gate and scoped Web formatting pass.
+- A final stale-command search found and removed the last historical references to the deleted migrate artifact and `migrate status/version`; the pre-stable rollout guide now matches API-owned migration and worker-after-readiness operation.
+- Post-polish verification is green again: `go test ./... -count=1`, focused Setup/server race, focused vet, `pnpm check:web`, all 30 Web tests, production Web build, deterministic contract hashes, and `git diff --check` pass.
+- Added explicit HTTP-Setup credential replacement so a pre-commit failed attempt can be retried with a changed administrator password without silently retaining the old hash. Its first focused compile found only a missing test alias; the regression now uses the same public source string as neighboring tests and will be rerun.
+- Credential-retry regressions now pass under the race detector: HTTP Setup replaces the old unsealed password and audits the change, while ordinary CLI/system drift synchronization still preserves migrated credentials and remains a no-op when current.
+- Tightened administrator readiness to reject malformed Argon2 hashes and made HTTP Setup verify the exact submitted email/password after bootstrap. The first focused compile exposed one helper error path returning the old boolean shape; it is corrected to return a nil hash slice and will be rerun.
+- Focused password, administrator, framework, and server tests now pass: configured startup requires a structurally valid active Administrator credential, and HTTP Setup must prove that the exact submitted credential logs into that role before it can seal configuration.
+- Worker startup now waits without opening the database until a durable marker exists and the API explicitly reports application mode plus readiness; corrupt configuration fails immediately and transient probe failures remain bounded and secret-safe. Focused worker race/vet pass.
+- Image smoke now performs a real empty-volume Setup, verifies the hot switch and no-store closure, restarts the API on the same volume, and proves Setup stays closed. Playwright retries are disabled and the first-run test can no longer pass by skipping an already-sealed instance; Docker execution itself remains unavailable locally.
+- The merged hardening gate passes under the race detector across password, administrator/bootstrap, framework definition, server, config store, Setup supervisor, worker startup, and worker runtime. Web check, all three Playwright test discovery, and image-smoke Bash syntax also pass.
+- A process-level Setup retry regression now proves the full initializer wiring: an unsealed first candidate using password A can be shut down and retried with password B, after which only B verifies. The focused server race test passes.
+- The shipped server now rejects SQLite/MySQL in production before connection or migration, while keeping all three drivers for development/test and derived compositions. Focused early-rejection and credential-retry race tests pass.
+- Final repository verification passes after all acceptance fixes: full Go test and vet, module verification, focused merged race, Web check and 30 tests, deterministic OpenAPI/client regeneration, production Web build, three Playwright cases discovered, Bash/YAML syntax, and clean diff whitespace. Contract hashes remain unchanged at `6e237be6b074bef81203789f6642061f2f0fe84dd5237c6a8c4e4b5883fddfab` and `e4d6f2cd29a88a1d93ae291e1b2520ac4c346b43e0a9bc3317e318bc50b4bec6`.
+- Final adversarial review found no P0/fail-open or secret leak. Its remaining Web/smoke items are now fixed: mode/status JSON rejects unknown fields, and worker image smoke waits for the explicit started log rather than treating an indefinitely waiting process as success. Web tests and Bash syntax pass.
+- The two remaining durability/lifecycle review items are in implementation: sealed-conflict cleanup receives an explicit Shutdown barrier, and nested configuration directories are moving from one `MkdirAll` durability assumption to per-level creation plus parent fsync.
+- The final durability/lifecycle review items are now fixed. Sealed candidate cleanup is published behind a lifecycle-locked completion barrier so Shutdown can time out and retry without reopening Setup or cleaning twice; nested installation directories are created one level at a time and each new directory entry is persisted by syncing its parent before publication can proceed.
+- The post-fix race/vet gate passes for config, Setup supervisor, and server integration; final repository-wide verification is running against the converged tree.
+- Repository-wide test/race/vet, Web, contract, build, and syntax gates passed on that tree, but the last read-only adversarial pass identified two additional shutdown/commit TOCTOU blockers before handoff: a marker can appear while the pre-publication directory durability probe fails, and concurrent active-application Shutdown calls do not yet share one cleanup result. Both failure paths are now assigned for regression-backed fixes; completion remains pending until the gates pass again.
+- Both final blockers are closed. Every pre-publication filesystem failure rechecks the destination and treats existence or an ambiguous inspection as sealed; active-application cleanup now runs exactly once with an independent bounded context while all callers wait with their own contexts and receive the same sanitized result.
+- Final independent static review reports no remaining blocker under the locked single-backend-instance threat model. The converged tree passes full Go test/vet, full Go race, focused post-fix race, module verification, Web check and 30 unit tests, deterministic contract generation, production Web build, Playwright discovery, Bash/YAML validation, and `git diff --check`.

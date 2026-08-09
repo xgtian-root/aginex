@@ -3,12 +3,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { Activity, ArrowUpRight, Boxes, Users } from "lucide-react";
 import Link from "next/link";
+import { useFormatter, useTranslations } from "next-intl";
 import { PageHeader } from "@/components/page-header";
 import { getDashboardSummary } from "@/lib/api";
 import "./dashboard.css";
 import "@/components/page-header.css";
 
 export default function DashboardPage() {
+  const t = useTranslations("Dashboard");
+  const common = useTranslations("Common");
+  const format = useFormatter();
   const summary = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: getDashboardSummary,
@@ -16,21 +20,24 @@ export default function DashboardPage() {
 
   const metrics = [
     {
-      label: "Products",
+      key: "products",
+      label: t("metrics.products.label"),
       value: summary.data?.products,
-      detail: "Catalog records",
+      detail: t("metrics.products.detail"),
       icon: Boxes,
     },
     {
-      label: "People",
+      key: "people",
+      label: t("metrics.people.label"),
       value: summary.data?.users,
-      detail: "Active operators",
+      detail: t("metrics.people.detail"),
       icon: Users,
     },
     {
-      label: "Events today",
+      key: "eventsToday",
+      label: t("metrics.eventsToday.label"),
       value: summary.data?.eventsLast24Hours,
-      detail: "Audited actions",
+      detail: t("metrics.eventsToday.detail"),
       icon: Activity,
     },
   ];
@@ -38,21 +45,23 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        description="A compact pulse of the resources, people, and audited work moving through this instance."
-        eyebrow="Friday brief"
-        title="Good operations begin with clear signals."
+        description={t("header.description")}
+        eyebrow={t("header.eyebrow")}
+        title={t("header.title")}
       />
-      <section className="metric-grid" aria-label="Workspace summary">
-        {metrics.map(({ label, value, detail, icon: Icon }, index) => (
+      <section className="metric-grid" aria-label={t("summaryAriaLabel")}>
+        {metrics.map(({ key, label, value, detail, icon: Icon }, index) => (
           <article
             className="metric"
-            key={label}
+            key={key}
             style={{ "--i": index } as React.CSSProperties}
           >
             <Icon aria-hidden size={20} strokeWidth={1.7} />
             <p>{label}</p>
             <strong>
-              {summary.isPending ? "—" : (value ?? 0).toLocaleString()}
+              {summary.isPending
+                ? common("notAvailable")
+                : format.number(value ?? 0)}
             </strong>
             <span>{detail}</span>
           </article>
@@ -60,16 +69,12 @@ export default function DashboardPage() {
       </section>
       <section className="dashboard-notes">
         <div>
-          <p className="eyebrow">Framework contract</p>
-          <h2>One resource, end to end.</h2>
-          <p>
-            Products are the reference slice for migrations, typed HTTP
-            operations, permissions, audit entries, and responsive management
-            UI.
-          </p>
+          <p className="eyebrow">{t("contract.eyebrow")}</p>
+          <h2>{t("contract.title")}</h2>
+          <p>{t("contract.description")}</p>
         </div>
         <Link className="button secondary" href="/products">
-          Open products
+          {t("contract.action")}
           <ArrowUpRight aria-hidden size={17} />
         </Link>
       </section>

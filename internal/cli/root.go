@@ -2,8 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,13 +16,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xgtian-root/aginex/framework/application"
-	"github.com/xgtian-root/aginex/framework/idempotency"
-	postgresjobs "github.com/xgtian-root/aginex/framework/jobs/postgres"
 	"github.com/xgtian-root/aginex/internal/buildinfo"
 	"github.com/xgtian-root/aginex/internal/composition"
-	"github.com/xgtian-root/aginex/internal/config"
-	"github.com/xgtian-root/aginex/internal/platform/database"
-	"github.com/xgtian-root/aginex/internal/platform/migrate"
 )
 
 func Execute() error {
@@ -52,45 +45,13 @@ func newRootCommandWithDefinition(
 	}
 	root.Version = buildinfo.String()
 	root.AddCommand(
-		bootstrapCommand(definition),
 		doctorCommand(),
 		checkCommand(),
 		devCommand(),
 		generateCommand(definition),
-		migrateCommand(definition),
 		skillsCommand(),
 	)
 	return root
-}
-
-func bootstrapCommand(
-	definition application.Definition,
-) *cobra.Command {
-	return &cobra.Command{
-		Use:   "bootstrap",
-		Short: "Synchronize built-in access and the initial administrator",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load()
-			if err != nil {
-				return fmt.Errorf("load configuration: %w", err)
-			}
-			db, err := database.Open(cfg.Database)
-			if err != nil {
-				return fmt.Errorf("open database: %w", err)
-			}
-			sqlDB, err := db.DB()
-			if err != nil {
-				return fmt.Errorf("access database connection: %w", err)
-			}
-			defer sqlDB.Close()
-			if err := definition.Bootstrap(cmd.Context(), db, cfg); err != nil {
-				return fmt.Errorf("bootstrap application: %w", err)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Bootstrap completed.")
-			return nil
-		},
-	}
 }
 
 func devCommand() *cobra.Command {
@@ -166,226 +127,6 @@ func generateCommand(
 		},
 	})
 	return command
-}
-
-func migrateCommand(
-	definition application.Definition,
-) *cobra.Command {
-	command := &cobra.Command{
-		Use:   "migrate",
-		Short: "Inspect and apply database migrations",
-	}
-	command.AddCommand(
-		&cobra.Command{
-			Use:   "up",
-			Short: "Apply all pending database migrations",
-			Args:  cobra.NoArgs,
-			RunE: func(cmd *cobra.Command, _ []string) error {
-				return withMigrationDatabase(func(db *sql.DB, cfg config.Config) error {
-					driver := cfg.Database.Driver
-					if err := definition.MigrateUp(
-						cmd.Context(),
-						db,
-						cfg,
-					); err != nil {
-						return err
-					}
-					if err := definition.EnsureMigrationsCurrent(
-						cmd.Context(),
-						db,
-						cfg,
-					); err != nil {
-						return err
-					}
-					status, err := migrate.Status(cmd.Context(), db, driver)
-					if err != nil {
-						return err
-					}
-					idempotencyDriver, idempotencyStatus, err := configuredIdempotencyStatus(
-						cmd.Context(),
-						db,
-						cfg,
-					)
-					if err != nil {
-						return err
-					}
-					fmt.Fprintf(
-						cmd.OutOrStdout(),
-						"Migrations applied: driver=%s current=%d latest=%d rateLimitCurrent=%d rateLimitLatest=%d idempotency=%s idempotencyCurrent=%d idempotencyLatest=%d jobs=%s modules=current moduleFingerprint=%s\n",
-						driver,
-						status.Current,
-						status.Latest,
-						status.RateLimit.Current,
-						status.RateLimit.Latest,
-						idempotencyDriver,
-						idempotencyStatus.Current,
-						idempotencyStatus.Latest,
-						configuredJobsState(cmd.Context(), db, cfg),
-						definition.Fingerprint(),
-					)
-					return nil
-				})
-			},
-		},
-		&cobra.Command{
-			Use:   "status",
-			Short: "Show applied and pending database migrations",
-			Args:  cobra.NoArgs,
-			RunE: func(cmd *cobra.Command, _ []string) error {
-				return withMigrationDatabase(func(db *sql.DB, cfg config.Config) error {
-					driver := cfg.Database.Driver
-					status, err := migrate.Status(cmd.Context(), db, driver)
-					if err != nil {
-						return err
-					}
-					idempotencyDriver, idempotencyStatus, err := configuredIdempotencyStatus(
-						cmd.Context(),
-						db,
-						cfg,
-					)
-					if err != nil {
-						return err
-					}
-					state := status.State()
-					if idempotencyDriver == "database" && !idempotencyStatus.IsCurrent() {
-						state = "pending"
-					}
-					moduleState := configuredModuleState(
-						cmd.Context(),
-						db,
-						cfg,
-						definition,
-					)
-					if moduleState != "current" {
-						state = "pending"
-					}
-					fmt.Fprintf(
-						cmd.OutOrStdout(),
-						"Migration status: driver=%s current=%d latest=%d applied=%d pending=%d rateLimitCurrent=%d rateLimitLatest=%d rateLimitPending=%d idempotency=%s idempotencyCurrent=%d idempotencyLatest=%d idempotencyPending=%d jobs=%s modules=%s moduleFingerprint=%s state=%s\n",
-						driver,
-						status.Current,
-						status.Latest,
-						status.Applied,
-						status.Pending,
-						status.RateLimit.Current,
-						status.RateLimit.Latest,
-						status.RateLimit.Pending,
-						idempotencyDriver,
-						idempotencyStatus.Current,
-						idempotencyStatus.Latest,
-						idempotencyStatus.Pending,
-						configuredJobsState(cmd.Context(), db, cfg),
-						moduleState,
-						definition.Fingerprint(),
-						state,
-					)
-					return nil
-				})
-			},
-		},
-		&cobra.Command{
-			Use:   "version",
-			Short: "Show current and latest database migration versions",
-			Args:  cobra.NoArgs,
-			RunE: func(cmd *cobra.Command, _ []string) error {
-				return withMigrationDatabase(func(db *sql.DB, cfg config.Config) error {
-					driver := cfg.Database.Driver
-					status, err := migrate.Status(cmd.Context(), db, driver)
-					if err != nil {
-						return err
-					}
-					idempotencyDriver, idempotencyStatus, err := configuredIdempotencyStatus(
-						cmd.Context(),
-						db,
-						cfg,
-					)
-					if err != nil {
-						return err
-					}
-					fmt.Fprintf(
-						cmd.OutOrStdout(),
-						"Migration version: driver=%s current=%d latest=%d rateLimitCurrent=%d rateLimitLatest=%d idempotency=%s idempotencyCurrent=%d idempotencyLatest=%d jobs=%s modules=%s moduleFingerprint=%s\n",
-						driver,
-						status.Current,
-						status.Latest,
-						status.RateLimit.Current,
-						status.RateLimit.Latest,
-						idempotencyDriver,
-						idempotencyStatus.Current,
-						idempotencyStatus.Latest,
-						configuredJobsState(cmd.Context(), db, cfg),
-						configuredModuleState(
-							cmd.Context(),
-							db,
-							cfg,
-							definition,
-						),
-						definition.Fingerprint(),
-					)
-					return nil
-				})
-			},
-		},
-	)
-	return command
-}
-
-func withMigrationDatabase(run func(*sql.DB, config.Config) error) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("load configuration: %w", err)
-	}
-	gormDB, err := database.Open(cfg.Database)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	db, err := gormDB.DB()
-	if err != nil {
-		return fmt.Errorf("access database connection: %w", err)
-	}
-	defer db.Close()
-	return run(db, cfg)
-}
-
-func configuredJobsState(ctx context.Context, db *sql.DB, cfg config.Config) string {
-	if cfg.Jobs.Driver == "disabled" {
-		return "disabled"
-	}
-	if err := postgresjobs.EnsureCurrent(ctx, db); err != nil {
-		return "pending"
-	}
-	return "current"
-}
-
-func configuredModuleState(
-	ctx context.Context,
-	db *sql.DB,
-	cfg config.Config,
-	definition application.Definition,
-) string {
-	if err := definition.EnsureMigrationsCurrent(
-		ctx,
-		db,
-		cfg,
-	); err != nil {
-		return "pending"
-	}
-	return "current"
-}
-
-func configuredIdempotencyStatus(
-	ctx context.Context,
-	db *sql.DB,
-	cfg config.Config,
-) (string, idempotency.MigrationStatus, error) {
-	if cfg.Idempotency.Driver == "disabled" {
-		return "disabled", idempotency.MigrationStatus{}, nil
-	}
-	status, err := idempotency.Status(ctx, db, cfg.Database.Driver)
-	if err != nil {
-		return "", idempotency.MigrationStatus{}, err
-	}
-	return "database", status, nil
 }
 
 type diagnostic struct {

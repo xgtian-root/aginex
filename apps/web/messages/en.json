@@ -1,0 +1,447 @@
+{
+  "Metadata": {
+    "defaultTitle": "Aginex",
+    "titleTemplate": "%s · Aginex",
+    "description": "An agent-ready admin workspace.",
+    "setup": {
+      "title": "Set up your workspace",
+      "description": "Connect Aginex to a database and create its first administrator."
+    }
+  },
+  "Common": {
+    "brandName": "Aginex",
+    "wordmark": "aginex",
+    "actions": "Actions",
+    "status": "Status",
+    "emailAddress": "Email address",
+    "password": "Password",
+    "required": "Required",
+    "tryAgain": "Try again",
+    "checkAgain": "Check again",
+    "workspace": "Workspace",
+    "development": "Development",
+    "loading": "Loading…",
+    "notAvailable": "—"
+  },
+  "LocaleSwitcher": {
+    "label": "Language",
+    "ariaLabel": "Select interface language",
+    "english": "English",
+    "simplifiedChinese": "简体中文",
+    "changing": "Changing language…"
+  },
+  "RuntimeUnavailable": {
+    "statusCode": "503",
+    "defaultTitle": "The server is not ready to answer.",
+    "mark": "Safe hold",
+    "eyebrow": "Runtime status unknown",
+    "description": "Aginex could not verify whether this installation is ready. Setup is kept closed until the backend returns an explicit mode.",
+    "action": "Check again",
+    "footnote": "No setup state is inferred from this response."
+  },
+  "Shell": {
+    "navigation": {
+      "overview": "Overview",
+      "products": "Products",
+      "people": "People",
+      "access": "Access",
+      "auditTrail": "Audit trail",
+      "files": "Files"
+    },
+    "skipLink": "Skip to main content",
+    "homeAriaLabel": "Aginex home",
+    "brandTagline": "control room",
+    "primaryNavigationAriaLabel": "Primary navigation",
+    "signOutAriaLabel": "Sign out",
+    "workspaceFallback": "Workspace",
+    "environment": "Development",
+    "openingWorkspace": "Opening your workspace…",
+    "error": {
+      "eyebrow": "Workspace unavailable",
+      "title": "We could not open this control room.",
+      "description": "The server did not complete the identity check. Your session has not been changed.",
+      "action": "Try again"
+    }
+  },
+  "Login": {
+    "successToast": "Signed in. Your workspace is ready.",
+    "credentialsError": "The email address or password is incorrect.",
+    "networkError": "We could not reach the API. Check that the server is running.",
+    "story": {
+      "eyebrow": "Agent-ready administration",
+      "title": "A clear control room for serious work.",
+      "description": "Every screen maps to an API contract, a permission, and a repeatable Coding Agent workflow.",
+      "permissionPoint": "Explicit resource:action permissions",
+      "contractPoint": "OpenAPI-backed frontend contracts"
+    },
+    "form": {
+      "eyebrow": "Welcome back",
+      "title": "Sign in to Aginex",
+      "description": "Use the administrator created during setup.",
+      "emailLabel": "Email address",
+      "emailPlaceholder": "admin@example.com",
+      "passwordLabel": "Password",
+      "pending": "Opening workspace…",
+      "submit": "Sign in",
+      "note": "No public registration. The first administrator is established during one-time setup."
+    },
+    "loading": "Preparing sign in…"
+  },
+  "Setup": {
+    "route": {
+      "loading": {
+        "eyebrow": "Installation gate",
+        "title": "Verifying runtime mode…",
+        "description": "Setup stays closed until the backend answers."
+      },
+      "error": {
+        "eyebrow": "Setup held closed",
+        "title": "This installation view stopped unexpectedly.",
+        "description": "The browser could not confirm whether initialization continued. Reload the guarded route to verify the backend mode and progress again.",
+        "action": "Reload setup"
+      }
+    },
+    "skipLink": "Skip to setup form",
+    "header": {
+      "wordmark": "aginex / commissioning",
+      "serial": "INSTALLATION 001"
+    },
+    "ledger": {
+      "progressAriaLabel": "Setup progress",
+      "eyebrow": "One-time setup",
+      "title": "Commission your control room.",
+      "description": "Three verified operations turn this empty runtime into an accountable workspace.",
+      "currentStep": "Current step",
+      "note": "Setup disappears permanently after configuration is sealed.",
+      "steps": {
+        "database": {
+          "title": "Database",
+          "caption": "Prove the connection"
+        },
+        "administrator": {
+          "title": "Administrator",
+          "caption": "Establish ownership"
+        },
+        "initialize": {
+          "title": "Initialize",
+          "caption": "Seal this installation"
+        }
+      }
+    },
+    "database": {
+      "heading": {
+        "caption": "Connection proof",
+        "title": "Locate the system of record.",
+        "description": "Aginex tests this exact connection before administrator credentials can be submitted."
+      },
+      "engineLabel": "Database engine",
+      "drivers": {
+        "sqlite": "SQLite",
+        "postgres": "PostgreSQL",
+        "mysql": "MySQL"
+      },
+      "productionHint": "The current production distribution requires PostgreSQL. SQLite and MySQL remain available for development, tests, and derived applications.",
+      "pathLabel": "Database path",
+      "connectionStringLabel": "Connection string",
+      "required": "Required",
+      "showConnectionString": "Show connection string",
+      "hideConnectionString": "Hide connection string",
+      "sqliteHint": "Use a path writable by the backend process.",
+      "serverHint": "TLS and authentication settings belong in the connection string.",
+      "verificationFallback": "Aginex could not verify this database.",
+      "connectionVerified": "Connection verified",
+      "connectionVerifiedDescription": "This exact driver and DSN can continue.",
+      "testing": "Testing connection…",
+      "testAgain": "Test again",
+      "testConnection": "Test connection",
+      "continue": "Continue"
+    },
+    "administrator": {
+      "heading": {
+        "caption": "Initial authority",
+        "title": "Name the first operator.",
+        "description": "This account receives the Administrator role. There is no public registration path after setup."
+      },
+      "emailLabel": "Email address",
+      "identifierHint": "Administrator ID",
+      "emailPlaceholder": "admin@example.com",
+      "passwordLabel": "Password",
+      "passwordLengthHint": "12+ characters",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "confirmPasswordLabel": "Confirm password",
+      "exactMatchHint": "Exact match",
+      "credentialNote": "Credentials are sent once to the backend and are never stored in browser storage.",
+      "passwordMismatch": "The password confirmation does not match.",
+      "backToDatabase": "Database",
+      "initializeWorkspace": "Initialize workspace"
+    },
+    "initialization": {
+      "pausedCaption": "Initialization paused",
+      "runningCaption": "System commissioning",
+      "pausedTitle": "The workspace remains unsealed.",
+      "runningTitle": "Bring every service online.",
+      "pausedDescription": "Review the reported condition or retry the same verified configuration.",
+      "runningDescription": "The server is migrating, establishing access, and preparing the application runtime.",
+      "progressAriaLabel": "Initialization progress",
+      "actionRequired": "Action required",
+      "automaticHandoff": "Automatic handoff",
+      "errorDescription": "Setup remains available because configuration was not sealed.",
+      "runningStatusDescription": "This page will close itself when application mode is active.",
+      "reviewConfiguration": "Review configuration",
+      "retryInitialization": "Retry initialization",
+      "requestFallback": "The initialization request did not complete.",
+      "failure": "Initialization stopped before configuration was sealed.",
+      "failureWithReference": "Initialization stopped before configuration was sealed. Reference: {code}.",
+      "stages": {
+        "waiting": "Waiting for initialization",
+        "validating_database": "Validating database",
+        "migrating": "Applying schema",
+        "bootstrapping": "Creating administrator access",
+        "starting_application": "Starting application services",
+        "persisting_configuration": "Sealing configuration",
+        "activating_application": "Activating workspace"
+      }
+    },
+    "probe": {
+      "eyebrow": "Installation gate",
+      "title": "Reading the runtime state.",
+      "description": "Setup remains closed until the supervisor confirms this installation.",
+      "unavailableEyebrow": "Setup held closed",
+      "unavailableTitle": "The backend state is unknown.",
+      "defaultUnavailableDetail": "Aginex could not confirm the current runtime mode.",
+      "supervisorStateFallback": "The setup supervisor did not return its current state.",
+      "action": "Check again"
+    }
+  },
+  "Dashboard": {
+    "header": {
+      "eyebrow": "Friday brief",
+      "title": "Good operations begin with clear signals.",
+      "description": "A compact pulse of the resources, people, and audited work moving through this instance."
+    },
+    "summaryAriaLabel": "Workspace summary",
+    "metrics": {
+      "products": {
+        "label": "Products",
+        "detail": "Catalog records"
+      },
+      "people": {
+        "label": "People",
+        "detail": "Active operators"
+      },
+      "eventsToday": {
+        "label": "Events today",
+        "detail": "Audited actions"
+      }
+    },
+    "contract": {
+      "eyebrow": "Framework contract",
+      "title": "One resource, end to end.",
+      "description": "Products are the reference slice for migrations, typed HTTP operations, permissions, audit entries, and responsive management UI.",
+      "action": "Open products"
+    }
+  },
+  "Products": {
+    "createdToast": "Product created.",
+    "createError": "The product could not be created.",
+    "deletedToast": "Product deleted.",
+    "deleteError": "The product could not be deleted.",
+    "header": {
+      "eyebrow": "Catalog operations",
+      "title": "Products",
+      "description": "The canonical Aginex resource: searchable, permission-aware, audited, and backed by all supported databases.",
+      "createAction": "Create product"
+    },
+    "editor": {
+      "eyebrow": "New record",
+      "title": "Create product",
+      "closeAriaLabel": "Close product editor",
+      "nameLabel": "Product name",
+      "skuLabel": "SKU",
+      "priceLabel": "Price",
+      "statusLabel": "Status",
+      "keepBrowsing": "Keep browsing",
+      "pending": "Creating product…",
+      "submit": "Create product"
+    },
+    "statuses": {
+      "draft": "Draft",
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "list": {
+      "ariaLabel": "Product list",
+      "searchAriaLabel": "Search products",
+      "searchPlaceholder": "Search name or SKU",
+      "recordCount": "{count, plural, one {# record} other {# records}}",
+      "unavailableTitle": "Products are unavailable",
+      "unavailableDescription": "Check the API connection and try again.",
+      "emptyTitle": "No products yet",
+      "emptyDescription": "Create the first product to verify the complete resource workflow.",
+      "columns": {
+        "name": "Name",
+        "sku": "SKU",
+        "price": "Price",
+        "status": "Status",
+        "updated": "Updated",
+        "actions": "Actions"
+      },
+      "deleteAriaLabel": "Delete {name}"
+    }
+  },
+  "Files": {
+    "deletedToast": "File deleted.",
+    "deleteError": "The file could not be deleted.",
+    "chooseImageError": "Choose a JPEG, PNG, or WebP image.",
+    "objectUploadError": "Object upload returned {status}.",
+    "uploadedToast": "Image uploaded and verified.",
+    "uploadError": "The image could not be uploaded. Check its type and size, then try again.",
+    "temporaryUrlError": "A temporary file URL could not be created.",
+    "header": {
+      "eyebrow": "Object storage",
+      "title": "Files",
+      "description": "Verified image objects stored locally, in S3-compatible services, or Alibaba Cloud OSS through one provider contract."
+    },
+    "upload": {
+      "title": "Upload a private image",
+      "requirements": "JPEG, PNG, or WebP · up to 10 MB",
+      "choose": "Choose image",
+      "pending": "Uploading and verifying…",
+      "submit": "Upload image"
+    },
+    "emptyTitle": "No files yet",
+    "emptyDescription": "Upload an image to exercise the provider-neutral storage workflow.",
+    "columns": {
+      "file": "File",
+      "provider": "Provider",
+      "size": "Size",
+      "visibility": "Visibility",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "providers": {
+      "local": "Local",
+      "s3": "S3",
+      "oss": "Alibaba Cloud OSS"
+    },
+    "visibility": {
+      "private": "Private",
+      "public": "Public"
+    },
+    "statuses": {
+      "pending": "Pending",
+      "ready": "Ready",
+      "invalid": "Invalid",
+      "deleting": "Deleting",
+      "delete_failed": "Delete failed",
+      "deleted": "Deleted"
+    },
+    "units": {
+      "byte": "B",
+      "kilobyte": "KB",
+      "megabyte": "MB"
+    },
+    "openAriaLabel": "Open {name}",
+    "deleteAriaLabel": "Delete {name}"
+  },
+  "ResourceList": {
+    "loading": "Loading {resource}…",
+    "unavailableTitle": "{resource} are unavailable",
+    "unavailableDescription": "Check your permissions and API connection, then try again."
+  },
+  "Users": {
+    "header": {
+      "eyebrow": "Identity",
+      "title": "People",
+      "description": "Operators who can enter this instance. Public registration stays disabled by design."
+    },
+    "resourceLabel": "people",
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "status": "Status",
+      "created": "Created"
+    },
+    "statuses": {
+      "active": "Active",
+      "disabled": "Disabled"
+    }
+  },
+  "Roles": {
+    "header": {
+      "eyebrow": "Authorization",
+      "title": "Access",
+      "description": "Roles group explicit resource:action grants. Navigation and API enforcement share the same permission codes."
+    },
+    "resourceLabel": "access roles",
+    "columns": {
+      "role": "Role",
+      "description": "Description",
+      "permissions": "Permissions"
+    },
+    "grantCount": "{count, plural, one {# grant} other {# grants}}"
+  },
+  "Audit": {
+    "header": {
+      "eyebrow": "Accountability",
+      "title": "Audit trail",
+      "description": "A chronological record of security-sensitive and data-changing actions, tied to request IDs."
+    },
+    "resourceLabel": "audit events",
+    "columns": {
+      "action": "Action",
+      "resource": "Resource",
+      "summary": "Summary",
+      "ipAddress": "IP address",
+      "time": "Time"
+    }
+  },
+  "Problem": {
+    "fallback": "The request could not be completed.",
+    "withRequestId": "{message} Request ID: {requestId}.",
+    "noResponseBody": "The API returned no response body.",
+    "serverStatus": "The server returned {status}.",
+    "invalidRuntimeState": "The API returned an invalid runtime state response.",
+    "codes": {
+      "REQUEST_INVALID": "The request is invalid. Review the entered values and try again.",
+      "AUTHENTICATION_REQUIRED": "Sign in to continue.",
+      "RESOURCE_FORBIDDEN": "You do not have permission to perform this action.",
+      "RESOURCE_NOT_FOUND": "The requested resource does not exist.",
+      "REQUEST_CONFLICT": "The request conflicts with the current resource state.",
+      "REQUEST_TOO_LARGE": "The request is too large. Reduce its size and try again.",
+      "UNSUPPORTED_MEDIA_TYPE": "This content type is not supported.",
+      "RATE_LIMITED": "Too many requests were made. Wait before trying again.",
+      "HEADERS_TOO_LARGE": "The request headers are too large.",
+      "INTERNAL_ERROR": "The server could not complete the request.",
+      "REQUEST_FAILED": "The request could not be completed.",
+      "CORS_FORBIDDEN": "This request origin is not allowed.",
+      "CORS_PREFLIGHT_FORBIDDEN": "The requested cross-origin method or header is not allowed.",
+      "CSRF_FORBIDDEN": "The request token is no longer valid. Refresh the page and try again.",
+      "CSRF_TOKEN_UNAVAILABLE": "A request token could not be generated.",
+      "SERVICE_UNAVAILABLE": "The service is not ready to handle requests.",
+      "SETUP_DATABASE_UNAVAILABLE": "The database configuration could not be verified.",
+      "SETUP_IN_PROGRESS": "Setup is already running. Wait for the current attempt to finish.",
+      "SETUP_APPLICATION_INITIALIZATION_FAILED": "The application could not be initialized.",
+      "SETUP_CONFIGURATION_COMMIT_FAILED": "The installation configuration could not be sealed.",
+      "SETUP_INITIALIZATION_FAILED": "Initialization stopped before the installation was ready.",
+      "FILE_CLEANUP_UNAVAILABLE": "File cleanup is unavailable. Configure a durable job provider before deleting stored objects.",
+      "FILE_TOO_LARGE": "The image exceeds the configured upload limit.",
+      "FILE_CONTENT_INVALID": "Upload a complete JPEG, PNG, or WebP image within the configured dimension limits.",
+      "UPLOAD_INTENT_NOT_PENDING": "This upload is no longer waiting for confirmation.",
+      "IDEMPOTENCY_KEY_INVALID": "The request idempotency key is invalid.",
+      "IDEMPOTENCY_UNAVAILABLE": "The request cannot be processed safely right now.",
+      "IDEMPOTENCY_ACTOR_UNAVAILABLE": "The authenticated actor could not be verified for this request.",
+      "IDEMPOTENCY_IN_PROGRESS": "This request is already in progress. Try again after it finishes.",
+      "IDEMPOTENCY_RESPONSE_TOO_LARGE": "The response is too large to retain safely.",
+      "IDEMPOTENCY_COMPLETION_FAILED": "The operation completed, but its response could not be retained safely.",
+      "IDEMPOTENCY_KEY_REUSED": "This request key is already bound to a different operation.",
+      "IDEMPOTENCY_RESOURCE_MISSING": "The resource associated with the stored response no longer exists.",
+      "IDEMPOTENCY_REPLAY_FAILED": "The stored response could not be reconstructed safely.",
+      "JOBS_UNAVAILABLE": "Job administration is unavailable because the durable queue is not configured.",
+      "RATE_LIMIT_ACTOR_UNAVAILABLE": "The authenticated actor could not be verified for request protection.",
+      "RATE_LIMIT_POLICY_INVALID": "Request protection is unavailable because the operation policy is invalid.",
+      "RATE_LIMIT_UNAVAILABLE": "Request protection is temporarily unavailable."
+    }
+  }
+}

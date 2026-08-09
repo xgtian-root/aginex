@@ -7,10 +7,11 @@ removed instead of being preserved as a compatibility mode.
 ## Required application changes
 
 1. Define the complete compiled-in module set once with
-   `application.Define`. Reuse that `Definition` for API, worker, migrate,
-   bootstrap, and OpenAPI entry points. Compare its fingerprint across deployed
-   processes. An empty definition no longer includes the sample products,
-   dashboard, or file-object API. Existing starter deployments must opt in:
+   `application.Define`. Reuse that `Definition` for API, worker, automatic
+   initialization, and OpenAPI entry points. Compare its fingerprint across
+   deployed processes. An empty definition no longer includes the sample
+   products, dashboard, or file-object API. Existing starter deployments must
+   opt in:
 
    ```go
    application.Define(
@@ -18,9 +19,11 @@ removed instead of being preserved as a compatibility mode.
        application.StarterExampleModule(),
    )
    ```
-2. Run the explicit migrate process before API or worker rollout. Neither
-   runtime calls `AutoMigrate` or modifies schema. Use `migrate status` and
-   `migrate version` as release checks.
+2. Give the API's persisted database account both runtime and DDL authority.
+   Start exactly one API first: it applies the selected Goose migrations,
+   synchronizes access drift, and must report application mode plus readiness
+   before workers start. Workers remain schema-read-only. No runtime uses
+   `AutoMigrate`, and there is no separate migrate/bootstrap CLI or image.
 3. Update every protected `module.OperationDefinition` to declare an
    `Authentication` scheme, lowercase permission, and policy reference. Public
    operations must be explicitly `Public`.
@@ -66,11 +69,10 @@ because a module rollback cannot safely distinguish an adopted historical
 table from one it created. Remove those tables only through an explicit,
 backup-verified application data-retirement migration.
 
-Run the new migrate artifact once before starting API or worker processes.
-`migrate status`, runtime startup, and readiness include only the migration
-bundles in the selected definition. A zero-business definition therefore does
-not require either bundled history; the checked-in starter definition requires
-both.
+Roll out one API instance before starting workers. Its automatic migration,
+runtime startup, and readiness include only the migration bundles in the
+selected definition. A zero-business definition therefore does not require
+either bundled history; the checked-in starter definition requires both.
 
 In production, registering `FilesModule` also requires
 `AGINEX_JOBS_DRIVER=postgres` so file deletion and orphan recovery remain
@@ -80,8 +82,10 @@ durable. A definition without the files module may keep jobs disabled.
 
 The upgrade does not retain compatibility for unscoped global file access,
 audit failure followed by business commit, arbitrary request IDs, unchecked
-redirect destinations, production startup migration, critical in-process
-goroutines, or parallel handwritten/generated API contracts.
+redirect destinations, a separate migration/bootstrap operations flow,
+critical in-process goroutines, or parallel handwritten/generated API
+contracts. The API now applies Goose migrations and synchronizes access drift
+before it reports ready.
 
 Unversioned health probes are now `/health/live` and `/health/ready`; the
 existing `/api/v1/health/*` routes are compatibility aliases. External business
@@ -90,14 +94,15 @@ APIs remain under `/api/v1`.
 ## Rollout order
 
 1. Back up and restore-test the database and object store.
-2. Build API, worker, migration, and web artifacts from one commit and module
-   fingerprint.
-3. Run the new migration image once and require a current status.
-4. Run explicit bootstrap only when synchronizing registered permissions or
-   initial administrator access.
-5. Roll out workers, then API, then the generated-client web build.
-6. Require readiness and the release verification matrix before routing real
-   users.
+2. Build API, worker, and web artifacts from one commit and module fingerprint.
+3. Roll out one API instance with its durable installation volume and
+   DDL-capable runtime DSN; require `mode=application` and readiness after its
+   automatic migration and access synchronization.
+4. Start workers only after that API initialization succeeds; workers never
+   mutate schema.
+5. Roll out the generated-client web build and route `/api/*` plus `/health/*`
+   to Go, with all other paths routed to Next.
+6. Require the release verification matrix before routing real users.
 
 Use expand/migrate/contract phases for destructive application schema changes.
 Rollback may require rolling application binaries back before a later contract

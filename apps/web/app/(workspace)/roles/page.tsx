@@ -1,27 +1,31 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { ResourceList } from "@/components/resource-list";
 import { listRoles } from "@/lib/api";
 import "../products/products.css";
 
 export default function RolesPage() {
+  const t = useTranslations("Roles");
+
   return (
     <ResourceList
       columns={[
-        { key: "name", label: "Role" },
-        { key: "description", label: "Description" },
+        { key: "name", label: t("columns.role") },
+        { key: "description", label: t("columns.description") },
         {
           key: "permissions",
-          label: "Permissions",
+          label: t("columns.permissions"),
           format: (value) =>
-            Array.isArray(value) ? `${value.length} grants` : "0 grants",
+            t("grantCount", { count: Array.isArray(value) ? value.length : 0 }),
         },
       ]}
-      description="Roles group explicit resource:action grants. Navigation and API enforcement share the same permission codes."
-      eyebrow="Authorization"
+      description={t("header.description")}
+      eyebrow={t("header.eyebrow")}
       load={listRoles}
       queryKey="roles"
-      title="Access"
+      resourceLabel={t("resourceLabel")}
+      title={t("header.title")}
     />
   );
 }

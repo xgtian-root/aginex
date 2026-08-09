@@ -50,6 +50,7 @@ func TestLoadDefaults(t *testing.T) {
 func TestProductionRequiresSessionSecret(t *testing.T) {
 	t.Setenv("AGINEX_ENV", "production")
 	t.Setenv("AGINEX_DATABASE_DRIVER", "postgres")
+	t.Setenv("AGINEX_DATABASE_DSN", "postgres://aginex@example.com/aginex")
 	t.Setenv("AGINEX_JOBS_DRIVER", "postgres")
 	t.Setenv("AGINEX_SESSION_SECRET", "short")
 	t.Setenv("AGINEX_SESSION_SECURE", "true")
@@ -63,6 +64,7 @@ func TestProductionRequiresSessionSecret(t *testing.T) {
 func TestProductionRejectsInsecureCookiesAndOrigins(t *testing.T) {
 	t.Setenv("AGINEX_ENV", "production")
 	t.Setenv("AGINEX_DATABASE_DRIVER", "postgres")
+	t.Setenv("AGINEX_DATABASE_DSN", "postgres://aginex@example.com/aginex")
 	t.Setenv("AGINEX_JOBS_DRIVER", "postgres")
 	t.Setenv(
 		"AGINEX_SESSION_SECRET",
@@ -96,6 +98,8 @@ func TestProductionCoreConfigurationDoesNotRequireDurableJobs(t *testing.T) {
 
 func TestLoadExplicitOriginAllowlistAndTrustedProxies(t *testing.T) {
 	t.Setenv("AGINEX_ENV", "development")
+	t.Setenv("AGINEX_DATABASE_DRIVER", "sqlite")
+	t.Setenv("AGINEX_DATABASE_DSN", "test.db")
 	t.Setenv("AGINEX_WEB_ORIGINS", "https://admin.example.com, https://ops.example.com")
 	t.Setenv("AGINEX_TRUSTED_PROXIES", "127.0.0.1,10.0.0.0/8")
 	cfg, err := Load()
@@ -147,6 +151,7 @@ func TestProductionRejectsExampleCredentials(t *testing.T) {
 		t.Helper()
 		t.Setenv("AGINEX_ENV", "production")
 		t.Setenv("AGINEX_DATABASE_DRIVER", "postgres")
+		t.Setenv("AGINEX_DATABASE_DSN", "postgres://aginex@example.com/aginex")
 		t.Setenv("AGINEX_JOBS_DRIVER", "disabled")
 		t.Setenv("AGINEX_SESSION_SECURE", "true")
 		t.Setenv(
@@ -212,6 +217,8 @@ func TestLoadRejectsInvalidSameSiteAndLimits(t *testing.T) {
 }
 
 func TestLoadExplicitRateLimits(t *testing.T) {
+	t.Setenv("AGINEX_DATABASE_DRIVER", "sqlite")
+	t.Setenv("AGINEX_DATABASE_DSN", "test.db")
 	t.Setenv("AGINEX_RATE_LIMIT_LOGIN_LIMIT", "7")
 	t.Setenv("AGINEX_RATE_LIMIT_LOGIN_WINDOW", "2m")
 	t.Setenv("AGINEX_RATE_LIMIT_UPLOAD_LIMIT", "45")
@@ -235,6 +242,7 @@ func TestLoadExplicitRateLimits(t *testing.T) {
 func TestLoadRejectsInvalidJobProviderCombination(t *testing.T) {
 	t.Setenv("AGINEX_JOBS_DRIVER", "postgres")
 	t.Setenv("AGINEX_DATABASE_DRIVER", "sqlite")
+	t.Setenv("AGINEX_DATABASE_DSN", "test.db")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected PostgreSQL jobs with SQLite database to fail")
 	}
@@ -273,6 +281,8 @@ func TestValidateRejectsProgrammaticProductionBypass(t *testing.T) {
 }
 
 func TestLoadExplicitIdempotencyConfiguration(t *testing.T) {
+	t.Setenv("AGINEX_DATABASE_DRIVER", "sqlite")
+	t.Setenv("AGINEX_DATABASE_DSN", "test.db")
 	t.Setenv("AGINEX_IDEMPOTENCY_DRIVER", "disabled")
 	t.Setenv("AGINEX_IDEMPOTENCY_LEASE_DURATION", "45s")
 	t.Setenv("AGINEX_IDEMPOTENCY_TTL", "72h")

@@ -211,15 +211,15 @@ jobs:
       AGINEX_WEB_ORIGINS: http://127.0.0.1:3000
       AGINEX_SESSION_SECRET: e2e-only-${{ github.run_id }}-${{ github.run_attempt }}-not-a-production-secret
       AGINEX_SESSION_SECURE: "false"
-      AGINEX_DATABASE_DRIVER: postgres
-      AGINEX_DATABASE_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex?sslmode=disable
+      AGINEX_CONFIG_FILE: /tmp/aginex-e2e-${{ github.run_id }}-${{ github.run_attempt }}/aginex-config.json
       AGINEX_IDEMPOTENCY_DRIVER: database
       AGINEX_JOBS_DRIVER: postgres
       AGINEX_JOBS_WORKER_ID: aginex-e2e-worker
       AGINEX_STORAGE_DRIVER: local
       AGINEX_STORAGE_LOCAL_ROOT: /tmp/aginex-e2e-uploads
-      AGINEX_BOOTSTRAP_ADMIN_EMAIL: e2e-admin@example.com
-      AGINEX_BOOTSTRAP_ADMIN_PASSWORD: correct e2e administrator password
+      AGINEX_E2E_DATABASE_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex?sslmode=disable
+      AGINEX_E2E_ADMIN_EMAIL: e2e-admin@example.com
+      AGINEX_E2E_ADMIN_PASSWORD: correct e2e administrator password
       NEXT_PUBLIC_API_URL: http://127.0.0.1:8080
     steps:
       - name: Check out source
@@ -245,10 +245,6 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: Apply migrations and bootstrap administrator
-        run: |
-          go run ./cmd/aginex migrate up
-          go run ./cmd/aginex bootstrap
       - name: Run browser workflows
         run: pnpm e2e
       - name: Upload failure evidence
@@ -303,10 +299,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [api, worker, migrate, web]
+        target: [api, worker, web]
     env:
       IMAGE_REF: aginex-ci-${{ matrix.target }}:${{ github.sha }}
-      OPS_IMAGE_REF: aginex-ci-ops:${{ github.sha }}-${{ matrix.target }}
+      API_IMAGE_REF: aginex-ci-api:${{ github.sha }}-${{ matrix.target }}
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -330,17 +326,16 @@ jobs:
             VERSION=0.1.0-ci
             COMMIT=${{ github.sha }}
             BUILD_DATE=${{ steps.metadata.outputs.created }}
-            NEXT_PUBLIC_API_URL=https://api.example.invalid
           cache-from: type=gha,scope=aginex-${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=aginex-${{ matrix.target }}
-      - name: Build operations helper for runtime smoke
-        if: matrix.target == 'api' || matrix.target == 'worker'
+      - name: Build API helper for worker smoke
+        if: matrix.target == 'worker'
         run: >-
           docker buildx build
           --file Dockerfile
-          --target migrate
+          --target api
           --load
-          --tag "$OPS_IMAGE_REF"
+          --tag "$API_IMAGE_REF"
           --build-arg VERSION=0.1.0-ci
           --build-arg COMMIT=${{ github.sha }}
           --build-arg BUILD_DATE=${{ steps.metadata.outputs.created }}
@@ -357,7 +352,7 @@ jobs:
           stop_signal="$(docker image inspect --format '{{ .Config.StopSignal }}' "$IMAGE_REF")"
           test "$stop_signal" = "SIGTERM"
       - name: Smoke test read-only runtime and SIGTERM
-        run: bash scripts/ci-image-smoke.sh "${{ matrix.target }}" "$IMAGE_REF" "$OPS_IMAGE_REF"
+        run: bash scripts/ci-image-smoke.sh "${{ matrix.target }}" "$IMAGE_REF" "$API_IMAGE_REF"
       - name: Generate CycloneDX SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

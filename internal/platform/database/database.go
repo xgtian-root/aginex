@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -15,6 +16,19 @@ import (
 )
 
 func Open(cfg config.Database) (*gorm.DB, error) {
+	return OpenContext(context.Background(), cfg)
+}
+
+// OpenContext opens and verifies a database while honoring the caller's
+// startup deadline. MySQL version discovery is disabled so the first network
+// operation is the explicit context-aware ping below.
+func OpenContext(ctx context.Context, cfg config.Database) (*gorm.DB, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("database context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var dialector gorm.Dialector
 	switch cfg.Driver {
 	case "sqlite":
@@ -25,13 +39,17 @@ func Open(cfg config.Database) (*gorm.DB, error) {
 	case "postgres":
 		dialector = postgres.Open(cfg.DSN)
 	case "mysql":
-		dialector = mysql.Open(cfg.DSN)
+		dialector = mysql.New(mysql.Config{
+			DSN:                       cfg.DSN,
+			SkipInitializeWithVersion: true,
+		})
 	default:
 		return nil, fmt.Errorf("unsupported database driver %q", cfg.Driver)
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: newSafeLogger(slog.Default()),
+		DisableAutomaticPing: true,
+		Logger:               newSafeLogger(slog.Default()),
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -47,5 +65,9 @@ func Open(cfg config.Database) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetMaxOpenConns(20)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		return nil, err
+	}
 	return db, nil
 }

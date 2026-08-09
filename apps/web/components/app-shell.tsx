@@ -14,44 +14,47 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect } from "react";
-import { getCurrentUser, logout } from "@/lib/api";
+import { LocaleSwitcher } from "@/components/locale-switcher";
+import { ApiError, getCurrentUser, logout } from "@/lib/api";
 
 const navigation = [
   {
     href: "/dashboard",
-    label: "Overview",
+    label: "overview",
     icon: Gauge,
     permission: "dashboard:read",
   },
   {
     href: "/products",
-    label: "Products",
+    label: "products",
     icon: Boxes,
     permission: "products:read",
   },
-  { href: "/users", label: "People", icon: Users, permission: "users:read" },
+  { href: "/users", label: "people", icon: Users, permission: "users:read" },
   {
     href: "/roles",
-    label: "Access",
+    label: "access",
     icon: ShieldCheck,
     permission: "roles:read",
   },
   {
     href: "/audit",
-    label: "Audit trail",
+    label: "auditTrail",
     icon: FileClock,
     permission: "audit:read",
   },
   {
     href: "/files",
-    label: "Files",
+    label: "files",
     icon: Images,
     permission: "files:read",
   },
-];
+] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("Shell");
   const pathname = usePathname();
   const router = useRouter();
   const me = useQuery({
@@ -59,15 +62,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     queryFn: getCurrentUser,
     retry: false,
   });
+  const needsLogin =
+    me.error instanceof ApiError && me.error.response.status === 401;
 
   useEffect(() => {
-    if (me.isError) {
+    if (needsLogin) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
-  }, [me.isError, pathname, router]);
+  }, [needsLogin, pathname, router]);
 
   if (me.isPending) {
     return <ShellSkeleton />;
+  }
+  if (me.isError && !needsLogin) {
+    return (
+      <div className="shell-query-error" role="alert">
+        <span className="brand-mark" aria-hidden>
+          A
+        </span>
+        <LocaleSwitcher />
+        <p className="eyebrow">{t("error.eyebrow")}</p>
+        <h1>{t("error.title")}</h1>
+        <p>{t("error.description")}</p>
+        <button className="button" onClick={() => me.refetch()} type="button">
+          {t("error.action")}
+        </button>
+      </div>
+    );
   }
   if (!me.data) {
     return null;
@@ -86,17 +107,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="shell">
       <a className="skip-link" href="#main-content">
-        Skip to main content
+        {t("skipLink")}
       </a>
       <aside className="rail">
-        <Link className="brand" href="/dashboard" aria-label="Aginex home">
+        <Link
+          className="brand"
+          href="/dashboard"
+          aria-label={t("homeAriaLabel")}
+        >
           <span className="brand-mark">A</span>
           <span>
             <strong>aginex</strong>
-            <small>control room</small>
+            <small>{t("brandTagline")}</small>
           </span>
         </Link>
-        <nav aria-label="Primary navigation">
+        <nav aria-label={t("primaryNavigationAriaLabel")}>
           {allowed.map((item) => {
             const Icon = item.icon;
             const isActive = pathname.startsWith(item.href);
@@ -107,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
               >
                 <Icon aria-hidden size={18} strokeWidth={1.8} />
-                <span>{item.label}</span>
+                <span>{t(`navigation.${item.label}`)}</span>
                 {isActive && <ChevronRight className="nav-caret" size={15} />}
               </Link>
             );
@@ -120,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <small>{me.data.email}</small>
           </span>
           <button
-            aria-label="Sign out"
+            aria-label={t("signOutAriaLabel")}
             className="icon-button"
             onClick={signOut}
             type="button"
@@ -131,11 +156,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="workbench">
         <header className="topbar">
-          <span className="eyebrow">{active?.label ?? "Workspace"}</span>
-          <span className="environment">
-            <i aria-hidden />
-            Development
+          <span className="eyebrow">
+            {active ? t(`navigation.${active.label}`) : t("workspaceFallback")}
           </span>
+          <div className="topbar-actions">
+            <span className="environment">
+              <i aria-hidden />
+              {t("environment")}
+            </span>
+            <LocaleSwitcher />
+          </div>
         </header>
         <main id="main-content">{children}</main>
       </div>
@@ -144,10 +174,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function ShellSkeleton() {
+  const t = useTranslations("Shell");
   return (
     <div className="loading-shell" aria-live="polite">
       <span className="brand-mark">A</span>
-      <p>Opening your workspace…</p>
+      <p>{t("openingWorkspace")}</p>
+      <LocaleSwitcher />
     </div>
   );
 }

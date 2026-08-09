@@ -13,6 +13,9 @@ func TestHashAndVerify(t *testing.T) {
 	if !Verify(encoded, "correct horse battery staple") {
 		t.Fatal("expected the password to verify")
 	}
+	if !ValidHash(encoded) {
+		t.Fatal("generated password is not a structurally valid hash")
+	}
 	if Verify(encoded, "incorrect password") {
 		t.Fatal("expected an incorrect password to fail")
 	}
@@ -37,6 +40,11 @@ func TestPasswordBoundsRejectOversizedInputAndUnsafeStoredCost(t *testing.T) {
 		"correct horse battery staple",
 	) {
 		t.Fatal("Verify accepted an unsafe Argon2 memory cost")
+	}
+	if ValidHash(
+		"$argon2id$v=19$m=4294967295,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA",
+	) {
+		t.Fatal("ValidHash accepted an unsafe Argon2 memory cost")
 	}
 	if Verify(
 		"$argon2id$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA",

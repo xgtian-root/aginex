@@ -4,7 +4,7 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
-  border-left: 0.35rem solid var(--signal);
+  border-inline-start: 0.35rem solid var(--signal);
   padding: 1rem 1.25rem;
 }
 

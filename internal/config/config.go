@@ -94,7 +94,11 @@ type Storage struct {
 	AccessKeySecret string
 }
 
-func Load() (Config, error) {
+// loadEnvironmentConfig loads configuration owned by the process environment.
+// Database installation state is resolved separately by LoadState so an
+// entirely unconfigured database can be represented without an implicit
+// SQLite fallback.
+func loadEnvironmentConfig() (Config, error) {
 	sessionTTL, err := durationValue("AGINEX_SESSION_TTL", "24h")
 	if err != nil {
 		return Config{}, err
@@ -208,8 +212,8 @@ func Load() (Config, error) {
 			ShutdownGracePeriod: shutdownGracePeriod,
 		},
 		Database: Database{
-			Driver: strings.ToLower(value("AGINEX_DATABASE_DRIVER", "sqlite")),
-			DSN:    value("AGINEX_DATABASE_DSN", "data/aginex.db"),
+			Driver: strings.ToLower(strings.TrimSpace(os.Getenv("AGINEX_DATABASE_DRIVER"))),
+			DSN:    strings.TrimSpace(os.Getenv("AGINEX_DATABASE_DSN")),
 		},
 		Session: Session{
 			CookieName: value(
@@ -266,9 +270,6 @@ func Load() (Config, error) {
 		WebOrigins: webOrigins,
 	}
 	cfg = WithDefaults(cfg)
-	if err := Validate(cfg); err != nil {
-		return Config{}, err
-	}
 	return cfg, nil
 }
 
@@ -384,6 +385,29 @@ func WithDefaults(cfg Config) Config {
 // environment loader.
 func Validate(input Config) error {
 	cfg := WithDefaults(input)
+	if err := validateWithoutDatabase(cfg); err != nil {
+		return err
+	}
+	switch cfg.Database.Driver {
+	case "sqlite", "postgres", "mysql":
+	default:
+		return fmt.Errorf(
+			"unsupported database driver %q",
+			cfg.Database.Driver,
+		)
+	}
+	if cfg.Jobs.Driver == "postgres" && cfg.Database.Driver != "postgres" {
+		return fmt.Errorf(
+			"AGINEX_JOBS_DRIVER=postgres requires AGINEX_DATABASE_DRIVER=postgres",
+		)
+	}
+	return nil
+}
+
+// validateWithoutDatabase validates configuration needed by both the setup
+// server and the fully initialized application. Database-specific checks are
+// intentionally deferred until setup supplies a database configuration.
+func validateWithoutDatabase(cfg Config) error {
 	switch cfg.Environment {
 	case "development", "test", "production":
 	default:
@@ -398,14 +422,6 @@ func Validate(input Config) error {
 	if err := validateTrustedProxies(cfg.HTTP.TrustedProxies); err != nil {
 		return err
 	}
-	switch cfg.Database.Driver {
-	case "sqlite", "postgres", "mysql":
-	default:
-		return fmt.Errorf(
-			"unsupported database driver %q",
-			cfg.Database.Driver,
-		)
-	}
 	switch cfg.Storage.Driver {
 	case "local", "s3", "oss":
 	default:
@@ -415,13 +431,7 @@ func Validate(input Config) error {
 		)
 	}
 	switch cfg.Jobs.Driver {
-	case "disabled":
-	case "postgres":
-		if cfg.Database.Driver != "postgres" {
-			return fmt.Errorf(
-				"AGINEX_JOBS_DRIVER=postgres requires AGINEX_DATABASE_DRIVER=postgres",
-			)
-		}
+	case "disabled", "postgres":
 	default:
 		return fmt.Errorf(
 			"unsupported jobs driver %q",

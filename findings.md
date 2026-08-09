@@ -1,5 +1,264 @@
 # Findings
 
+## Modern Setup Redesign Findings — 2026-08-09
+
+### Requirements and Constraints
+
+- The user explicitly requested a modern redesign of the Setup page and named
+  the `frontend-design` skill.
+- Aginex project guidance routes UI work through `add-admin-page`: preserve API
+  contracts, accessibility, responsive behavior, permissions/runtime guards,
+  complete data states, and the Web verification gate.
+- The worktree already contains substantial uncommitted Setup and localization
+  implementation. Those changes are application-owned and must be preserved.
+- Current Setup is a three-step client wizard backed by runtime mode/status
+  queries and database/setup mutations. The redesign must not change those
+  state machines, redirect behavior, or stable API values.
+
+### Initial Visual Direction
+
+- Direction: light editorial-industrial “commissioning desk” rather than a
+  generic SaaS card wizard. Use warm mineral surfaces, dark aubergine ink, and
+  a rare persimmon signal accent.
+- Differentiator: an asymmetric commissioning rail that turns setup progress
+  into a strong piece of page architecture, with oversized typographic step
+  numerals and a compact live-system status strip.
+- Typography should use the project’s already-loaded expressive family where
+  possible; avoid adding a network font dependency or falling back to generic
+  Inter/Roboto styling.
+- Motion is limited to a coordinated entrance and state feedback using
+  transform/opacity with exponential easing and a reduced-motion fallback.
+
+### Resources
+
+- `apps/web/components/setup-wizard.tsx`
+- `apps/web/app/setup/setup.css`
+- `apps/web/app/setup/page.tsx`
+
+## Web Internationalization Findings — 2026-08-09
+
+### Requirements
+
+- Aginex must support multiple UI languages.
+- Initial implementation assumption: English and Simplified Chinese, with an
+  architecture that makes later locales additive.
+- Include locale negotiation, an explicit persistent switcher, localized
+  dates/numbers/error copy, and correct `<html lang>` behavior.
+- Preserve the existing `/api/v1` contracts and stable problem codes.
+- Work around the substantial in-progress Setup changes already present in the
+  shared worktree; do not overwrite application-owned drift.
+
+### Initial Hardening Constraints
+
+- Avoid hydration mismatch between server-rendered and client-rendered locale.
+- UI controls must tolerate longer translations and CJK text.
+- Missing messages must have a deterministic English fallback.
+- Locale handling must fail closed to the supported locale allowlist.
+
+### Baseline Discoveries
+
+- The web package has no current i18n dependency. Its root layout is a server
+  component with a hard-coded `<html lang="en">`, while `Providers` and most
+  interactive surfaces are client components.
+- `AppShell` owns navigation, authentication states, environment copy, and
+  sign-out UI in one client component, making a context-backed translation hook
+  a natural migration seam.
+- The workspace layout is dynamic and already performs a server-side runtime
+  check before rendering the client shell. Locale resolution can happen once in
+  the root server layout and be passed into the provider without adding a URL
+  segment or duplicating runtime requests.
+- There is no existing translation library in `apps/web/package.json`; adding
+  one would require dependency/lockfile churn. A typed in-repo catalog is viable
+  for the current surface area and keeps the runtime contract explicit.
+- The current shell contains user-visible error, loading, navigation, ARIA, and
+  brand-support copy that all needs catalog coverage; permission identifiers and
+  route paths must remain unchanged.
+- Setup is the largest migration surface (`setup-wizard.tsx` is 941 lines) and
+  already contains stable machine states (`stage`, `code`, driver values) next
+  to user-facing labels. Catalogs must translate labels and failure fallbacks,
+  while preserving every state/code comparison.
+- Login, files, and products currently display backend `problem.detail`
+  directly. That cannot guarantee a selected UI language; presentation should
+  prefer a catalog lookup keyed by stable `problem.code`, with a localized
+  generic fallback instead of leaking server prose across locales.
+- Dates, counts, prices, and byte sizes are formatted ad hoc with the ambient
+  browser locale. Shared `Intl.DateTimeFormat` / `Intl.NumberFormat` helpers
+  must use the selected locale explicitly so server language and formatting do
+  not drift.
+- ResourceList currently derives English grammar from a supplied title
+  (`Loading ${title.toLowerCase()}`, `${title} are unavailable`). These states
+  need explicit translated messages or message callbacks; sentence composition
+  is not portable across languages.
+- Status values (`draft`, `active`, `archived`, file/user state), setup stages,
+  and permission grant counts need localized display labels without changing
+  their underlying API values.
+- Dynamic ARIA labels containing filenames/product names require interpolation
+  support. Static catalog strings alone are insufficient.
+- Product prices are stored as integer cents but the UI hard-codes `$`; the
+  selected locale alone cannot infer a business currency. Keep USD as the
+  current explicit product assumption and format it with `Intl.NumberFormat`.
+- Existing Vitest coverage is library-focused and has no component/i18n tests.
+  The configured jsdom + Testing Library stack can cover the provider/switcher,
+  while pure locale negotiation/catalog/formatter tests should remain DOM-free.
+- Playwright selectors currently target English labels. English must remain the
+  default fallback so existing E2E stays stable; add one focused Chinese locale
+  scenario rather than duplicating the full destructive admin workflow.
+- API error construction should remain language-neutral infrastructure. Add a
+  presentation helper outside `api.ts` that maps stable problem codes and HTTP
+  statuses into localized UI messages, preserving raw details for diagnostics
+  but not using them as the primary translated display.
+- Several styles use physical left/right borders and offsets (`app-shell.css`,
+  Login, dashboard, files). Full RTL is not an initial shipped locale, but
+  locale infrastructure should set `dir` and touched styles should favor logical
+  properties so a future RTL catalog does not require architectural changes.
+- The root Home and route layouts all render `RuntimeUnavailable`; because the
+  root locale provider wraps them, this component can become a client consumer
+  without changing fail-closed server mode checks.
+- Metadata is currently static English. Root metadata can remain the brand
+  fallback, but Setup route metadata should be generated from the server-resolved
+  locale to avoid a localized page with an English browser title.
+- The installed Next 16 types confirm both `cookies()` and `headers()` are async.
+  Locale resolution in the root layout should await both once, prefer the
+  allowlisted cookie, then negotiate `Accept-Language`.
+- Existing web drift is concentrated in runtime/Setup guards, API contracts,
+  shell error handling, and E2E. Internationalization edits must be additive on
+  the current file contents; generated `api.generated.ts` is out of scope.
+- Repository architecture documentation already classifies `next-intl` as a P0
+  frontend dependency, and the v1 PRD explicitly requires English-default UI
+  with an internationalization seam. This supersedes the initial no-new-runtime
+  preference: use `next-intl` rather than inventing a framework-specific runtime.
+- Keep existing unprefixed routes. Locale is presentation state, not an API or
+  resource identifier, so cookie/header resolution avoids breaking redirects,
+  bookmarks, permissions, and the one-shot Setup E2E workflow.
+- Current official `next-intl` App Router guidance explicitly supports apps
+  without locale-specific URLs: resolve locale from a cookie or other user
+  preference in `i18n/request.ts`, register the Next plugin, and expose request
+  config to client components through `NextIntlClientProvider`.
+- `next-intl` request config is already React-cache scoped once per request and
+  can safely read async `cookies()` / `headers()`. Its provider inherits locale,
+  messages, timezone, and formats from the server configuration.
+- For unprefixed routing, official guidance changes locale by updating the
+  source preference (the locale cookie here). A router refresh can then obtain a
+  consistent server/client configuration without changing the pathname.
+- Configure a deterministic UTC timezone because audit timestamps are global
+  event instants and the product currently has no persisted user timezone.
+- The backend Problem contract already guarantees a language-neutral `code` but
+  treats `title` and `detail` as free text. Many business errors collapse to
+  generic status-derived codes, so the first UI mapper can promise localized
+  generic guidance, not a distinct translation for every backend cause.
+- Setup exposes a finite status/stage contract and explicit `SETUP_*` codes;
+  translate their presentation without changing request payloads, React Query
+  keys, OpenAPI, or generated client types.
+- Native HTML validation bubbles follow the browser UI language, not the
+  in-product cookie. Initial i18n will retain native validation semantics; fully
+  controlled translated validation is a separate form-validation enhancement.
+- Role descriptions and audit summaries are backend-owned English content.
+  Localizing that data later requires stable structured keys/parameters, not
+  translated database columns; this slice localizes product chrome and enum/action
+  presentation without claiming backend content localization.
+- `next-intl` installed successfully through the existing pnpm store. The
+  package manager reported only already-policy-managed ignored optional build
+  scripts; no application build script was requested or bypassed.
+- The resolved version is `next-intl` 4.13.5, whose peer range explicitly
+  includes Next 16 and React 19. Its current types support `AppConfig` module
+  augmentation for strict Locale and Messages types.
+- Locale request configuration now uses explicit message loaders, the strict
+  cookie allowlist before header negotiation, and UTC. The root server layout
+  consumes the same request locale for `<html lang dir>` and the client provider.
+- The finished catalogs contain exact recursive and ICU placeholder parity for
+  English and Simplified Chinese, including ARIA text, loading/error states,
+  enum labels, plural counts, Setup stages, and stable Problem codes. User-entered
+  and backend-owned content remains verbatim by design.
+- The locale switcher persists only an allowlisted, non-sensitive BCP 47 value
+  in a one-year SameSite=Lax cookie (Secure on HTTPS), updates document language
+  and direction immediately, then refreshes Server Components so metadata and
+  provider messages converge on the same request locale.
+- Locale-sensitive CSS now uses logical inline properties for the shell, tables,
+  form errors, metrics, and upload accents; mobile table labels can expand to
+  40% and wrap, and Simplified Chinese receives an explicit CJK font stack with
+  reduced editorial letter spacing.
+- A separate problem presentation helper maps stable codes to catalog keys,
+  supports operation-specific overrides, and intentionally never exposes raw
+  backend detail as the localized default.
+- Production-request verification confirms that request negotiation controls the
+  initial document language, route metadata, and Setup copy before hydration;
+  the strict locale cookie takes precedence over a conflicting browser header.
+- Final Web verification passed typecheck, full Biome, 93 Vitest cases, the
+  webpack production build, standalone artifact assertion, Playwright test
+  discovery, and whitespace validation. The destructive one-shot Setup/admin
+  Playwright workflow remains an environment gate rather than being run against
+  the developer's current installation state.
+
+### Resources
+
+- https://next-intl.dev/docs/getting-started/app-router
+- https://next-intl.dev/docs/usage/configuration
+- https://next-intl.dev/docs/usage/translations
+- https://next-intl.dev/docs/usage/dates-times
+
+## Embedded Setup Findings — 2026-08-09
+
+- `cmd/server` currently loads a fully validated runtime config, opens the
+  database, constructs the application, and only then starts HTTP; it needs a
+  database-independent supervisor and base-config loader.
+- `config.Load` currently defaults a missing database to
+  `sqlite/data/aginex.db`, so raw environment presence must be tracked before
+  defaults are applied.
+- Reusable initialization seams already exist:
+  `Definition.MigrateUp`, `Definition.Bootstrap`, `Definition.NewAPI`, and
+  `App.Start`.
+- The web root unconditionally redirects to `/dashboard`; workspace auth treats
+  every `/auth/me` failure as unauthenticated. Both must use a no-store system
+  mode probe and distinguish 401 from availability failures.
+- The current Docker API image injects a SQLite DSN, which would permanently
+  bypass Setup; that default must be removed and `/data` must carry the sealed
+  configuration.
+- Production FilesModule currently requires PostgreSQL jobs, so the shipped
+  production composition can only complete Setup with PostgreSQL unless Jobs
+  or the module composition changes outside this task.
+- Setup is an unauthenticated database-connection surface by explicit product
+  choice. Strict Origin/CSRF, bounded requests, redacted errors, and an external
+  VPN/proxy/security-group allowlist are mandatory compensating controls.
+- UI direction: refined industrial installation console, three steps, visible
+  progress, no decorative card grid, responsive split composition, strong
+  focus states, and reduced-motion support.
+- Existing bootstrap always performs upserts/association replacement and emits
+  `SourceCLI`, even on an unchanged second run. Main-owned startup requires a
+  drift preflight plus configurable `http`/`system` audit context so restarts
+  do not create misleading audit entries.
+- `App.Start` is idempotent while started and `App.Shutdown` owns reverse-order
+  lifecycle cleanup, so a Setup initializer can start a candidate before the
+  atomic handler swap and hand a single cleanup closure to the supervisor.
+- Worker already uses configured-only `config.Load` and performs read-only
+  readiness checks; once that loader understands the installation file it can
+  remain non-mutating while failing with `ErrSetupRequired` on fresh installs.
+- The installation store uses an exclusive hard-link publication after file
+  fsync, which prevents overwrite races. Its API must distinguish failures
+  before publication from cleanup/directory-sync failures after the target is
+  visible; otherwise the live handler could remain in Setup while the next
+  restart is permanently configured.
+- HTTP readiness already contains the authoritative database, migration,
+  storage, and module checks, but lacked a callable method. Candidate Setup
+  activation needs the same checks before sealing configuration, so `App.Ready`
+  is being exposed without changing the public probe response.
+- The Setup supervisor now separates a stable mode route from an atomically
+  swappable delegate, runs accepted initialization under a process-owned
+  timeout, clears request-held secrets after use, and treats configuration
+  commit as the point of no return. Activated candidates must require a
+  shutdown closure so lifecycle/database resources remain owned through server
+  shutdown.
+- Setup captures only normalized request ID and client IP into its detached
+  initialization context. The server initializer can therefore emit HTTP
+  bootstrap audit attribution without retaining arbitrary headers or tying the
+  accepted task to the browser request context.
+- Setup exports a pure `DocumentOpenAPI` contract merger. Calling it only from
+  `application.Definition.BuildOpenAPI` publishes the union contract to codegen
+  without registering Setup operations on a normal application router.
+- The Setup HTTP surface reuses the framework request-limit, CORS, CSRF, trusted
+  proxy, request-ID, RFC Problem, and no-store primitives. The mode probe is
+  intercepted outside both delegates, while Setup health is deliberately ready
+  so trusted ingress can route a fresh installation.
+
 ## Market
 
 - `gin-vue-admin` and `go-admin` validate demand for batteries-included Go
@@ -306,3 +565,24 @@
 - Docker 29.4.0.
 - Git 2.50.1; the workspace is an initialized repository with an intentionally
   uncommitted remediation worktree.
+# Embedded Setup implementation review (2026-08-09)
+
+- The Setup supervisor owns a single atomic `{mode, handler}` pair, detaches accepted initialization from the browser request, commits installation state before switching to the candidate handler, and treats that commit as the irreversible boundary.
+- Setup responses, mode probing, application-mode Setup 404s, and setup health/CSRF routes are all emitted through no-store handlers. Setup request DTOs use finite enums and write-only DSN/password schema fields; dependency failures are mapped to stable generic codes.
+- The in-memory write limiter is bounded and keyed by validated route plus trusted client IP, matching the locked single-instance assumption.
+- The shared CSRF middleware accepts an allowlisted Referer when Origin is absent. The locked Setup contract is stricter, so Setup write routes need an additional explicit non-empty Origin requirement before invoking the operation.
+- `App.Start` receives the initializer's bounded context. Lifecycle hooks are permitted to retain that context, so canceling the initialization timeout immediately after activation could terminate background hook work. Startup needs a process-lifetime runtime context while database/migration/readiness operations remain timeout-bounded.
+- Installation state correctly separates managed DSN persistence from environment markers, rejects partial database environment configuration and unsafe target files, and publishes an exclusive 0600 file only after syncing its contents. The marker is written only after a configured candidate is ready.
+- Delivery now builds only API/worker/web images, gives Go runtimes a persistent `/data` installation volume, and no longer injects a browser API origin at Web build time. Server-rendered Web guards therefore depend on the documented runtime-only `AGINEX_API_INTERNAL_URL` whenever Next and Go are separate containers.
+- Initial delivery prose covered same-origin browser routing but omitted the server-only internal API variable and `/health/*` ingress split; this was sent back for correction before final verification.
+- The existing Playwright suite still starts an already configured/bootstrap-backed application and contains no committed first-installation scenario. To meet the locked acceptance matrix, CI must start with an absent isolated config file and let the browser submit PostgreSQL/admin Setup before the existing admin workflows.
+- Adversarial frontend review found cross-tab CSRF invalidation: every token GET replaces the shared cookie, while each tab caches its token promise indefinitely. A second tab can make the first tab's Setup completion permanently 403. The backend should reuse a valid cookie token, and the browser client should invalidate/retry once on `CSRF_FORBIDDEN`.
+- Backend adversarial review found four fail-closed gaps to close before completion: pre-middleware business-path 404 isolation in Setup, Setup-specific size/TTL clamps, shutdown racing a delayed successful commit, and distinguishing uncommitted retryable config failures from sealed/published conflicts. It also found one secret-retention issue (bootstrap password copied into long-lived App config) and context.Background calls that bypass the total initialization timeout.
+- The first three supervisor gaps are now closed and covered by race tests. The remaining irreversible-boundary work is the config store's sealed-vs-retryable result and supervisor behavior when an installation file appears or is published without a confirmed directory fsync.
+- The config store now exposes `InstallationSealed(err)`: EEXIST and post-publication directory-fsync errors are non-retryable sealed outcomes, while pre-publication failures remain retryable. New directories sync their parent and the destination directory is preflight-fsynced before publication.
+- The current shipped definition includes Files, whose production constructor requires `AGINEX_JOBS_DRIVER=postgres`; config validation in turn requires a PostgreSQL database for that job driver. Therefore SQLite/MySQL may still be tested in development or derived compositions, but the production distribution rejects them before the installation file commit boundary.
+- The Setup supervisor initially reports database validation, advances to migration after its own ping, and accepts detailed stage reports from the unified initializer. Progress reports are now clamped to a monotonic stage order, so the concrete initializer's defensive database reopen cannot make the browser progress display move backward.
+- A worker needs an affirmative API lifecycle signal, not merely a readable installation marker: the marker proves a prior initialization but does not prove the current API completed a new automatic migration. Worker startup therefore polls the DB-independent mode endpoint and readiness before opening the database; its public API URL must be routable from the worker network.
+- HTTP Setup retries need different credential semantics from normal access drift synchronization. Setup explicitly replaces and verifies the submitted administrator hash so a failed pre-commit attempt can change password; configured startup still preserves existing credentials and only writes when permissions/roles drift.
+- Installation publication must classify more than the exclusive rename itself. Any filesystem failure before publication now rechecks the destination: only a definite absence remains retryable, while an existing or uninspectable marker seals Setup; new directory hierarchies persist each component by syncing its parent before proceeding.
+- Candidate ownership needs a durable in-memory shutdown result as well as an atomic handler. Both sealed and activated candidates now have exactly-once cleanup barriers; active cleanup uses a Supervisor-owned bounded context, while concurrent or retried callers independently bound their wait and observe one stable sanitized result.

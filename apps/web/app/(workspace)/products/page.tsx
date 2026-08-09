@@ -2,20 +2,24 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Trash2, X } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import {
-  ApiError,
   createProduct as createProductRequest,
   deleteProduct as deleteProductRequest,
   listProducts,
   type ProductDraft,
 } from "@/lib/api";
+import { localizeApiError } from "@/lib/problem-message";
 import "@/components/page-header.css";
 import "./products.css";
 
 export default function ProductsPage() {
+  const t = useTranslations("Products");
+  const translate = useTranslations();
+  const format = useFormatter();
   const client = useQueryClient();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -30,14 +34,10 @@ export default function ProductsPage() {
       client.invalidateQueries({ queryKey: ["products"] });
       client.invalidateQueries({ queryKey: ["dashboard-summary"] });
       setCreating(false);
-      toast.success("Product created.");
+      toast.success(t("createdToast"));
     },
     onError: (error) => {
-      toast.error(
-        error instanceof ApiError
-          ? error.problem.detail
-          : "The product could not be created.",
-      );
+      toast.error(localizeApiError(error, translate, t("createError")));
     },
   });
 
@@ -45,9 +45,10 @@ export default function ProductsPage() {
     mutationFn: deleteProductRequest,
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["products"] });
-      toast.success("Product deleted.");
+      toast.success(t("deletedToast"));
     },
-    onError: () => toast.error("The product could not be deleted."),
+    onError: (error) =>
+      toast.error(localizeApiError(error, translate, t("deleteError"))),
   });
 
   function create(event: FormEvent<HTMLFormElement>) {
@@ -71,23 +72,23 @@ export default function ProductsPage() {
             type="button"
           >
             <Plus aria-hidden size={17} />
-            Create product
+            {t("header.createAction")}
           </button>
         }
-        description="The canonical Aginex resource: searchable, permission-aware, audited, and backed by all supported databases."
-        eyebrow="Catalog operations"
-        title="Products"
+        description={t("header.description")}
+        eyebrow={t("header.eyebrow")}
+        title={t("header.title")}
       />
 
       {creating && (
         <form className="product-editor panel" onSubmit={create}>
           <div className="editor-heading">
             <div>
-              <p className="eyebrow">New record</p>
-              <h2>Create product</h2>
+              <p className="eyebrow">{t("editor.eyebrow")}</p>
+              <h2>{t("editor.title")}</h2>
             </div>
             <button
-              aria-label="Close product editor"
+              aria-label={t("editor.closeAriaLabel")}
               className="icon-button"
               onClick={() => setCreating(false)}
               type="button"
@@ -96,15 +97,15 @@ export default function ProductsPage() {
             </button>
           </div>
           <div className="field">
-            <label htmlFor="name">Product name</label>
+            <label htmlFor="name">{t("editor.nameLabel")}</label>
             <input className="input" id="name" name="name" required />
           </div>
           <div className="field">
-            <label htmlFor="sku">SKU</label>
+            <label htmlFor="sku">{t("editor.skuLabel")}</label>
             <input className="input" id="sku" name="sku" required />
           </div>
           <div className="field">
-            <label htmlFor="price">Price</label>
+            <label htmlFor="price">{t("editor.priceLabel")}</label>
             <input
               className="input"
               id="price"
@@ -116,16 +117,16 @@ export default function ProductsPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="status">Status</label>
+            <label htmlFor="status">{t("editor.statusLabel")}</label>
             <select
               className="input"
               defaultValue="draft"
               id="status"
               name="status"
             >
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
+              <option value="draft">{t("statuses.draft")}</option>
+              <option value="active">{t("statuses.active")}</option>
+              <option value="archived">{t("statuses.archived")}</option>
             </select>
           </div>
           <div className="editor-actions">
@@ -134,84 +135,94 @@ export default function ProductsPage() {
               onClick={() => setCreating(false)}
               type="button"
             >
-              Keep browsing
+              {t("editor.keepBrowsing")}
             </button>
             <button
               className="button"
               disabled={createProduct.isPending}
               type="submit"
             >
-              {createProduct.isPending ? "Creating product…" : "Create product"}
+              {createProduct.isPending
+                ? t("editor.pending")
+                : t("editor.submit")}
             </button>
           </div>
         </form>
       )}
 
-      <section className="panel product-list" aria-label="Product list">
+      <section className="panel product-list" aria-label={t("list.ariaLabel")}>
         <div className="table-tools">
           <label className="search-box">
             <Search aria-hidden size={17} />
-            <span className="sr-only">Search products</span>
+            <span className="sr-only">{t("list.searchAriaLabel")}</span>
             <input
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search name or SKU"
+              placeholder={t("list.searchPlaceholder")}
               type="search"
               value={search}
             />
           </label>
-          <span className="muted">{products.data?.total ?? 0} records</span>
+          <span className="muted">
+            {t("list.recordCount", { count: products.data?.total ?? 0 })}
+          </span>
         </div>
         {products.isError ? (
           <div className="empty-state" role="alert">
-            <h2>Products are unavailable</h2>
-            <p>Check the API connection and try again.</p>
+            <h2>{t("list.unavailableTitle")}</h2>
+            <p>{t("list.unavailableDescription")}</p>
           </div>
         ) : products.data?.items.length === 0 ? (
           <div className="empty-state">
-            <h2>No products yet</h2>
-            <p>
-              Create the first product to verify the complete resource workflow.
-            </p>
+            <h2>{t("list.emptyTitle")}</h2>
+            <p>{t("list.emptyDescription")}</p>
           </div>
         ) : (
           <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>SKU</th>
-                  <th>Price</th>
-                  <th>Status</th>
-                  <th>Updated</th>
+                  <th>{t("list.columns.name")}</th>
+                  <th>{t("list.columns.sku")}</th>
+                  <th>{t("list.columns.price")}</th>
+                  <th>{t("list.columns.status")}</th>
+                  <th>{t("list.columns.updated")}</th>
                   <th>
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t("list.columns.actions")}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {products.data?.items.map((product) => (
                   <tr key={product.id}>
-                    <td data-label="Name">
+                    <td data-label={t("list.columns.name")}>
                       <strong>{product.name}</strong>
                     </td>
-                    <td data-label="SKU">
+                    <td data-label={t("list.columns.sku")}>
                       <code>{product.sku}</code>
                     </td>
-                    <td data-label="Price">
-                      $
-                      {(product.priceCents / 100).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
+                    <td data-label={t("list.columns.price")}>
+                      {format.number(product.priceCents / 100, {
+                        style: "currency",
+                        currency: "USD",
                       })}
                     </td>
-                    <td data-label="Status">
-                      <span className="status">{product.status}</span>
+                    <td data-label={t("list.columns.status")}>
+                      <span className="status">
+                        {t(`statuses.${product.status}`)}
+                      </span>
                     </td>
-                    <td data-label="Updated">
-                      {new Date(product.updatedAt).toLocaleDateString()}
+                    <td data-label={t("list.columns.updated")}>
+                      {format.dateTime(new Date(product.updatedAt), {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
                     </td>
-                    <td data-label="Actions">
+                    <td data-label={t("list.columns.actions")}>
                       <button
-                        aria-label={`Delete ${product.name}`}
+                        aria-label={t("list.deleteAriaLabel", {
+                          name: product.name,
+                        })}
                         className="icon-button delete-button"
                         disabled={deleteProduct.isPending}
                         onClick={() => deleteProduct.mutate(product.id)}

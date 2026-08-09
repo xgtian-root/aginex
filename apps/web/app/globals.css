@@ -46,6 +46,43 @@ html {
   font-kerning: normal;
 }
 
+html:lang(zh-CN) {
+  font-family:
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Segoe UI", system-ui, sans-serif;
+}
+
+html:lang(zh-CN)
+  :is(
+    .page-title,
+    .login-story h1,
+    .login-form h2,
+    .shell-query-error h1,
+    .dashboard-notes h2,
+    .empty-state h2,
+    .setup-ledger__intro h1,
+    .setup-step-heading h2,
+    .setup-probe h1,
+    .setup-route-loading h1,
+    .runtime-unavailable h1
+  ) {
+  font-family: "Songti SC", "Noto Serif CJK SC", STSong, serif;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+html:lang(zh-CN)
+  :is(
+    .setup-wordmark,
+    .setup-serial,
+    .driver-fieldset legend,
+    .setup-field__label label,
+    .runtime-unavailable__mark
+  ) {
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
 body {
   min-height: 100vh;
   margin: 0;
@@ -83,7 +120,7 @@ select {
   position: fixed;
   z-index: 100;
   top: 0.75rem;
-  left: 0.75rem;
+  inset-inline-start: 0.75rem;
   transform: translateY(-200%);
   border-radius: var(--radius-sm);
   background: var(--ink);
@@ -101,6 +138,11 @@ select {
   font-weight: 750;
   letter-spacing: 0.13em;
   text-transform: uppercase;
+}
+
+html:lang(zh-CN) .eyebrow {
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .page-title {
@@ -194,7 +236,6 @@ select {
   padding: 0.22rem 0.55rem;
   font-size: 0.75rem;
   font-weight: 700;
-  text-transform: capitalize;
 }
 
 .status::before {
@@ -209,6 +250,51 @@ select {
   color: var(--ink-muted);
 }
 
+.locale-switcher {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.locale-switcher select {
+  min-height: 2.25rem;
+  max-width: 9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0.35rem 0.55rem;
+}
+
+.locale-switcher select:disabled {
+  cursor: progress;
+}
+
+.spin {
+  animation: global-spin 850ms linear infinite;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes global-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -220,7 +306,7 @@ select {
 .data-table td {
   border-bottom: 1px solid var(--line);
   padding: 0.9rem 1rem;
-  text-align: left;
+  text-align: start;
 }
 
 .data-table th {
@@ -254,7 +340,7 @@ select {
 
   .data-table td {
     display: grid;
-    grid-template-columns: 7rem 1fr;
+    grid-template-columns: minmax(7rem, 40%) minmax(0, 1fr);
     border: 0;
     padding: 0.35rem 1rem;
   }
@@ -266,7 +352,14 @@ select {
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    overflow-wrap: anywhere;
   }
+}
+
+html:lang(zh-CN) .data-table th,
+html:lang(zh-CN) .data-table td::before {
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,14 +2,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   border-top: 1px solid var(--line);
-  border-left: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
 }
 
 .metric {
   display: grid;
   min-height: 14rem;
   grid-template-columns: 1fr auto;
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background: var(--surface);
   padding: 1.5rem;
@@ -35,7 +35,7 @@
 .metric span {
   grid-column: 2;
   align-self: end;
-  text-align: right;
+  text-align: end;
 }
 
 .dashboard-notes {
@@ -44,8 +44,9 @@
   justify-content: space-between;
   gap: 2rem;
   margin-top: 4rem;
-  border-left: 0.35rem solid var(--signal);
-  padding: 1rem 0 1rem 1.5rem;
+  border-inline-start: 0.35rem solid var(--signal);
+  padding-block: 1rem;
+  padding-inline-start: 1.5rem;
 }
 
 .dashboard-notes h2 {

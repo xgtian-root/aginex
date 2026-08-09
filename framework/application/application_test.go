@@ -226,6 +226,19 @@ func TestDefinitionIsAReusableExternalCompositionRoot(t *testing.T) {
 	}
 }
 
+func TestDefinitionNewAPIContextHonorsCanceledInitialization(t *testing.T) {
+	definition, err := application.Define()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = definition.NewAPIContext(ctx, application.Config{}, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("NewAPIContext error = %v, want context cancellation", err)
+	}
+}
+
 func TestEmptyDefinitionHasNoBusinessSchemaOrEndpoints(t *testing.T) {
 	definition, err := application.Define()
 	if err != nil {

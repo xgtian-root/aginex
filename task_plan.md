@@ -1,5 +1,96 @@
 # Aginex v1 Implementation Plan
 
+## Current Goal: Modern Setup Page Redesign (2026-08-09)
+
+Redesign the existing three-step Setup experience with a distinctive modern
+visual system while preserving every runtime probe, database verification,
+administrator validation, initialization, localization, and recovery path.
+
+### Setup Redesign Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| D1. Baseline and visual audit | in_progress | Current Setup states, component structure, CSS dependencies, screenshots, and active drift are mapped |
+| D2. Design direction and implementation | pending | A cohesive modern direction is implemented without altering Setup contracts or state transitions |
+| D3. Responsive and interaction hardening | pending | Narrow/wide layouts, keyboard focus, reduced motion, loading/error/success, and both locales are polished |
+| D4. Verification and delivery | pending | Focused tests, `pnpm check:web`, `pnpm build:web`, browser QA, and diff checks pass |
+
+### Setup Redesign Guardrails
+
+- Preserve the in-progress Setup and internationalization logic; keep this a
+  focused presentation-layer redesign unless a semantic markup adjustment is
+  necessary for accessibility.
+- Reuse the current Next.js, TanStack Query, Lucide, and next-intl stack; do not
+  introduce another design system or state dependency.
+- Use a light, editorial-industrial modern direction with warm tinted neutrals,
+  one rare high-chroma signal color, asymmetrical composition, and purposeful
+  motion that respects `prefers-reduced-motion`.
+- Maintain visible labels, 44px targets, `:focus-visible` treatment, localized
+  long-copy resilience, and all probe/initialization failure recovery actions.
+
+## Current Goal: Web Internationalization (2026-08-09)
+
+Add production-ready, extensible web internationalization with English and
+Simplified Chinese, browser-language negotiation, a persistent user-selectable
+locale, localized formatting and error presentation, and regression coverage,
+without disturbing the in-progress embedded Setup changes.
+
+### Internationalization Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| I1. Baseline and contract | complete | Rendering boundaries, UI copy, errors, tests, and active workspace drift are mapped |
+| I2. Locale infrastructure | complete | Typed locale/messages API, negotiation, persistence, document language, and formatter helpers exist |
+| I3. Product UI migration | complete | Login, Setup, shell, navigation, and workspace pages use localized messages with a discoverable switcher |
+| I4. Verification and hardening | complete | Unit/type/lint/build and focused browser-level coverage pass; long-copy and hydration edges are checked |
+
+### Working Internationalization Decisions
+
+- Ship `en` and `zh-CN` first; adding another locale must be a message-catalog
+  change rather than a component rewrite.
+- Keep API problem `code` values language-neutral and translate their user-facing
+  presentation in the web client; do not localize wire contracts.
+- Use an explicit locale cookie as the durable preference, then browser
+  `Accept-Language`, then English as the fallback.
+- Use the repository-designated `next-intl` runtime, while retaining unprefixed
+  routes and repository-owned message catalogs.
+- Preserve all unrelated dirty-worktree changes and adapt to the current Setup
+  implementation instead of replacing it.
+
+## Current Goal: Embedded One-Time Setup (2026-08-09)
+
+Implement a fail-closed two-mode backend runtime: a fresh installation exposes
+only Setup, while a configured installation automatically migrates,
+bootstraps, and serves the application. Setup configures the database and first
+administrator, persists a sealed runtime configuration, and hot-switches the
+same HTTP process into application mode.
+
+### Setup Implementation Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| S1. Baseline and architecture seams | complete | Existing config, lifecycle, routes, contracts, web guards, images, and tests mapped; user decisions preserved |
+| S2. Installation state and backend supervisor | complete | Strict config-state store, setup/application router isolation, async initialization, auto migrate/bootstrap, and hot swap implemented |
+| S3. Contracts and frontend onboarding | complete | Union OpenAPI/client plus guarded three-step Setup UI implemented with fail-closed unknown state |
+| S4. Delivery migration | complete | CLI/image/scripts/docs updated for main-owned migrations, persistent config volume, and trusted-network deployment |
+| S5. Verification and hardening | complete | Focused regressions and complete Go/Web/contract/image-relevant gates pass; unavailable live dialects reported |
+
+### Locked Setup Decisions
+
+- Missing database configuration means Setup; any partial, corrupt, unsafe, or
+  previously sealed configuration fails closed and never implies Setup.
+- Setup is embedded in `cmd/server`, works online behind deployment-owned
+  trusted-network controls, and intentionally has no application Setup token.
+- One persisted high-authority DSN owns runtime DML and automatic DDL migrations.
+- The Setup UI covers database plus first administrator only; it generates a
+  Session secret when one is not externally supplied.
+- Successful initialization atomically persists configuration and hot-swaps the
+  handler; no restart or application reset endpoint exists.
+- The shipped backend is single-instance. Worker startup remains non-mutating
+  and follows API readiness.
+- Write-oriented migrate/bootstrap CLI paths are removed; the main server owns
+  startup migration and permission synchronization.
+
 ## Goal
 
 Build the first production-capable vertical slice of Aginex: an Apache-2.0,
@@ -123,6 +214,28 @@ PostgreSQL dependencies.
 
 | Error | Attempt | Resolution |
 |---|---|---|
+| Initial internationalization planning patch expected the findings title `# Findings & Decisions` | 1 | Inspected the existing planning-file headers and reapplied against `# Findings` without replacing prior content |
+| Unquoted zsh path `apps/web/app/(workspace)/layout.tsx` expanded as a glob | 1 | Quote all App Router route-group paths in subsequent shell inspection commands |
+| Agent wait requested 1 second, below the collaboration tool's 10-second minimum | 1 | Use bounded waits of at least 10 seconds; no task work was affected |
+| API-code inventory command mixed shell quotes around a regex and zsh reported an unmatched quote | 1 | Split the inventory into simpler single-quoted searches without embedded quote classes |
+| Internationalization findings patch placed same-file hunks out of source order | 1 | Reapply task-plan hunks in top-to-bottom file order, then patch the other logs |
+| Sandboxed pnpm selected the workspace-local store instead of the store backing existing `node_modules` | 1 | Re-run the scoped `pnpm --filter @aginex/web add next-intl` with approved access to the existing pnpm store; install completed |
+| Initial installed-type search included a non-existent `apps/web/node_modules/use-intl` path | 1 | Follow the `next-intl` pnpm symlink and inspect the actual `node_modules/.pnpm/use-intl@4.13.5...` type package |
+| New jsdom component test could not resolve the Next `@/` alias because Vitest had no config | 1 | Add a minimal React Vitest config mirroring the app-root alias and keep Node as the default environment |
+| Locale-switcher component tests accumulated DOM between cases because Vitest globals did not register Testing Library auto-cleanup | 2 | Register explicit `afterEach(cleanup)` in the isolated jsdom test file |
+| First complete Web gate passed typecheck but Biome reported safe import/format fixes, a descending-specificity Chinese table override, and deliberate `document.cookie` compatibility usage | 1 | Move the locale-specific table rule after its base selectors, document the allowlisted cookie boundary, and apply Biome only to the reported internationalization files |
+| Sandbox denied binding the production Web smoke-test port | 1 | Re-run the local-only `next start` with scoped approval on `127.0.0.1:3301`, verify three locale requests, and terminate the temporary server |
+| First commit-safety search embedded both quote styles in one zsh regex and failed before scanning | 1 | Re-run the read-only scan with NUL-delimited paths and simpler patterns; no private keys, AWS access keys, or SSH public keys were found |
+| Bootstrap drift test compile compared `string` to `authz.GrantScope` | 1 | Convert the enum explicitly at the SQL DTO boundary, then rerun the focused packages |
+| Combined planning/code patch missed the historical error-table separator | 1 | Inspect the exact table shape and apply a targeted planning-only patch |
+| Administrator regression referenced a non-existent disabled identity constant | 1 | Use the persisted `"disabled"` status value; production only defines an active constant |
+| Setup supervisor fault-injection test referenced `io` without importing it | 1 | Assigned the active Setup owner to add the missing test-only import before rerunning its package |
+| System Ruby 2.6 rejected the newer `YAML.load_file(..., aliases:)` keyword during final workflow syntax validation | 1 | Re-run the read-only parse with the Ruby 2.6-compatible single-argument API; the workflow does not require YAML aliases |
+| Historical pre-stable upgrade prose still referenced the removed migrate artifact and `migrate status/version` commands | Final repository search | Rewrite that rollout section for API-owned automatic Goose migrations and worker-after-readiness startup |
+| New HTTP Setup credential-replacement regression referenced an audit alias not imported by the existing test package | First focused compile | Keep the test at the public string boundary (`Source: "http"`) used by neighboring regressions, then rerun focused race tests |
+| New administrator credential-hash query returned a boolean from its slice-returning helper error path | First focused compile | Return `nil, error` from the internal hash list helper, then rerun password/app/framework/server packages |
+| Final adversarial review found a marker-appearance TOCTOU and active-candidate Shutdown result loss | Post-gate read-only audit | Recheck the destination after every pre-publication filesystem failure, and retain one shared active cleanup state/result across concurrent and retried Shutdown calls |
+| A server test cleanup used `t.Context()` after the testing package had canceled it | First server run after the shared active-cleanup barrier | Give test cleanup its own bounded background context; production callers continue to control only how long they wait for the shared cleanup |
 | Workspace was not a Git repository | Initial inspection | Treat as a greenfield directory; initialize project files without destructive Git operations |
 | Sandbox blocked creation of `.git` | `git init -b main` | Re-ran the scoped command with approval and initialized successfully |
 | Go cache and module proxy were unavailable in the sandbox | First `go mod tidy` | Moved Go caches into the project and downloaded dependencies with scoped approval |

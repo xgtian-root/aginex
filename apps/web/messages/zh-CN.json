@@ -1,0 +1,447 @@
+{
+  "Metadata": {
+    "defaultTitle": "Aginex",
+    "titleTemplate": "%s · Aginex",
+    "description": "面向 Coding Agent 的管理工作区。",
+    "setup": {
+      "title": "设置工作区",
+      "description": "将 Aginex 连接到数据库，并创建首位管理员。"
+    }
+  },
+  "Common": {
+    "brandName": "Aginex",
+    "wordmark": "aginex",
+    "actions": "操作",
+    "status": "状态",
+    "emailAddress": "电子邮箱",
+    "password": "密码",
+    "required": "必填",
+    "tryAgain": "重试",
+    "checkAgain": "重新检查",
+    "workspace": "工作区",
+    "development": "开发环境",
+    "loading": "正在加载…",
+    "notAvailable": "—"
+  },
+  "LocaleSwitcher": {
+    "label": "语言",
+    "ariaLabel": "选择界面语言",
+    "english": "English",
+    "simplifiedChinese": "简体中文",
+    "changing": "正在切换语言…"
+  },
+  "RuntimeUnavailable": {
+    "statusCode": "503",
+    "defaultTitle": "服务器尚未准备好响应请求。",
+    "mark": "安全等待",
+    "eyebrow": "运行状态未知",
+    "description": "Aginex 无法确认此安装是否已准备就绪。在后端返回明确的运行模式前，设置入口将保持关闭。",
+    "action": "重新检查",
+    "footnote": "不会根据此响应推断任何设置状态。"
+  },
+  "Shell": {
+    "navigation": {
+      "overview": "概览",
+      "products": "产品",
+      "people": "人员",
+      "access": "权限",
+      "auditTrail": "审计记录",
+      "files": "文件"
+    },
+    "skipLink": "跳到主要内容",
+    "homeAriaLabel": "Aginex 首页",
+    "brandTagline": "控制台",
+    "primaryNavigationAriaLabel": "主导航",
+    "signOutAriaLabel": "退出登录",
+    "workspaceFallback": "工作区",
+    "environment": "开发环境",
+    "openingWorkspace": "正在打开工作区…",
+    "error": {
+      "eyebrow": "工作区不可用",
+      "title": "无法打开此控制台。",
+      "description": "服务器未能完成身份检查。你的会话没有发生变化。",
+      "action": "重试"
+    }
+  },
+  "Login": {
+    "successToast": "登录成功，工作区已准备就绪。",
+    "credentialsError": "电子邮箱或密码不正确。",
+    "networkError": "无法连接到 API。请检查服务器是否正在运行。",
+    "story": {
+      "eyebrow": "面向 Coding Agent 的管理系统",
+      "title": "为严肃工作打造的清晰控制台。",
+      "description": "每个界面都对应一份 API 契约、一项权限和一套可重复的 Coding Agent 工作流。",
+      "permissionPoint": "明确的 resource:action 权限",
+      "contractPoint": "由 OpenAPI 支撑的前端契约"
+    },
+    "form": {
+      "eyebrow": "欢迎回来",
+      "title": "登录 Aginex",
+      "description": "使用设置期间创建的管理员账户。",
+      "emailLabel": "电子邮箱",
+      "emailPlaceholder": "admin@example.com",
+      "passwordLabel": "密码",
+      "pending": "正在打开工作区…",
+      "submit": "登录",
+      "note": "不开放公开注册。首位管理员会在一次性设置期间创建。"
+    },
+    "loading": "正在准备登录…"
+  },
+  "Setup": {
+    "route": {
+      "loading": {
+        "eyebrow": "安装检查",
+        "title": "正在验证运行模式…",
+        "description": "在后端响应前，设置入口保持关闭。"
+      },
+      "error": {
+        "eyebrow": "设置入口已关闭",
+        "title": "此安装界面意外停止。",
+        "description": "浏览器无法确认初始化是否仍在继续。请重新加载受保护的路由，再次验证后端模式和进度。",
+        "action": "重新加载设置"
+      }
+    },
+    "skipLink": "跳到设置表单",
+    "header": {
+      "wordmark": "aginex / 安装启用",
+      "serial": "安装实例 001"
+    },
+    "ledger": {
+      "progressAriaLabel": "设置进度",
+      "eyebrow": "一次性设置",
+      "title": "启用你的控制台。",
+      "description": "通过三项经过验证的操作，将空白运行环境转变为可审计的工作区。",
+      "currentStep": "当前步骤",
+      "note": "配置封存后，设置入口将永久消失。",
+      "steps": {
+        "database": {
+          "title": "数据库",
+          "caption": "验证连接"
+        },
+        "administrator": {
+          "title": "管理员",
+          "caption": "建立所有权"
+        },
+        "initialize": {
+          "title": "初始化",
+          "caption": "封存此安装"
+        }
+      }
+    },
+    "database": {
+      "heading": {
+        "caption": "连接验证",
+        "title": "定位系统记录库。",
+        "description": "提交管理员凭据前，Aginex 会测试这个确切的数据库连接。"
+      },
+      "engineLabel": "数据库引擎",
+      "drivers": {
+        "sqlite": "SQLite",
+        "postgres": "PostgreSQL",
+        "mysql": "MySQL"
+      },
+      "productionHint": "当前生产发行版要求使用 PostgreSQL。SQLite 和 MySQL 仍可用于开发、测试和派生应用。",
+      "pathLabel": "数据库路径",
+      "connectionStringLabel": "连接字符串",
+      "required": "必填",
+      "showConnectionString": "显示连接字符串",
+      "hideConnectionString": "隐藏连接字符串",
+      "sqliteHint": "请使用后端进程可写入的路径。",
+      "serverHint": "请在连接字符串中配置 TLS 和身份验证选项。",
+      "verificationFallback": "Aginex 无法验证此数据库。",
+      "connectionVerified": "连接已验证",
+      "connectionVerifiedDescription": "这个确切的驱动和 DSN 可以继续使用。",
+      "testing": "正在测试连接…",
+      "testAgain": "再次测试",
+      "testConnection": "测试连接",
+      "continue": "继续"
+    },
+    "administrator": {
+      "heading": {
+        "caption": "初始权限",
+        "title": "创建首位操作员。",
+        "description": "此账户将获得 Administrator 角色。设置完成后不提供公开注册入口。"
+      },
+      "emailLabel": "电子邮箱",
+      "identifierHint": "管理员 ID",
+      "emailPlaceholder": "admin@example.com",
+      "passwordLabel": "密码",
+      "passwordLengthHint": "至少 12 个字符",
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码",
+      "confirmPasswordLabel": "确认密码",
+      "exactMatchHint": "必须完全一致",
+      "credentialNote": "凭据只会发送到后端一次，绝不会存入浏览器存储。",
+      "passwordMismatch": "两次输入的密码不一致。",
+      "backToDatabase": "数据库",
+      "initializeWorkspace": "初始化工作区"
+    },
+    "initialization": {
+      "pausedCaption": "初始化已暂停",
+      "runningCaption": "正在启用系统",
+      "pausedTitle": "工作区尚未封存。",
+      "runningTitle": "启动全部服务。",
+      "pausedDescription": "请检查报告的状况，或使用同一份已验证配置重试。",
+      "runningDescription": "服务器正在执行迁移、建立访问权限并准备应用运行环境。",
+      "progressAriaLabel": "初始化进度",
+      "actionRequired": "需要处理",
+      "automaticHandoff": "自动切换",
+      "errorDescription": "配置尚未封存，因此设置入口仍然可用。",
+      "runningStatusDescription": "应用模式启用后，此页面会自动关闭。",
+      "reviewConfiguration": "检查配置",
+      "retryInitialization": "重试初始化",
+      "requestFallback": "初始化请求未能完成。",
+      "failure": "配置封存前，初始化已停止。",
+      "failureWithReference": "配置封存前，初始化已停止。参考代码：{code}。",
+      "stages": {
+        "waiting": "等待初始化",
+        "validating_database": "验证数据库",
+        "migrating": "应用数据库结构",
+        "bootstrapping": "创建管理员访问权限",
+        "starting_application": "启动应用服务",
+        "persisting_configuration": "封存配置",
+        "activating_application": "激活工作区"
+      }
+    },
+    "probe": {
+      "eyebrow": "安装检查",
+      "title": "正在读取运行状态。",
+      "description": "在监督程序确认此安装前，设置入口保持关闭。",
+      "unavailableEyebrow": "设置入口已关闭",
+      "unavailableTitle": "后端状态未知。",
+      "defaultUnavailableDetail": "Aginex 无法确认当前运行模式。",
+      "supervisorStateFallback": "设置监督程序未返回当前状态。",
+      "action": "重新检查"
+    }
+  },
+  "Dashboard": {
+    "header": {
+      "eyebrow": "本周五简报",
+      "title": "清晰信号是良好运营的起点。",
+      "description": "快速了解此实例中的资源、人员和已审计工作的最新动态。"
+    },
+    "summaryAriaLabel": "工作区摘要",
+    "metrics": {
+      "products": {
+        "label": "产品",
+        "detail": "目录记录"
+      },
+      "people": {
+        "label": "人员",
+        "detail": "活跃操作员"
+      },
+      "eventsToday": {
+        "label": "今日事件",
+        "detail": "已审计操作"
+      }
+    },
+    "contract": {
+      "eyebrow": "框架契约",
+      "title": "一个资源，贯通全链路。",
+      "description": "产品是迁移、类型化 HTTP 操作、权限、审计记录和响应式管理界面的参考实现。",
+      "action": "打开产品"
+    }
+  },
+  "Products": {
+    "createdToast": "产品已创建。",
+    "createError": "无法创建产品。",
+    "deletedToast": "产品已删除。",
+    "deleteError": "无法删除产品。",
+    "header": {
+      "eyebrow": "目录操作",
+      "title": "产品",
+      "description": "Aginex 的标准资源：支持搜索、感知权限、记录审计，并兼容所有受支持的数据库。",
+      "createAction": "创建产品"
+    },
+    "editor": {
+      "eyebrow": "新记录",
+      "title": "创建产品",
+      "closeAriaLabel": "关闭产品编辑器",
+      "nameLabel": "产品名称",
+      "skuLabel": "SKU",
+      "priceLabel": "价格",
+      "statusLabel": "状态",
+      "keepBrowsing": "继续浏览",
+      "pending": "正在创建产品…",
+      "submit": "创建产品"
+    },
+    "statuses": {
+      "draft": "草稿",
+      "active": "启用",
+      "archived": "已归档"
+    },
+    "list": {
+      "ariaLabel": "产品列表",
+      "searchAriaLabel": "搜索产品",
+      "searchPlaceholder": "搜索名称或 SKU",
+      "recordCount": "{count, plural, other {# 条记录}}",
+      "unavailableTitle": "产品不可用",
+      "unavailableDescription": "请检查 API 连接后重试。",
+      "emptyTitle": "暂无产品",
+      "emptyDescription": "创建首个产品，以验证完整的资源工作流。",
+      "columns": {
+        "name": "名称",
+        "sku": "SKU",
+        "price": "价格",
+        "status": "状态",
+        "updated": "更新时间",
+        "actions": "操作"
+      },
+      "deleteAriaLabel": "删除{name}"
+    }
+  },
+  "Files": {
+    "deletedToast": "文件已删除。",
+    "deleteError": "无法删除文件。",
+    "chooseImageError": "请选择 JPEG、PNG 或 WebP 图片。",
+    "objectUploadError": "对象上传返回状态 {status}。",
+    "uploadedToast": "图片已上传并通过验证。",
+    "uploadError": "无法上传图片。请检查文件类型和大小后重试。",
+    "temporaryUrlError": "无法创建临时文件 URL。",
+    "header": {
+      "eyebrow": "对象存储",
+      "title": "文件",
+      "description": "通过统一的提供商契约，在本地、S3 兼容服务或阿里云 OSS 中存储经过验证的图片对象。"
+    },
+    "upload": {
+      "title": "上传私有图片",
+      "requirements": "JPEG、PNG 或 WebP · 最大 10 MB",
+      "choose": "选择图片",
+      "pending": "正在上传并验证…",
+      "submit": "上传图片"
+    },
+    "emptyTitle": "暂无文件",
+    "emptyDescription": "上传一张图片，以验证与存储提供商无关的工作流。",
+    "columns": {
+      "file": "文件",
+      "provider": "提供商",
+      "size": "大小",
+      "visibility": "可见性",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "providers": {
+      "local": "本地",
+      "s3": "S3",
+      "oss": "阿里云 OSS"
+    },
+    "visibility": {
+      "private": "私有",
+      "public": "公开"
+    },
+    "statuses": {
+      "pending": "待处理",
+      "ready": "就绪",
+      "invalid": "无效",
+      "deleting": "正在删除",
+      "delete_failed": "删除失败",
+      "deleted": "已删除"
+    },
+    "units": {
+      "byte": "B",
+      "kilobyte": "KB",
+      "megabyte": "MB"
+    },
+    "openAriaLabel": "打开{name}",
+    "deleteAriaLabel": "删除{name}"
+  },
+  "ResourceList": {
+    "loading": "正在加载{resource}…",
+    "unavailableTitle": "无法加载{resource}",
+    "unavailableDescription": "请检查权限和 API 连接后重试。"
+  },
+  "Users": {
+    "header": {
+      "eyebrow": "身份",
+      "title": "人员",
+      "description": "可以进入此实例的操作员。系统按设计保持关闭公开注册。"
+    },
+    "resourceLabel": "人员",
+    "columns": {
+      "name": "姓名",
+      "email": "电子邮箱",
+      "status": "状态",
+      "created": "创建时间"
+    },
+    "statuses": {
+      "active": "启用",
+      "disabled": "停用"
+    }
+  },
+  "Roles": {
+    "header": {
+      "eyebrow": "授权",
+      "title": "权限",
+      "description": "角色将明确的 resource:action 授权组合在一起。导航和 API 强制执行共享相同的权限代码。"
+    },
+    "resourceLabel": "访问角色",
+    "columns": {
+      "role": "角色",
+      "description": "说明",
+      "permissions": "权限"
+    },
+    "grantCount": "{count, plural, other {# 项授权}}"
+  },
+  "Audit": {
+    "header": {
+      "eyebrow": "可追责性",
+      "title": "审计记录",
+      "description": "按时间顺序记录涉及安全和数据变更的操作，并关联请求 ID。"
+    },
+    "resourceLabel": "审计事件",
+    "columns": {
+      "action": "操作",
+      "resource": "资源",
+      "summary": "摘要",
+      "ipAddress": "IP 地址",
+      "time": "时间"
+    }
+  },
+  "Problem": {
+    "fallback": "无法完成请求。",
+    "withRequestId": "{message} 请求 ID：{requestId}。",
+    "noResponseBody": "API 未返回响应正文。",
+    "serverStatus": "服务器返回状态 {status}。",
+    "invalidRuntimeState": "API 返回了无效的运行状态响应。",
+    "codes": {
+      "REQUEST_INVALID": "请求无效。请检查输入内容后重试。",
+      "AUTHENTICATION_REQUIRED": "请先登录再继续。",
+      "RESOURCE_FORBIDDEN": "你没有执行此操作的权限。",
+      "RESOURCE_NOT_FOUND": "请求的资源不存在。",
+      "REQUEST_CONFLICT": "请求与资源的当前状态冲突。",
+      "REQUEST_TOO_LARGE": "请求过大。请减小请求大小后重试。",
+      "UNSUPPORTED_MEDIA_TYPE": "不支持此内容类型。",
+      "RATE_LIMITED": "请求次数过多，请稍后重试。",
+      "HEADERS_TOO_LARGE": "请求头过大。",
+      "INTERNAL_ERROR": "服务器无法完成此请求。",
+      "REQUEST_FAILED": "无法完成请求。",
+      "CORS_FORBIDDEN": "不允许此请求来源。",
+      "CORS_PREFLIGHT_FORBIDDEN": "不允许请求的跨域方法或请求头。",
+      "CSRF_FORBIDDEN": "请求令牌已失效。请刷新页面后重试。",
+      "CSRF_TOKEN_UNAVAILABLE": "无法生成请求令牌。",
+      "SERVICE_UNAVAILABLE": "服务尚未准备好处理请求。",
+      "SETUP_DATABASE_UNAVAILABLE": "无法验证数据库配置。",
+      "SETUP_IN_PROGRESS": "设置正在运行。请等待当前尝试完成。",
+      "SETUP_APPLICATION_INITIALIZATION_FAILED": "无法初始化应用。",
+      "SETUP_CONFIGURATION_COMMIT_FAILED": "无法封存安装配置。",
+      "SETUP_INITIALIZATION_FAILED": "安装准备完成前，初始化已停止。",
+      "FILE_CLEANUP_UNAVAILABLE": "文件清理不可用。删除已存储对象前，请先配置持久任务提供商。",
+      "FILE_TOO_LARGE": "图片超过配置的上传大小限制。",
+      "FILE_CONTENT_INVALID": "请上传符合尺寸限制的完整 JPEG、PNG 或 WebP 图片。",
+      "UPLOAD_INTENT_NOT_PENDING": "此上传已不再等待确认。",
+      "IDEMPOTENCY_KEY_INVALID": "请求的幂等键无效。",
+      "IDEMPOTENCY_UNAVAILABLE": "目前无法安全处理此请求。",
+      "IDEMPOTENCY_ACTOR_UNAVAILABLE": "无法验证此请求的已认证操作主体。",
+      "IDEMPOTENCY_IN_PROGRESS": "此请求正在处理中。请在完成后重试。",
+      "IDEMPOTENCY_RESPONSE_TOO_LARGE": "响应过大，无法安全保留。",
+      "IDEMPOTENCY_COMPLETION_FAILED": "操作已完成，但无法安全保留其响应。",
+      "IDEMPOTENCY_KEY_REUSED": "此请求键已绑定到其他操作。",
+      "IDEMPOTENCY_RESOURCE_MISSING": "与已存储响应关联的资源已不存在。",
+      "IDEMPOTENCY_REPLAY_FAILED": "无法安全重建已存储的响应。",
+      "JOBS_UNAVAILABLE": "未配置持久任务队列，因此任务管理不可用。",
+      "RATE_LIMIT_ACTOR_UNAVAILABLE": "无法为请求保护验证已认证操作主体。",
+      "RATE_LIMIT_POLICY_INVALID": "操作策略无效，因此请求保护不可用。",
+      "RATE_LIMIT_UNAVAILABLE": "请求保护暂时不可用。"
+    }
+  }
+}

@@ -199,7 +199,10 @@ type JobHandlerDefinition struct {
 }
 
 // LifecycleHook contains optional start and stop callbacks. The registry stores
-// callbacks but never invokes them.
+// callbacks but never invokes them. Start's context is call-scoped and becomes
+// invalid after Start returns; a hook that owns long-running work must create
+// and retain its own cancellation context, then cancel and join that work from
+// Stop.
 type LifecycleHook struct {
 	Name  string
 	Start func(context.Context) error

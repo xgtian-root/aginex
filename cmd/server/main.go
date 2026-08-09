@@ -15,7 +15,6 @@ import (
 	"github.com/xgtian-root/aginex/internal/buildinfo"
 	"github.com/xgtian-root/aginex/internal/composition"
 	"github.com/xgtian-root/aginex/internal/config"
-	"github.com/xgtian-root/aginex/internal/platform/database"
 )
 
 func main() {
@@ -36,39 +35,24 @@ func run() error {
 	)
 	defer stopSignals()
 
-	cfg, err := config.Load()
+	state, err := config.LoadState()
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
-
-	db, err := database.Open(cfg.Database)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("access database connection: %w", err)
-	}
-	defer sqlDB.Close()
-
+	cfg := state.Config
 	definition := composition.Definition()
-	server, err := definition.NewAPI(cfg, db)
-	if err != nil {
-		return fmt.Errorf("create application: %w", err)
-	}
-	startContext, cancelStart := context.WithTimeout(
+	runtime, err := newManagedServerRuntime(
 		signalContext,
-		cfg.HTTP.ShutdownGracePeriod,
+		state,
+		definition,
 	)
-	if err := server.Start(startContext); err != nil {
-		cancelStart()
-		return fmt.Errorf("start application lifecycle: %w", err)
+	if err != nil {
+		return err
 	}
-	cancelStart()
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTP.Address,
-		Handler:           server.Handler(),
+		Handler:           runtime.Handler(),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
 		WriteTimeout:      cfg.HTTP.WriteTimeout,
@@ -86,6 +70,7 @@ func run() error {
 			"commit", buildinfo.Commit,
 			"build_date", buildinfo.BuildDate,
 			"module_fingerprint", definition.Fingerprint(),
+			"mode", state.Status,
 		)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
@@ -103,7 +88,7 @@ func run() error {
 		serveErr,
 		shutdownRuntime(
 			httpServer,
-			server,
+			runtime,
 			cfg.HTTP.ShutdownGracePeriod,
 		),
 	)

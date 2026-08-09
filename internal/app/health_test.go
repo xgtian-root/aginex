@@ -33,6 +33,9 @@ func TestReadinessFailsWhenSchemaFallsBehindAfterStartup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := server.Ready(t.Context()); err != nil {
+		t.Fatalf("initial callable readiness: %v", err)
+	}
 
 	ready := httptest.NewRequest(http.MethodGet, "/api/v1/health/ready", nil)
 	readyRecorder := httptest.NewRecorder()
@@ -46,6 +49,9 @@ func TestReadinessFailsWhenSchemaFallsBehindAfterStartup(t *testing.T) {
 		6,
 	).Error; err != nil {
 		t.Fatal(err)
+	}
+	if err := server.Ready(t.Context()); err == nil {
+		t.Fatal("callable readiness accepted a behind-schema database")
 	}
 
 	notReady := httptest.NewRequest(http.MethodGet, "/api/v1/health/ready", nil)
@@ -127,6 +133,9 @@ func TestModuleReadinessChecksAreBoundedAndFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := server.Ready(t.Context()); !errors.Is(err, dependencyError) {
+		t.Fatalf("callable required readiness error = %v", err)
+	}
 	request := httptest.NewRequest(
 		http.MethodGet,
 		"/health/ready",
@@ -188,6 +197,9 @@ func TestOptionalModuleReadinessDoesNotRemoveService(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := server.Ready(t.Context()); err != nil {
+		t.Fatalf("optional callable readiness: %v", err)
 	}
 	request := httptest.NewRequest(
 		http.MethodGet,

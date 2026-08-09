@@ -31,11 +31,17 @@ export function safeLocalRedirect(
     !decoded.startsWith("/") ||
     decoded.startsWith("//") ||
     decoded.includes("\\") ||
-    hasControlCharacters(decoded)
+    hasControlCharacters(decoded) ||
+    isSetupPath(decoded)
   ) {
     return fallback;
   }
   return candidate;
+}
+
+function isSetupPath(value: string) {
+  const pathname = value.split(/[?#]/, 1)[0];
+  return pathname === "/setup" || pathname.startsWith("/setup/");
 }
 
 function hasControlCharacters(value: string) {

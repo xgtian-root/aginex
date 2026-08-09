@@ -2,10 +2,13 @@
 
 import { ArrowRight, Braces, CheckCircle2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { type FormEvent, Suspense, useState } from "react";
 import { toast } from "sonner";
-import { ApiError, login } from "@/lib/api";
+import { LocaleSwitcher } from "@/components/locale-switcher";
+import { login } from "@/lib/api";
 import { safeLocalRedirect } from "@/lib/navigation";
+import { localizeApiError } from "@/lib/problem-message";
 import "./login.css";
 
 export default function LoginPage() {
@@ -17,6 +20,8 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
+  const t = useTranslations("Login");
+  const translate = useTranslations();
   const router = useRouter();
   const search = useSearchParams();
   const [pending, setPending] = useState(false);
@@ -32,13 +37,13 @@ function LoginForm() {
         email: String(data.get("email")),
         password: String(data.get("password")),
       });
-      toast.success("Signed in. Your workspace is ready.");
+      toast.success(t("successToast"));
       router.replace(safeLocalRedirect(search.get("next")));
     } catch (caught) {
       setError(
-        caught instanceof ApiError
-          ? caught.problem.detail
-          : "We could not reach the API. Check that the server is running.",
+        localizeApiError(caught, translate, t("networkError"), {
+          AUTHENTICATION_REQUIRED: t("credentialsError"),
+        }),
       );
     } finally {
       setPending(false);
@@ -48,50 +53,50 @@ function LoginForm() {
   return (
     <main className="login-page">
       <section className="login-story" aria-labelledby="welcome-title">
-        <div className="login-brand">
-          <span className="brand-mark">A</span>
-          <strong>aginex</strong>
+        <div className="login-brand-row">
+          <div className="login-brand">
+            <span className="brand-mark">A</span>
+            <strong>aginex</strong>
+          </div>
+          <LocaleSwitcher />
         </div>
         <div>
-          <p className="eyebrow">Agent-ready administration</p>
-          <h1 id="welcome-title">A clear control room for serious work.</h1>
-          <p className="login-lead">
-            Every screen maps to an API contract, a permission, and a repeatable
-            Coding Agent workflow.
-          </p>
+          <p className="eyebrow">{t("story.eyebrow")}</p>
+          <h1 id="welcome-title">{t("story.title")}</h1>
+          <p className="login-lead">{t("story.description")}</p>
         </div>
         <ul className="login-points">
           <li>
             <CheckCircle2 aria-hidden size={18} />
-            Explicit resource:action permissions
+            {t("story.permissionPoint")}
           </li>
           <li>
             <Braces aria-hidden size={18} />
-            OpenAPI-backed frontend contracts
+            {t("story.contractPoint")}
           </li>
         </ul>
       </section>
       <section className="login-form-wrap">
         <form className="login-form panel" onSubmit={signIn}>
           <div>
-            <p className="eyebrow">Welcome back</p>
-            <h2>Sign in to Aginex</h2>
-            <p className="muted">Use the administrator created during setup.</p>
+            <p className="eyebrow">{t("form.eyebrow")}</p>
+            <h2>{t("form.title")}</h2>
+            <p className="muted">{t("form.description")}</p>
           </div>
           <div className="field">
-            <label htmlFor="email">Email address</label>
+            <label htmlFor="email">{t("form.emailLabel")}</label>
             <input
               autoComplete="email"
               className="input"
               id="email"
               name="email"
-              placeholder="admin@example.com"
+              placeholder={t("form.emailPlaceholder")}
               required
               type="email"
             />
           </div>
           <div className="field">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">{t("form.passwordLabel")}</label>
             <input
               autoComplete="current-password"
               className="input"
@@ -112,13 +117,10 @@ function LoginForm() {
             disabled={pending}
             type="submit"
           >
-            {pending ? "Opening workspace…" : "Sign in"}
+            {pending ? t("form.pending") : t("form.submit")}
             {!pending && <ArrowRight aria-hidden size={17} />}
           </button>
-          <p className="login-note">
-            No public registration. Administrators are created with the Aginex
-            CLI.
-          </p>
+          <p className="login-note">{t("form.note")}</p>
         </form>
       </section>
     </main>
@@ -126,12 +128,14 @@ function LoginForm() {
 }
 
 function LoginLoading() {
+  const t = useTranslations("Login");
   return (
     <main className="login-page">
       <section className="login-story" aria-hidden />
       <section className="login-form-wrap" aria-live="polite">
         <div className="login-form panel">
-          <p>Preparing sign in…</p>
+          <LocaleSwitcher />
+          <p>{t("loading")}</p>
         </div>
       </section>
     </main>

@@ -14,6 +14,7 @@ import (
 	internalapp "github.com/xgtian-root/aginex/internal/app"
 	"github.com/xgtian-root/aginex/internal/config"
 	"github.com/xgtian-root/aginex/internal/platform/database"
+	internalsetup "github.com/xgtian-root/aginex/internal/setup"
 	internalworker "github.com/xgtian-root/aginex/internal/worker"
 	"gorm.io/gorm"
 )
@@ -34,6 +35,7 @@ type (
 	IdempotencyConfig = config.Idempotency
 	JobsConfig        = config.Jobs
 	BootstrapConfig   = config.Bootstrap
+	BootstrapOptions  = internalapp.BootstrapOptions
 	StorageConfig     = config.Storage
 )
 
@@ -133,12 +135,36 @@ func OpenDatabase(cfg DatabaseConfig) (*gorm.DB, error) {
 	return database.Open(cfg)
 }
 
+// OpenDatabaseContext opens and verifies the configured database under ctx.
+func OpenDatabaseContext(
+	ctx context.Context,
+	cfg DatabaseConfig,
+) (*gorm.DB, error) {
+	return database.OpenContext(ctx, cfg)
+}
+
 // NewAPI composes the HTTP runtime with this definition's exact module set.
 func (definition Definition) NewAPI(
 	cfg Config,
 	db *gorm.DB,
 ) (*App, error) {
 	return internalapp.NewCompositionWithModulesAndObservability(
+		cfg,
+		db,
+		definition.observability,
+		definition.Modules()...,
+	)
+}
+
+// NewAPIContext composes the HTTP runtime while bounding constructor probes by
+// the supplied initialization context.
+func (definition Definition) NewAPIContext(
+	ctx context.Context,
+	cfg Config,
+	db *gorm.DB,
+) (*App, error) {
+	return internalapp.NewCompositionWithModulesAndObservabilityContext(
+		ctx,
 		cfg,
 		db,
 		definition.observability,
@@ -207,10 +233,55 @@ func (definition Definition) Bootstrap(
 	)
 }
 
+// BootstrapWithOptions synchronizes access for this definition and records
+// the trusted execution context supplied by an embedded setup or startup
+// supervisor.
+func (definition Definition) BootstrapWithOptions(
+	ctx context.Context,
+	db *gorm.DB,
+	cfg Config,
+	options BootstrapOptions,
+) error {
+	return internalapp.BootstrapCompositionWithModulesAndOptions(
+		ctx,
+		db,
+		cfg.Bootstrap,
+		options,
+		definition.Modules()...,
+	)
+}
+
+// HasActiveAdministrator verifies that the configured application has a
+// usable local Administrator sign-in after automatic bootstrap.
+func (definition Definition) HasActiveAdministrator(
+	ctx context.Context,
+	db *gorm.DB,
+) (bool, error) {
+	return internalapp.HasActiveAdministrator(ctx, db)
+}
+
+// HasActiveAdministratorCredentials verifies the exact password identity
+// submitted by the one-time HTTP Setup flow.
+func (definition Definition) HasActiveAdministratorCredentials(
+	ctx context.Context,
+	db *gorm.DB,
+	email string,
+	credential string,
+) (bool, error) {
+	return internalapp.HasActiveAdministratorCredentials(
+		ctx,
+		db,
+		email,
+		credential,
+	)
+}
+
 // BuildOpenAPI produces the contract for this definition's exact module set
 // without opening runtime dependencies.
 func (definition Definition) BuildOpenAPI() *huma.OpenAPI {
-	return internalapp.BuildCompositionOpenAPI(
+	document := internalapp.BuildCompositionOpenAPI(
 		definition.Modules()...,
 	)
+	internalsetup.DocumentOpenAPI(document)
+	return document
 }

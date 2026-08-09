@@ -2,11 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, ImageUp, Trash2 } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import {
-  ApiError,
   confirmUpload,
   createUploadIntent,
   csrfHeaders,
@@ -14,11 +14,15 @@ import {
   getFileURL,
   listFiles,
 } from "@/lib/api";
+import { localizeApiError } from "@/lib/problem-message";
 import "@/components/page-header.css";
 import "../products/products.css";
 import "./files.css";
 
 export default function FilesPage() {
+  const t = useTranslations("Files");
+  const translate = useTranslations();
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const files = useQuery({
@@ -29,14 +33,10 @@ export default function FilesPage() {
     mutationFn: deleteFileRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["files"] });
-      toast.success("File deleted.");
+      toast.success(t("deletedToast"));
     },
     onError: (error) =>
-      toast.error(
-        error instanceof ApiError
-          ? error.problem.detail
-          : "The file could not be deleted.",
-      ),
+      toast.error(localizeApiError(error, translate, t("deleteError"))),
   });
 
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -46,7 +46,7 @@ export default function FilesPage() {
     ) as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) {
-      toast.error("Choose a JPEG, PNG, or WebP image.");
+      toast.error(t("chooseImageError"));
       return;
     }
     setUploading(true);
@@ -73,18 +73,18 @@ export default function FilesPage() {
         credentials: localUpload ? "include" : "omit",
       });
       if (!response.ok) {
-        throw new Error(`Object upload returned ${response.status}.`);
+        throw new ObjectUploadError(response.status);
       }
       await confirmUpload(prepared.file.id);
       input.value = "";
       queryClient.invalidateQueries({ queryKey: ["files"] });
-      toast.success("Image uploaded and verified.");
+      toast.success(t("uploadedToast"));
     } catch (error) {
-      toast.error(
-        error instanceof ApiError
-          ? error.problem.detail
-          : "The image could not be uploaded. Check its type and size, then try again.",
-      );
+      const fallback =
+        error instanceof ObjectUploadError
+          ? t("objectUploadError", { status: error.status })
+          : t("uploadError");
+      toast.error(localizeApiError(error, translate, fallback));
     } finally {
       setUploading(false);
     }
@@ -94,26 +94,42 @@ export default function FilesPage() {
     try {
       const signed = await getFileURL(id);
       window.open(signed.url, "_blank", "noopener,noreferrer");
-    } catch {
-      toast.error("A temporary file URL could not be created.");
+    } catch (error) {
+      toast.error(localizeApiError(error, translate, t("temporaryUrlError")));
     }
+  }
+
+  function formatBytes(bytes: number) {
+    if (bytes < 1024) {
+      return `${format.number(bytes)} ${t("units.byte")}`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${format.number(bytes / 1024, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })} ${t("units.kilobyte")}`;
+    }
+    return `${format.number(bytes / (1024 * 1024), {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })} ${t("units.megabyte")}`;
   }
 
   return (
     <>
       <PageHeader
-        description="Verified image objects stored locally, in S3-compatible services, or Alibaba Cloud OSS through one provider contract."
-        eyebrow="Object storage"
-        title="Files"
+        description={t("header.description")}
+        eyebrow={t("header.eyebrow")}
+        title={t("header.title")}
       />
       <form className="upload-strip panel" onSubmit={upload}>
         <div>
-          <strong>Upload a private image</strong>
-          <span>JPEG, PNG, or WebP · up to 10 MB</span>
+          <strong>{t("upload.title")}</strong>
+          <span>{t("upload.requirements")}</span>
         </div>
         <label className="file-picker">
           <ImageUp aria-hidden size={18} />
-          <span>Choose image</span>
+          <span>{t("upload.choose")}</span>
           <input
             accept="image/jpeg,image/png,image/webp"
             name="image"
@@ -122,48 +138,56 @@ export default function FilesPage() {
           />
         </label>
         <button className="button" disabled={uploading} type="submit">
-          {uploading ? "Uploading and verifying…" : "Upload image"}
+          {uploading ? t("upload.pending") : t("upload.submit")}
         </button>
       </form>
       <section className="panel">
         {files.data?.items.length === 0 ? (
           <div className="empty-state">
-            <h2>No files yet</h2>
-            <p>
-              Upload an image to exercise the provider-neutral storage workflow.
-            </p>
+            <h2>{t("emptyTitle")}</h2>
+            <p>{t("emptyDescription")}</p>
           </div>
         ) : (
           <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>File</th>
-                  <th>Provider</th>
-                  <th>Size</th>
-                  <th>Visibility</th>
-                  <th>Status</th>
+                  <th>{t("columns.file")}</th>
+                  <th>{t("columns.provider")}</th>
+                  <th>{t("columns.size")}</th>
+                  <th>{t("columns.visibility")}</th>
+                  <th>{t("columns.status")}</th>
                   <th>
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t("columns.actions")}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {files.data?.items.map((file) => (
                   <tr key={file.id}>
-                    <td data-label="File">
+                    <td data-label={t("columns.file")}>
                       <strong>{file.originalName}</strong>
                     </td>
-                    <td data-label="Provider">{file.provider}</td>
-                    <td data-label="Size">{formatBytes(file.size)}</td>
-                    <td data-label="Visibility">{file.visibility}</td>
-                    <td data-label="Status">
-                      <span className="status">{file.status}</span>
+                    <td data-label={t("columns.provider")}>
+                      {t(`providers.${file.provider}`)}
                     </td>
-                    <td data-label="Actions">
+                    <td data-label={t("columns.size")}>
+                      {formatBytes(file.size)}
+                    </td>
+                    <td data-label={t("columns.visibility")}>
+                      {t(`visibility.${file.visibility}`)}
+                    </td>
+                    <td data-label={t("columns.status")}>
+                      <span className="status">
+                        {t(`statuses.${file.status}`)}
+                      </span>
+                    </td>
+                    <td data-label={t("columns.actions")}>
                       <div className="file-actions">
                         <button
-                          aria-label={`Open ${file.originalName}`}
+                          aria-label={t("openAriaLabel", {
+                            name: file.originalName,
+                          })}
                           className="icon-button"
                           disabled={file.status !== "ready"}
                           onClick={() => openFile(file.id)}
@@ -172,7 +196,9 @@ export default function FilesPage() {
                           <ExternalLink aria-hidden size={16} />
                         </button>
                         <button
-                          aria-label={`Delete ${file.originalName}`}
+                          aria-label={t("deleteAriaLabel", {
+                            name: file.originalName,
+                          })}
                           className="icon-button delete-button"
                           onClick={() => deleteFile.mutate(file.id)}
                           type="button"
@@ -192,8 +218,9 @@ export default function FilesPage() {
   );
 }
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+class ObjectUploadError extends Error {
+  constructor(readonly status: number) {
+    super();
+    this.name = "ObjectUploadError";
+  }
 }

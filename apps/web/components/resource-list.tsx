@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "@/components/page-header";
 import "@/components/page-header.css";
 
@@ -12,6 +13,7 @@ export function ResourceList({
   eyebrow,
   title,
   description,
+  resourceLabel,
   columns,
 }: {
   load: () => Promise<{ items: object[] | null }>;
@@ -19,12 +21,15 @@ export function ResourceList({
   eyebrow: string;
   title: string;
   description: string;
+  resourceLabel: string;
   columns: {
     key: string;
     label: string;
     format?: (value: unknown, row: Row) => React.ReactNode;
   }[];
 }) {
+  const t = useTranslations("ResourceList");
+  const common = useTranslations("Common");
   const result = useQuery({
     queryKey: [queryKey],
     queryFn: load,
@@ -36,12 +41,12 @@ export function ResourceList({
       <section className="panel">
         {result.isPending ? (
           <div className="empty-state" aria-live="polite">
-            <h2>Loading {title.toLowerCase()}…</h2>
+            <h2>{t("loading", { resource: resourceLabel })}</h2>
           </div>
         ) : result.isError ? (
           <div className="empty-state" role="alert">
-            <h2>{title} are unavailable</h2>
-            <p>Check your permissions and API connection, then try again.</p>
+            <h2>{t("unavailableTitle", { resource: resourceLabel })}</h2>
+            <p>{t("unavailableDescription")}</p>
           </div>
         ) : (
           <div className="table-scroll">
@@ -62,7 +67,7 @@ export function ResourceList({
                         <td data-label={column.label} key={column.key}>
                           {column.format
                             ? column.format(row[column.key], row)
-                            : String(row[column.key] ?? "—")}
+                            : String(row[column.key] ?? common("notAvailable"))}
                         </td>
                       ))}
                     </tr>

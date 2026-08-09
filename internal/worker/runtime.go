@@ -51,8 +51,8 @@ func New(ctx context.Context, cfg config.Config, db *gorm.DB) (*Runtime, error) 
 }
 
 // NewWithModules composes built-in and application-owned durable job handlers.
-// It only verifies schema versions; application modules must be migrated by the
-// explicit migrate process before the worker starts.
+// It only verifies schema versions; the API's automatic initialization must
+// complete all migrations before the worker starts.
 func NewWithModules(
 	ctx context.Context,
 	cfg config.Config,

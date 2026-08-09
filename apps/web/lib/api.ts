@@ -1,5 +1,6 @@
 import createClient from "openapi-fetch";
 import type { components, paths } from "./api.generated";
+import { isSetupStatusResponse, isSystemModeResponse } from "./runtime-mode";
 
 export type Problem = components["schemas"]["Problem"];
 export type User = components["schemas"]["UserResponse"];
@@ -16,6 +17,14 @@ export type PreparedUpload = components["schemas"]["UploadIntentResponse"];
 export type UploadIntent = components["schemas"]["UploadIntentRequest"];
 export type DashboardSummary =
   components["schemas"]["DashboardSummaryResponse"];
+export type SystemMode = components["schemas"]["SystemModeResponse"];
+export type SetupStatus = components["schemas"]["SetupStatusResponse"];
+export type SetupDatabaseTest =
+  components["schemas"]["SetupDatabaseTestRequest"];
+export type SetupDatabaseTestResult =
+  components["schemas"]["SetupDatabaseTestResponse"];
+export type SetupComplete = components["schemas"]["SetupCompleteRequest"];
+export type SetupAccepted = components["schemas"]["SetupAcceptedResponse"];
 
 type ClientResult<T> = {
   data?: T;
@@ -34,8 +43,7 @@ export class ApiError extends Error {
   }
 }
 
-const configuredURL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const configuredURL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const apiURL = configuredURL.replace(/\/api\/v1\/?$/, "");
 const csrfHeaderName = "X-CSRF-Token" as const;
 
@@ -47,12 +55,14 @@ const client = createClient<paths>({
 let csrfRequest: Promise<components["schemas"]["CSRFTokenResponse"]> | null =
   null;
 
+type CSRFHeaderParameter = { "X-CSRF-Token": string };
+
 async function getCSRFToken() {
   const result = await client.GET("/api/v1/auth/csrf");
   return requireData(result);
 }
 
-export async function csrfHeaders(): Promise<Record<string, string>> {
+export async function csrfHeaders(): Promise<CSRFHeaderParameter> {
   csrfRequest ??= getCSRFToken();
   try {
     const csrf = await csrfRequest;
@@ -66,30 +76,88 @@ export async function csrfHeaders(): Promise<Record<string, string>> {
   }
 }
 
-async function csrfHeaderParameter() {
-  const headers = await csrfHeaders();
-  return { [csrfHeaderName]: headers[csrfHeaderName] };
+async function withCSRF<T>(
+  operation: (headers: CSRFHeaderParameter) => Promise<ClientResult<T>>,
+): Promise<ClientResult<T>> {
+  let result = await operation(await csrfHeaders());
+  if (!isCSRFForbidden(result)) return result;
+
+  // Another tab can refresh the shared CSRF cookie while this tab still holds
+  // an older in-memory token. Clear it and retry the rejected (and therefore
+  // side-effect-free) request exactly once with the current cookie token.
+  csrfRequest = null;
+  result = await operation(await csrfHeaders());
+  return result;
 }
 
 export async function login(
   body: components["schemas"]["LoginRequest"],
 ): Promise<User> {
-  const result = await client.POST("/api/v1/auth/login", {
-    body,
-    params: { header: await csrfHeaderParameter() },
-  });
+  const result = await withCSRF((header) =>
+    client.POST("/api/v1/auth/login", { body, params: { header } }),
+  );
   return requireData(result);
 }
 
 export async function logout(): Promise<void> {
-  const result = await client.POST("/api/v1/auth/logout", {
-    params: { header: await csrfHeaderParameter() },
-  });
+  const result = await withCSRF((header) =>
+    client.POST("/api/v1/auth/logout", { params: { header } }),
+  );
   requireSuccess(result);
 }
 
 export async function getCurrentUser(): Promise<User> {
   return requireData(await client.GET("/api/v1/auth/me"));
+}
+
+export async function getSystemMode(): Promise<SystemMode> {
+  const result = await client.GET("/api/v1/system/mode", {
+    cache: "no-store",
+  });
+  const mode = requireData(result);
+  if (!isSystemModeResponse(mode)) {
+    throw invalidRuntimeResponse(result.response);
+  }
+  return mode;
+}
+
+export async function getSetupStatus(): Promise<SetupStatus> {
+  const result = await client.GET("/api/v1/setup/status", {
+    cache: "no-store",
+  });
+  const status = requireData(result);
+  if (!isSetupStatusResponse(status)) {
+    throw invalidRuntimeResponse(result.response);
+  }
+  return status;
+}
+
+export async function testSetupDatabase(
+  body: SetupDatabaseTest,
+): Promise<SetupDatabaseTestResult> {
+  return requireData(
+    await withCSRF((header) =>
+      client.POST("/api/v1/setup/database/test", {
+        body,
+        cache: "no-store",
+        params: { header },
+      }),
+    ),
+  );
+}
+
+export async function completeSetup(
+  body: SetupComplete,
+): Promise<SetupAccepted> {
+  return requireData(
+    await withCSRF((header) =>
+      client.POST("/api/v1/setup/complete", {
+        body,
+        cache: "no-store",
+        params: { header },
+      }),
+    ),
+  );
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
@@ -105,29 +173,35 @@ export async function listProducts(search = ""): Promise<ProductPage> {
 }
 
 export async function createProduct(body: ProductDraft): Promise<Product> {
+  const key = idempotencyKey();
   return requireData(
-    await client.POST("/api/v1/products", {
-      body,
-      params: {
-        header: {
-          ...(await csrfHeaderParameter()),
-          "Idempotency-Key": idempotencyKey(),
+    await withCSRF((headers) =>
+      client.POST("/api/v1/products", {
+        body,
+        params: {
+          header: {
+            ...headers,
+            "Idempotency-Key": key,
+          },
         },
-      },
-    }),
+      }),
+    ),
   );
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  const result = await client.DELETE("/api/v1/products/{id}", {
-    params: {
-      path: { id },
-      header: {
-        ...(await csrfHeaderParameter()),
-        "Idempotency-Key": idempotencyKey(),
+  const key = idempotencyKey();
+  const result = await withCSRF((headers) =>
+    client.DELETE("/api/v1/products/{id}", {
+      params: {
+        path: { id },
+        header: {
+          ...headers,
+          "Idempotency-Key": key,
+        },
       },
-    },
-  });
+    }),
+  );
   requireSuccess(result);
 }
 
@@ -150,30 +224,36 @@ export async function listFiles(): Promise<FilePage> {
 export async function createUploadIntent(
   body: UploadIntent,
 ): Promise<PreparedUpload> {
+  const key = idempotencyKey();
   return requireData(
-    await client.POST("/api/v1/files/upload-intents", {
-      body,
-      params: {
-        header: {
-          ...(await csrfHeaderParameter()),
-          "Idempotency-Key": idempotencyKey(),
+    await withCSRF((headers) =>
+      client.POST("/api/v1/files/upload-intents", {
+        body,
+        params: {
+          header: {
+            ...headers,
+            "Idempotency-Key": key,
+          },
         },
-      },
-    }),
+      }),
+    ),
   );
 }
 
 export async function confirmUpload(id: string): Promise<FileObject> {
+  const key = idempotencyKey();
   return requireData(
-    await client.POST("/api/v1/files/{id}/confirm", {
-      params: {
-        path: { id },
-        header: {
-          ...(await csrfHeaderParameter()),
-          "Idempotency-Key": idempotencyKey(),
+    await withCSRF((headers) =>
+      client.POST("/api/v1/files/{id}/confirm", {
+        params: {
+          path: { id },
+          header: {
+            ...headers,
+            "Idempotency-Key": key,
+          },
         },
-      },
-    }),
+      }),
+    ),
   );
 }
 
@@ -186,15 +266,18 @@ export async function getFileURL(id: string): Promise<SignedRequest> {
 }
 
 export async function deleteFile(id: string): Promise<void> {
-  const result = await client.DELETE("/api/v1/files/{id}", {
-    params: {
-      path: { id },
-      header: {
-        ...(await csrfHeaderParameter()),
-        "Idempotency-Key": idempotencyKey(),
+  const key = idempotencyKey();
+  const result = await withCSRF((headers) =>
+    client.DELETE("/api/v1/files/{id}", {
+      params: {
+        path: { id },
+        header: {
+          ...headers,
+          "Idempotency-Key": key,
+        },
       },
-    },
-  });
+    }),
+  );
   requireSuccess(result);
 }
 
@@ -223,6 +306,13 @@ function requireSuccess(result: ClientResult<unknown>): void {
   }
 }
 
+function isCSRFForbidden(result: ClientResult<unknown>): boolean {
+  return (
+    result.response.status === 403 &&
+    problemFrom(result.error, result.response).code === "CSRF_FORBIDDEN"
+  );
+}
+
 function problemFrom(error: unknown, response: Response): Problem {
   if (
     typeof error === "object" &&
@@ -247,6 +337,16 @@ function fallbackProblem(response: Response, detail: string): Problem {
     code: "REQUEST_FAILED",
     requestId: response.headers.get("X-Request-ID") ?? "",
   };
+}
+
+function invalidRuntimeResponse(response: Response): ApiError {
+  return new ApiError(
+    fallbackProblem(
+      response,
+      "The API returned an invalid runtime state response.",
+    ),
+    response,
+  );
 }
 
 function idempotencyKey(): string {

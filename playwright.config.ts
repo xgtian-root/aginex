@@ -1,8 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const webURL = process.env.AGINEX_E2E_WEB_URL ?? "http://127.0.0.1:3000";
-const apiURL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
+const apiURL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 const webEndpoint = new URL(webURL);
 if (
   webEndpoint.protocol !== "http:" ||
@@ -18,7 +17,10 @@ export default defineConfig({
   testMatch: "**/*.e2e.ts",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  // First-run Setup is intentionally one-shot. Retrying against the same API
+  // process would exercise the already-configured application and could turn
+  // a failed installation attempt into a false-positive test result.
+  retries: 0,
   workers: 1,
   reporter: process.env.CI
     ? [["line"], ["html", { open: "never" }]]
@@ -32,7 +34,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], locale: "en-US" },
     },
   ],
   webServer: [
@@ -48,8 +50,7 @@ export default defineConfig({
     },
     {
       name: "Aginex web",
-      command:
-        `pnpm --filter @aginex/web dev --hostname ${webEndpoint.hostname} --port ${webPort}`,
+      command: `pnpm --filter @aginex/web dev --hostname ${webEndpoint.hostname} --port ${webPort}`,
       url: `${webURL}/login`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

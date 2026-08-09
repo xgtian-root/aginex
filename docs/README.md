@@ -9,6 +9,7 @@ Aginex 是一个面向 Coding Agent 的 Go/Gin + Next.js 开源管理后台框�
 |---|---|---|
 | [v1 产品需求规划](v1-product-requirements.md) | Draft | v1 定位、需求、公共契约、路线图和验收条件 |
 | [第三方库清单](third-party-libraries.md) | Draft | v1 依赖选型、用途、优先级和明确排除项 |
+| [Web 国际化](internationalization.md) | Implemented | 语言协商、消息目录、格式化边界与新增 locale 流程 |
 | [生产部署与运维](operations.md) | Draft | 镜像、迁移、Worker、只读运行、健康检查与 CI 门禁 |
 | [生产整改边界](remediation-scope.md) | Draft | 框架基础能力、可选模块、POSTA 业务归属和发布门禁 |
 | [预稳定版升级说明](prestable-upgrade.md) | Draft | 2026-07-30 基线之后的破坏性 API、安全和发布迁移步骤 |

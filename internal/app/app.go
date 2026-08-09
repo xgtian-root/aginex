@@ -96,6 +96,7 @@ func NewWithModulesAndObservability(
 	applicationModules ...module.Module,
 ) (*App, error) {
 	return newApplication(
+		context.Background(),
 		cfg,
 		db,
 		recorder,
@@ -114,6 +115,26 @@ func NewCompositionWithModulesAndObservability(
 	applicationModules ...module.Module,
 ) (*App, error) {
 	return newApplication(
+		context.Background(),
+		cfg,
+		db,
+		recorder,
+		true,
+		applicationModules...,
+	)
+}
+
+// NewCompositionWithModulesAndObservabilityContext composes an application
+// while bounding all startup readiness probes by ctx.
+func NewCompositionWithModulesAndObservabilityContext(
+	ctx context.Context,
+	cfg config.Config,
+	db *gorm.DB,
+	recorder *observability.Recorder,
+	applicationModules ...module.Module,
+) (*App, error) {
+	return newApplication(
+		ctx,
 		cfg,
 		db,
 		recorder,
@@ -123,12 +144,19 @@ func NewCompositionWithModulesAndObservability(
 }
 
 func newApplication(
+	ctx context.Context,
 	cfg config.Config,
 	db *gorm.DB,
 	recorder *observability.Recorder,
 	exactComposition bool,
 	applicationModules ...module.Module,
 ) (*App, error) {
+	if ctx == nil {
+		return nil, errors.New("application construction context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if recorder == nil {
 		return nil, errors.New("observability recorder is required")
 	}
@@ -182,11 +210,11 @@ func newApplication(
 	); err != nil {
 		return nil, fmt.Errorf("configure database observability: %w", err)
 	}
-	if err := migrate.EnsureCurrent(context.Background(), sqlDB, cfg.Database.Driver); err != nil {
+	if err := migrate.EnsureCurrent(ctx, sqlDB, cfg.Database.Driver); err != nil {
 		return nil, fmt.Errorf("check database schema: %w", err)
 	}
 	if err := ensureModuleMigrationsCurrent(
-		context.Background(),
+		ctx,
 		sqlDB,
 		cfg.Database.Driver,
 		registry,
@@ -194,7 +222,7 @@ func newApplication(
 		return nil, err
 	}
 	if err := ratelimit.EnsureCurrent(
-		context.Background(),
+		ctx,
 		sqlDB,
 		cfg.Database.Driver,
 	); err != nil {
@@ -203,7 +231,7 @@ func newApplication(
 	var idempotencyStore *frameworkidempotency.GORMStore
 	if cfg.Idempotency.Driver == "database" {
 		if err := frameworkidempotency.EnsureCurrent(
-			context.Background(),
+			ctx,
 			sqlDB,
 			cfg.Database.Driver,
 		); err != nil {
@@ -221,7 +249,7 @@ func newApplication(
 	var jobQueue jobs.TransactionalQueue
 	var jobInspector jobs.Inspector
 	if cfg.Jobs.Driver == "postgres" {
-		if err := postgresjobs.EnsureCurrent(context.Background(), sqlDB); err != nil {
+		if err := postgresjobs.EnsureCurrent(ctx, sqlDB); err != nil {
 			return nil, fmt.Errorf("check postgres jobs schema: %w", err)
 		}
 		jobStore, storeErr := postgresjobs.New(db, postgresjobs.Config{
@@ -242,7 +270,7 @@ func newApplication(
 		}
 		jobInspector = jobStore
 	}
-	store, err := storage.FromConfig(context.Background(), cfg.Storage, cfg.HTTP.PublicURL)
+	store, err := storage.FromConfig(ctx, cfg.Storage, cfg.HTTP.PublicURL)
 	if err != nil {
 		return nil, fmt.Errorf("configure storage: %w", err)
 	}

@@ -9,7 +9,10 @@ import (
 )
 
 func (a *App) csrfToken(c *gin.Context) {
-	token, err := httpx.GenerateCSRFToken()
+	token, err := httpx.ReuseOrGenerateCSRFToken(
+		c.Request,
+		a.cfg.Session.CSRFCookie,
+	)
 	if err != nil {
 		httpx.WriteProblem(
 			c,

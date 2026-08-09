@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,11 +35,28 @@ func run() error {
 	)
 	defer stop()
 
-	cfg, err := config.Load()
+	slog.Info("Aginex worker waiting for API initialization")
+	cfg, err := waitForAPIInitialization(
+		ctx,
+		config.LoadState,
+		&http.Client{
+			Timeout: workerStartupRequestTimeout,
+			CheckRedirect: func(
+				*http.Request,
+				[]*http.Request,
+			) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		workerStartupPollInterval,
+	)
 	if err != nil {
-		return fmt.Errorf("load configuration: %w", err)
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return fmt.Errorf("wait for API initialization: %w", err)
 	}
-	db, err := database.Open(cfg.Database)
+	db, err := database.OpenContext(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

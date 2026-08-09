@@ -18,7 +18,15 @@ describe("safeLocalRedirect", () => {
     "/%2fevil.example",
     "/%252fevil.example",
     "/safe\nhttps://evil.example",
+    "/setup",
+    "/setup/",
+    "/setup?step=admin",
+    "/%2573etup",
   ])("rejects the external or ambiguous path %s", (value) => {
     expect(safeLocalRedirect(value)).toBe("/dashboard");
+  });
+
+  it("does not reject an ordinary path that merely starts similarly", () => {
+    expect(safeLocalRedirect("/setup-guide")).toBe("/setup-guide");
   });
 });

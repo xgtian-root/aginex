@@ -30,6 +30,22 @@ func GenerateCSRFToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(token), nil
 }
 
+// ReuseOrGenerateCSRFToken keeps the browser's double-submit token stable
+// across tabs. Rotating it on every read would invalidate the in-memory token
+// held by every other open tab even though they share the same cookie jar.
+func ReuseOrGenerateCSRFToken(
+	request *http.Request,
+	cookieName string,
+) (string, error) {
+	if request != nil {
+		if cookie, err := request.Cookie(cookieName); err == nil &&
+			validCSRFToken(cookie.Value) {
+			return cookie.Value, nil
+		}
+	}
+	return GenerateCSRFToken()
+}
+
 func EqualCSRFToken(left, right string) bool {
 	leftToken, leftErr := base64.RawURLEncoding.DecodeString(left)
 	rightToken, rightErr := base64.RawURLEncoding.DecodeString(right)
@@ -40,6 +56,11 @@ func EqualCSRFToken(left, right string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare(leftToken, rightToken) == 1
+}
+
+func validCSRFToken(value string) bool {
+	token, err := base64.RawURLEncoding.DecodeString(value)
+	return err == nil && len(token) == CSRFTokenBytes
 }
 
 func NewCSRF(config CSRFConfig) (gin.HandlerFunc, error) {

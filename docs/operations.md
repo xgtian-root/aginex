@@ -1,12 +1,35 @@
 # Aginex production operations
 
-This guide describes the deployable `api`, `worker`, `migrate`, and `web`
-artifacts. The API and worker never modify schemas during startup. A release
-must run migrations and the administrator bootstrap explicitly.
+Aginex ships three deployable artifacts: `api`, `worker`, and `web`. Database
+migrations and built-in access synchronization are part of API initialization;
+there is no migration image or operational migrate/bootstrap CLI.
+
+## Deployment contract
+
+The current release has four important operating constraints:
+
+1. Run exactly one API instance. The API applies pending Goose migrations and
+   synchronizes built-in permissions and roles before the application becomes
+   ready. Concurrent API startup and rolling multi-replica deployment are not
+   supported.
+2. Use PostgreSQL for production. SQLite and MySQL remain supported for local
+   development, tests, and compatibility verification, but are not production
+   deployment targets.
+3. Give the API database DSN enough authority to own and migrate the
+   application schema and to synchronize bootstrap data. A restricted
+   DML-only API role no longer works because initialization is server-owned.
+4. Start or restart workers only after the API reports application mode and
+   passes readiness. Workers validate their dependencies but never initialize
+   an unconfigured installation or apply migrations.
+
+The privileged API DSN increases the consequence of an API compromise. Keep it
+in the deployment platform's secret store, restrict network access to the
+database, scope it to one Aginex database, audit DDL, and do not expose it in
+build arguments, logs, crash reports, or web configuration.
 
 ## Build immutable images
 
-Build all images from the same source revision and inject the same release
+Build every image from the same source revision and inject the same release
 metadata:
 
 ```bash
@@ -24,311 +47,312 @@ docker build --target worker -t aginex/worker:"$VERSION" \
   --build-arg COMMIT="$COMMIT" \
   --build-arg BUILD_DATE="$BUILD_DATE" .
 
-docker build --target migrate -t aginex/ops:"$VERSION" \
-  --build-arg VERSION="$VERSION" \
-  --build-arg COMMIT="$COMMIT" \
-  --build-arg BUILD_DATE="$BUILD_DATE" .
-
 docker build --target web -t aginex/web:"$VERSION" \
   --build-arg VERSION="$VERSION" \
   --build-arg COMMIT="$COMMIT" \
-  --build-arg BUILD_DATE="$BUILD_DATE" \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.example.com .
+  --build-arg BUILD_DATE="$BUILD_DATE" .
 ```
 
-`NEXT_PUBLIC_API_URL` is public configuration compiled into browser assets.
-Changing it at container runtime does not rewrite an existing web build. Never
-pass passwords, session secrets, database DSNs, or cloud credentials as build
-arguments. Supply secrets to containers at runtime through the deployment
-platform's secret store.
+The web build leaves `NEXT_PUBLIC_API_URL` empty by default. Browser requests
+therefore use same-origin API URLs. At the production ingress, route `/api/*`
+and `/health/*` to the Go API and every other path to the Next container. For
+example, the essential Nginx-style split is:
 
-The distroless Go images use the numeric user `65532:65532` and contain no
-shell; the web image uses `1000:1000`. No image receives development
-credentials.
+```nginx
+location /api/ {
+    proxy_pass http://aginex-api:8080;
+}
+location /health/ {
+    proxy_pass http://aginex-api:8080;
+}
+location / {
+    proxy_pass http://aginex-web:3000;
+}
+```
+
+The Next server also probes API mode during server rendering. Inject
+`AGINEX_API_INTERNAL_URL=http://api:8080` (using the deployment's real internal
+service name) into the web container at runtime. This server-only variable is
+not exposed to the browser and is not a build argument. Its fallback,
+`http://127.0.0.1:8080`, is valid only when API and web share a host, such as
+local development; it cannot reach a separate API container.
+
+If a deployment intentionally uses a separate public API origin, pass its
+absolute origin as
+`--build-arg NEXT_PUBLIC_API_URL=https://api.example.com`. This value is public
+and compiled into browser assets; changing it at container runtime cannot
+rewrite an existing build.
+
+Never pass passwords, session secrets, database DSNs, or cloud credentials as
+build arguments. The distroless Go images run as `65532:65532` and contain no
+shell; the web image runs as `1000:1000`.
+
+## Installation state and `/data`
+
+The API image sets:
+
+```dotenv
+AGINEX_CONFIG_FILE=/data/aginex-config.json
+AGINEX_STORAGE_LOCAL_ROOT=/data/uploads
+```
+
+It deliberately does not set a database DSN. Mount a durable volume at
+`/data` even when object data lives in S3 or OSS. Browser Setup persists a
+versioned installation document there with mode `0600`; it includes the
+managed database DSN and session secret (generated when it was not supplied).
+Treat the file as a secret, back it up, and make the volume writable only by
+UID/GID `65532`.
+
+An environment-configured installation persists only its database driver and
+session secret in the file; the DSN remains environment-owned. A configured
+file is fail-closed: invalid JSON, unsafe permissions, a symlink, an unsupported
+version, or a mismatch with database environment variables prevents startup.
+Do not delete or replace a committed file merely to re-run Setup. Recover it
+from backup or repair the deployment configuration deliberately.
+
+## First-run browser Setup
+
+Start the API with an empty `/data` volume and leave both
+`AGINEX_DATABASE_DRIVER` and `AGINEX_DATABASE_DSN` unset. The stable
+`GET /api/v1/system/mode` endpoint then returns `{"mode":"setup"}`, and the web
+application redirects to the Setup page.
+
+Setup has no setup token and no authenticated administrator exists yet. Its
+write endpoints still enforce the configured browser-origin allowlist, CSRF,
+request limits, and rate limiting, but those controls do not establish operator
+identity. Until Setup completes, expose the API and web application only on a
+trusted provisioning network or through an operator-controlled tunnel. Do not
+put an unconfigured instance on a public ingress.
+
+Run only one API container during Setup. Enter a production PostgreSQL DSN with
+schema-owner/migration authority plus the initial administrator email and a
+strong password. The completion flow:
+
+1. validates and pings the database;
+2. applies pending core and enabled-module migrations;
+3. synchronizes built-in access and creates or verifies an active administrator;
+4. starts the application and verifies readiness;
+5. atomically publishes `AGINEX_CONFIG_FILE`; and
+6. switches the same HTTP server from Setup routes to application routes.
+
+The status endpoint exposes only bounded stages and safe error codes; it never
+returns the DSN or provider error text. A failure before the configuration
+commit leaves Setup active and does not publish a partial file. Database work
+may already have completed, so correct the reported dependency or permission
+problem and retry the repeat-safe initialization. If a reviewed migration is
+incompatible, restore the database backup rather than attempting an automatic
+down migration.
+
+After activation, `/api/v1/setup/*` returns `404`; it cannot be used to replace
+the database configuration. Rotate a stored DSN by an offline, backed-up
+configuration operation and validate the replacement before restoring service.
+
+## Environment-configured first start
+
+Automation can bypass browser Setup by setting both database variables before
+the first API start:
+
+```dotenv
+AGINEX_DATABASE_DRIVER=postgres
+AGINEX_DATABASE_DSN=postgres://aginex_owner:REDACTED@postgres.example.com/aginex?sslmode=require
+AGINEX_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+AGINEX_BOOTSTRAP_ADMIN_PASSWORD=use-a-secret-generated-value
+```
+
+The API migrates and bootstraps the database, verifies readiness, then seals an
+environment-backed installation marker. Remove the two bootstrap variables
+after an active administrator exists. Keep the database variables present on
+future starts; the marker records no DSN and startup fails if either value is
+missing or the driver changes.
 
 ## Production configuration
 
-Start from [`.env.example`](../.env.example), store the production copy outside
-the source tree, and change every example credential. Production mode rejects
-an insecure public URL, insecure allowed origins, an insecure session cookie,
-an all-address trusted-proxy range, placeholder or whitespace-padded bootstrap
-credentials, and session secrets that are short, templated, or low-diversity.
-The session cookie, CSRF cookie, and CSRF header names are fixed by the
-published OpenAPI contract.
-
-A typical online deployment uses:
+Start from [`.env.example`](../.env.example), keep the deployed copy outside the
+source tree, and supply secrets through the platform's secret mechanism. A
+typical same-origin PostgreSQL deployment includes:
 
 ```dotenv
 AGINEX_ENV=production
-AGINEX_API_PUBLIC_URL=https://api.example.com
+AGINEX_CONFIG_FILE=/data/aginex-config.json
+AGINEX_API_PUBLIC_URL=https://admin.example.com
 AGINEX_WEB_ORIGINS=https://admin.example.com
 AGINEX_TRUSTED_PROXIES=10.20.0.0/24
 AGINEX_SESSION_SECURE=true
 AGINEX_SESSION_SAME_SITE=lax
 
-AGINEX_DATABASE_DRIVER=postgres
-AGINEX_DATABASE_DSN=postgres://aginex:REDACTED@postgres.example.com/aginex?sslmode=require
 AGINEX_IDEMPOTENCY_DRIVER=database
 AGINEX_JOBS_DRIVER=postgres
+
+AGINEX_STORAGE_DRIVER=s3
+AGINEX_STORAGE_BUCKET=aginex-production
+AGINEX_STORAGE_REGION=us-east-1
+AGINEX_STORAGE_ENDPOINT=https://objects.example.com
 ```
 
-Only list proxy CIDRs that are controlled by the deployment. Each worker
-replica needs a stable, unique `AGINEX_JOBS_WORKER_ID`; use the pod or task
-identity rather than sharing the default value.
+For browser Setup, omit database and bootstrap variables. For preconfigured
+startup, add the PostgreSQL and one-time administrator values described above.
+Production validation also rejects HTTP public URLs, non-HTTPS browser origins,
+insecure cookies, all-address trusted-proxy ranges, and weak session or
+bootstrap secrets.
 
-If the web application and API intentionally use different sites, review the
-cookie `SameSite` mode and CSRF/origin requirements together. `SameSite=none`
-still requires a secure cookie in production.
+Only list proxy CIDRs controlled by the deployment. Each worker replica needs a
+stable, unique `AGINEX_JOBS_WORKER_ID`; use its pod or task identity. S3/OSS
+credentials should be limited to the configured bucket and the operations
+needed by readiness, signed transfers, verification, and deletion.
 
-### Separate database roles
+## Startup and release order
 
-Do not inject one database credential into every process. The environment
-variable can remain named `AGINEX_DATABASE_DSN`, but the deployment must give
-it a different secret value according to the process:
+For every release:
 
-| Process | Required database authority |
-|---|---|
-| `migrate` release job | Owns the application schema and migration objects; may take migration locks and execute the reviewed DDL/data migration |
-| one-shot `bootstrap` job | May synchronize users, identities, permissions, roles, associations, and insert its audit event; remove the credential after the job |
-| `api` | Runtime DML only for application tables; `audit_logs` is restricted to `SELECT` and `INSERT` |
-| `worker` | Runtime DML only for queue and handler-owned tables; `audit_logs` is restricted to `SELECT` and `INSERT` |
-| `web` | No database credential |
+1. Back up the PostgreSQL database, `AGINEX_CONFIG_FILE`, and object storage as
+   one recovery unit.
+2. Stop the worker so it cannot consume jobs against a partially upgraded
+   application.
+3. Stop the old API and start exactly one new API instance with the privileged
+   DSN. This is a recreate deployment, not a rolling multi-replica rollout.
+4. Wait for `GET /api/v1/system/mode` to return `application`, then require
+   `GET /health/ready` to return `200`.
+5. Start workers and verify that they stay running and can reach PostgreSQL and
+   object storage.
+6. Deploy the web image and route same-origin API traffic at the ingress.
 
-The API and worker roles must not own the database, application schema,
-`audit_logs`, append-only triggers, or migration tables, and must not inherit
-the migrator role. Revoke `UPDATE`, `DELETE`, and `TRUNCATE` on `audit_logs`,
-and revoke schema/table DDL such as `CREATE`, `ALTER`, `DROP`, and trigger
-management. A row-level append-only trigger is useful defense in depth, but a
-table owner or DDL-capable runtime credential could remove or bypass it.
+The Setup-mode readiness endpoint reports the provisioning server itself as
+ready, so `/health/ready` alone is not sufficient to release workers. Always
+gate them on application mode as well.
 
-For PostgreSQL, keep `audit_logs` and its trigger owned by the migrator role,
-revoke schema `CREATE` from runtime roles, then grant runtime roles only
-`SELECT, INSERT` on that table. For MySQL, omit `UPDATE` and `DELETE` on
-`audit_logs` and do not grant `ALTER`, `DROP`, `CREATE`, or `TRIGGER`; MySQL
-`TRUNCATE` is controlled by DDL authority. Manage these grants in deployment
-infrastructure, because concrete role names and database boundaries are
-environment-owned. SQLite deployments must enforce the equivalent separation
-with distinct file/process permissions; it is not a substitute for server-side
-roles in a multi-instance online service.
-
-## Release and rollback order
-
-Use one configuration source for the operational command, API, and worker:
-
-1. Back up the database and verify object-storage recovery procedures.
-2. Inject the DDL-capable migrator DSN and run `aginex migrate status`.
-3. Run `aginex migrate up` as a single release job, then remove that
-   credential from the runtime deployment.
-4. On first installation, and after built-in permission definitions change,
-   run the repeat-safe `aginex bootstrap` with its one-shot DML credential,
-   administrator email and password, then remove those values from normal
-   runtime configuration.
-5. Start or roll the API and worker with their restricted runtime DSNs.
-6. Wait for API readiness, then roll the web application.
-
-With the `migrate` image, the operational commands are:
-
-```bash
-docker run --rm --read-only --cap-drop=ALL \
-  --security-opt=no-new-privileges=true \
-  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
-  --env-file /run/secrets/aginex.env \
-  aginex/ops:0.1.0-rc.1 migrate up
-
-docker run --rm --read-only --cap-drop=ALL \
-  --security-opt=no-new-privileges=true \
-  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
-  --env-file /run/secrets/aginex-bootstrap.env \
-  aginex/ops:0.1.0-rc.1 bootstrap
-```
-
-The migrate command uses versioned Goose migrations and a database lock. API
-startup checks the core/rate-limit schema plus enabled idempotency and job
-schemas. Worker startup checks the core/rate-limit and PostgreSQL job schemas.
-Both fail instead of changing the database.
-
-Prefer forward-compatible expand/migrate/contract releases. If an application
-rollback is required, roll back to a binary compatible with the already
-applied schema. Do not automatically run destructive `down` migrations in
-production.
+API initialization is bounded and fail-closed. If migration, bootstrap,
+database, storage, or module readiness fails, the configured API exits before
+listening. Inspect its redacted logs, correct the dependency or deploy a binary
+compatible with the already-applied schema, and retry one instance. Prefer
+forward-compatible expand/migrate/contract changes; never automate destructive
+down migrations during rollback.
 
 ## Read-only containers
 
-The cloud-storage/PostgreSQL deployment needs no writable application root.
-Example API and worker controls:
+The images declare `/data` as persistent, but production should still name the
+volume explicitly. Example API controls:
 
 ```bash
-docker run --detach --read-only --cap-drop=ALL \
-  --security-opt=no-new-privileges=true \
-  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
-  --env-file /run/secrets/aginex.env \
-  --publish 8080:8080 \
-  aginex/api:0.1.0-rc.1
+docker volume create aginex-data
+docker network create aginex
 
-docker run --detach --read-only --cap-drop=ALL \
+docker run --detach --name aginex-api \
+  --network aginex \
+  --read-only --cap-drop=ALL \
   --security-opt=no-new-privileges=true \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
+  --mount type=volume,source=aginex-data,target=/data \
   --env-file /run/secrets/aginex.env \
+  --publish 127.0.0.1:8080:8080 \
+  aginex/api:0.1.0-rc.1
+```
+
+After the API reaches application mode and readiness, start the worker with the
+same installation configuration. A Setup-managed installation therefore needs
+the same `/data` volume (or a secure read-only projection of its configuration
+file). Environment-configured workers may receive their own PostgreSQL DSN,
+but must use the same driver and database. The worker actively waits for both
+application mode and readiness through `AGINEX_API_PUBLIC_URL`, so that URL
+must also be reachable from the worker network:
+
+```bash
+docker run --detach --name aginex-worker \
+  --network aginex \
+  --read-only --cap-drop=ALL \
+  --security-opt=no-new-privileges=true \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
+  --mount type=volume,source=aginex-data,target=/data \
+  --env-file /run/secrets/aginex-worker.env \
   aginex/worker:0.1.0-rc.1
 ```
 
-For SQLite or local object storage, mount a dedicated writable volume at
-`/data`; the Go images default the SQLite DSN and local storage root to paths
-below that directory. A bind-mounted host directory must be writable by UID/GID
-`65532`; do not make the whole root filesystem writable. Worker replicas using
-local storage must mount the same object data.
+Local object storage also requires the API and worker to share `/data/uploads`.
+For a bind mount, pre-create the directory for UID/GID `65532`; do not make the
+whole root filesystem writable.
 
-The standalone web server can run read-only with writable ephemeral caches:
+The standalone web server can run read-only with an ephemeral cache:
 
 ```bash
-docker run --detach --read-only --cap-drop=ALL \
+docker run --detach --name aginex-web \
+  --network aginex \
+  --read-only --cap-drop=ALL \
   --security-opt=no-new-privileges=true \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
   --tmpfs /app/apps/web/.next/cache:rw,nosuid,nodev,size=128m \
-  --publish 3000:3000 \
+  --env=AGINEX_API_INTERNAL_URL=http://aginex-api:8080 \
+  --publish 127.0.0.1:3000:3000 \
   aginex/web:0.1.0-rc.1
 ```
 
-## Health and shutdown
+## Health, shutdown, and observability
 
-- `GET /health/live` reports only that the API process can serve HTTP.
-- `GET /health/ready` verifies the database, every enabled migration set,
-  configured object storage, and required module dependencies. Each check has
-  its own timeout and the external failure response does not expose the
-  dependency error.
-- `/api/v1/health/live` and `/api/v1/health/ready` remain compatibility aliases.
+- `GET /api/v1/system/mode` distinguishes `setup` from `application` for the
+  lifetime of the API process.
+- `GET /health/live` reports that the current Setup or application HTTP surface
+  can serve requests.
+- In application mode, `GET /health/ready` verifies the database, enabled
+  migration sets, configured storage, and required module dependencies.
+- `/api/v1/health/live` and `/api/v1/health/ready` are compatibility aliases.
 
-Optional module readiness failures are logged but do not remove the process
-from service. Required failures return `503`. S3 and OSS readiness use a
-bucket-level probe, so production credentials must include the corresponding
-least-privilege metadata permission. The worker exposes the same bounded
-dependency decision through `Runtime.Ready(ctx)`; deployments may publish that
-result on an internal listener or use a process probe without coupling API
-readiness to worker availability.
+Required readiness failures return `503`. S3 and OSS readiness use a
+bucket-level probe, so credentials must include the corresponding metadata
+permission. Workers do not expose a public HTTP listener; use process state and
+redacted startup logs as their deployment probe.
 
-Both API and worker handle `SIGTERM`. The API drains requests for
-`AGINEX_HTTP_SHUTDOWN_GRACE_PERIOD`. The worker stops claiming new jobs,
-cancels active handlers, and settles their leases as failed within the same
-grace period so they can be retried. Configure the orchestrator's termination
-grace period to exceed this value.
+API and worker handle `SIGTERM`. The API drains requests for
+`AGINEX_HTTP_SHUTDOWN_GRACE_PERIOD`. The worker stops claiming jobs, cancels
+active handlers, and settles their leases so they can be retried. Set the
+orchestrator termination grace period above the application value.
 
-Logs are structured JSON on standard output. Preserve `request_id`,
-`traceparent`, actor, route, status, and duration fields in the log pipeline;
-secret-bearing fields are redacted by the runtime logger.
+Logs are structured JSON on standard output. Preserve request and trace IDs,
+actor, route, status, and duration fields; secret-bearing fields are redacted.
+The default composition records bounded telemetry internally but configures no
+export sink. A deployment owns its metrics/tracing adapter, buffering,
+sampling, TLS, credentials, collector availability, and private metrics
+listener.
 
-## Metrics and tracing
+## Durable jobs and idempotency
 
-Aginex instruments HTTP requests, GORM operations and connection pools,
-durable enqueue/claim/handler/heartbeat/settlement work, shared rate limiting,
-and Local/S3/OSS storage operations. Incoming W3C `traceparent` values create a
-new server child span. Transactional enqueue persists a producer context and
-the worker restores it as a consumer span, so API, worker, database, and
-storage activity can share one trace.
+`AGINEX_JOBS_DRIVER=postgres` is the production queue. It provides at-least-once
+delivery, so handlers must be idempotent. Claims use database row locking,
+heartbeated leases, retry backoff and jitter, and a terminal `dead` state.
+Production compositions with `FilesModule` must keep at least one worker
+running after the API becomes ready.
 
-The framework emits only bounded dimensions such as route templates, status,
-database system, job type/version, limiter namespace, storage provider, and
-outcome. Raw paths, SQL and parameters, actor/request/job IDs, limiter keys,
-payloads, object keys, bucket names, signed URLs, and provider error text are
-not telemetry attributes.
+Monitor queue state, oldest `scheduled_at`, attempts, and `heartbeat_at`.
+System-scoped operators can use `GET /api/v1/jobs` with `jobs:read` and
+`POST /api/v1/jobs/{uuid}/retry` with `jobs:retry`; use these protected APIs
+instead of editing queue rows.
 
-The default composition uses a no-export recorder. A deployment that needs
-metrics or traces must create a `framework/observability.Recorder` with a
-concurrency-safe `Sink`, then attach it with
-`application.Definition.WithObservability`. The deployment owns OTLP,
-Prometheus, or another adapter; buffering, sampling, TLS and credentials;
-collector availability; retention; and any internal `/metrics` listener.
-Aginex deliberately does not expose a public metrics endpoint or install
-process-global telemetry state.
-
-## Durable jobs
-
-`AGINEX_JOBS_DRIVER=postgres` is the production queue and requires
-`AGINEX_DATABASE_DRIVER=postgres`. It provides at-least-once delivery:
-handlers must remain idempotent. Claims use database row locking, leases are
-heartbeated, failures retry with backoff and jitter, and exhausted jobs enter
-`dead`.
-
-When `application.FilesModule()` is part of the shared definition, the worker
-registers both versions of `storage.cleanup`. A zero-business worker does not
-register or depend on these handlers or the `file_objects` table. Version 2
-distinguishes `explicit-delete` from `pending-expiry`. File deletion is a state
-transition followed by a durable task. A direct-upload intent also atomically
-schedules pending-object expiry for the signed request's expiry time plus a
-two-minute grace period.
-
-Production compositions that enable `FilesModule` must use
-`AGINEX_JOBS_DRIVER=postgres` and keep at least one worker running. Development
-compositions with jobs disabled do not have an automatic pending-upload expiry
-task. Monitor overdue version-2 `storage.cleanup` jobs and file rows that
-remain `pending` beyond the signed-upload window.
-
-Monitor `aginex_jobs` by state, oldest `scheduled_at`, attempts, and
-`heartbeat_at`. Alert on a growing pending backlog, stale running leases, or
-dead jobs. System-scoped operators can use:
-
-- `GET /api/v1/jobs` with `jobs:read`. It defaults to dead jobs and accepts
-  `state`, exact `type`, `page`, and `pageSize` filters.
-- `POST /api/v1/jobs/{uuid}/retry` with `jobs:retry`. It atomically changes only
-  `dead` jobs back to `pending` and writes the audit event in the same
-  transaction. An optional `Idempotency-Key` makes a successful retry safely
-  replayable without a second state change or audit event.
-
-The list deliberately omits payloads, payload hashes, idempotency keys,
-`traceparent`, and raw error text. Use the protected API instead of editing
-queue rows; retrying any non-dead state is rejected.
-
-## Idempotency retention
-
-The default `AGINEX_IDEMPOTENCY_DRIVER=database` scopes keys to the actor and
-operation, stores request fingerprints and safe responses, and rejects reuse
-with a different request. Lease duration must be shorter than or equal to the
-record TTL. Disabling the driver causes requests that supply
-`Idempotency-Key` to be rejected instead of silently ignoring the key.
-
-Expired rows are no longer reusable after `AGINEX_IDEMPOTENCY_TTL`, but TTL
-does not itself guarantee immediate physical deletion. High-volume
-applications must schedule the framework store's `CleanupExpired` operation
-and monitor table growth.
+Database idempotency scopes keys to the actor and operation, stores request
+fingerprints and safe responses, and rejects reuse with different input. TTL
+makes expired records non-replayable but does not immediately delete them;
+high-volume deployments must schedule cleanup and monitor table growth.
 
 ## Storage and recovery
 
 Use random object keys and short-lived signed URLs. Keep buckets private unless
-a file is explicitly public. For S3-compatible or OSS providers, use
-least-privilege credentials limited to the configured bucket.
-
-Database and object-storage backups form one recovery unit. Restore them to an
-isolated environment, run `aginex migrate status`, and test both metadata reads
-and object downloads. A database restore can legitimately contain pending
-`storage.cleanup` jobs; start a worker only after the matching object-store
-snapshot is available.
+an object is explicitly public. Database, installation configuration, and
+object-storage backups form one recovery unit. Restore all three to an isolated
+environment, start one API against the restore, require application mode and
+readiness, then test metadata reads and object downloads. Start a worker only
+after the matching object snapshot is available because a restored database
+may contain pending cleanup jobs.
 
 ## CI and release evidence
 
-CI enforces:
-
-- module checksum verification, tests, race tests, vet, Skill validation, and
-  atomic generated OpenAPI/client drift checks;
-- PostgreSQL, MySQL, Local, and required S3-compatible storage contracts;
-- full npm dependency audit, web typecheck/lint, tests, and standalone build;
-- a Chromium workflow against real API, Next.js, and PostgreSQL processes that
-  covers login/redirect protection, audited product CRUD, verified local image
-  upload, durable cleanup enqueue and protected job inspection, and logout;
-- Go vulnerability analysis, static security analysis, repository secret and
-  configuration scanning;
-- all four non-root image builds, CycloneDX SBOM generation, and image
-  High/Critical vulnerability gates;
-- read-only, capability-dropped runtime smoke checks. API and web readiness are
-  probed, the migration image runs against SQLite, the worker runs against
-  PostgreSQL, and long-running containers must exit cleanly after `SIGTERM`.
-
-The integration-test packages share one PostgreSQL and one MySQL DSN, so CI
-runs Go packages with `-p 1` to prevent independent migration tests from
-dropping each other's module tables. OSS contract tests run only when the
-repository's OSS test secrets are configured; set
-`AGINEX_REQUIRE_OSS_CONTRACT=true` to make that provider mandatory for a
-trusted push or manual release run. Pull-request jobs never receive OSS
-credentials.
+CI enforces backend tests and static checks, generated contract drift, web
+typecheck/lint/tests/build, PostgreSQL/MySQL/storage contracts, browser
+workflows, vulnerability and secret scanning, and SBOM/vulnerability gates for
+all three images. The serial browser workflow starts with a unique, absent
+installation file, completes real browser Setup against PostgreSQL, and then
+runs authenticated application workflows. Runtime smoke tests run non-root,
+read-only, capability-dropped containers: the API initializes SQLite itself,
+the worker is started only after a helper API initializes PostgreSQL and
+reports application mode and readiness, and the web image is built with
+same-origin API configuration. Long-running containers must exit cleanly after
+`SIGTERM`.
 
 GitHub Actions and container bases are pinned to immutable commits or digests.
-Review Dependabot updates before merging, especially security-scanner actions;
-do not replace the reviewed Trivy action and version pins with floating tags.
+Review dependency and scanner updates before merging; do not replace reviewed
+pins with floating tags.

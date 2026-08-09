@@ -81,7 +81,7 @@ func TestBootstrapCreatesUserIdentityAndRoleAtomically(t *testing.T) {
 	}
 	assertBootstrapCount(t, db, &domain.User{}, 1)
 	assertBootstrapCount(t, db, &domain.UserIdentity{}, 1)
-	assertBootstrapCount(t, db, &domain.AuditLog{}, 2)
+	assertBootstrapCount(t, db, &domain.AuditLog{}, 1)
 	var assignmentCount int64
 	if err := db.Table("user_roles").
 		Where("user_id = ? AND role_id = ?", user.ID, user.Roles[0].ID).
@@ -115,6 +115,52 @@ func TestBootstrapCreatesUserIdentityAndRoleAtomically(t *testing.T) {
 	})
 	if _, err := service.Login("ADMIN@example.com", cfg.AdminPassword, "", ""); err != nil {
 		t.Fatalf("bootstrap administrator login: %v", err)
+	}
+}
+
+func TestBootstrapRecordsHTTPContextOnlyWhenStateDrifts(t *testing.T) {
+	db := openBootstrapDatabase(t)
+	cfg := config.Bootstrap{
+		AdminEmail:    "setup@example.com",
+		AdminPassword: "correct bootstrap password",
+	}
+	options := BootstrapOptions{
+		Source:    "http",
+		RequestID: "01JSETUPREQUEST",
+		IPAddress: "192.0.2.10",
+	}
+	if err := BootstrapCompositionWithModulesAndOptions(
+		t.Context(),
+		db,
+		cfg,
+		options,
+		FilesModule(),
+		StarterExampleModule(),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := BootstrapCompositionWithModulesAndOptions(
+		t.Context(),
+		db,
+		cfg,
+		options,
+		FilesModule(),
+		StarterExampleModule(),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	var audits []domain.AuditLog
+	if err := db.Find(&audits).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(audits) != 1 {
+		t.Fatalf("bootstrap audit count = %d, want 1", len(audits))
+	}
+	if audits[0].Source != "http" ||
+		audits[0].RequestID != options.RequestID ||
+		audits[0].IPAddress != options.IPAddress {
+		t.Fatalf("bootstrap audit context = %#v", audits[0])
 	}
 }
 
@@ -188,6 +234,61 @@ func TestBootstrapPreservesMigratedPasswordIdentity(t *testing.T) {
 	}
 	if _, err := service.Login(email, configuredPassword, "", ""); !errors.Is(err, auth.ErrInvalidCredentials) {
 		t.Fatalf("replacement bootstrap password error = %v, want invalid credentials", err)
+	}
+}
+
+func TestHTTPSetupCanReplaceCredentialAfterAnUnsealedAttempt(t *testing.T) {
+	db := openBootstrapDatabase(t)
+	const (
+		email       = "retry-admin@example.com"
+		oldPassword = "first setup administrator password"
+		newPassword = "replacement setup administrator password"
+	)
+	if err := Bootstrap(t.Context(), db, config.Bootstrap{
+		AdminEmail:    email,
+		AdminPassword: oldPassword,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := BootstrapWithModulesAndOptions(
+		t.Context(),
+		db,
+		config.Bootstrap{
+			AdminEmail:    email,
+			AdminPassword: newPassword,
+		},
+		BootstrapOptions{
+			Source:                         "http",
+			ReplaceAdministratorCredential: true,
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	var identity domain.UserIdentity
+	if err := db.Where(
+		"provider = ? AND subject = ?",
+		domain.IdentityProviderPassword,
+		email,
+	).First(&identity).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !password.Verify(identity.CredentialHash, newPassword) {
+		t.Fatal("HTTP Setup did not persist the replacement password")
+	}
+	if password.Verify(identity.CredentialHash, oldPassword) {
+		t.Fatal("HTTP Setup retained the previous unsealed password")
+	}
+
+	var auditCount int64
+	if err := db.Model(&domain.AuditLog{}).
+		Where("action = ?", "system:bootstrap").
+		Count(&auditCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if auditCount != 2 {
+		t.Fatalf("bootstrap audit count = %d, want 2", auditCount)
 	}
 }
 

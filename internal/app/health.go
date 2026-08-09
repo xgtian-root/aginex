@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -21,6 +22,31 @@ import (
 )
 
 const builtInReadinessTimeout = 3 * time.Second
+
+// Ready runs the same required dependency checks as the HTTP readiness probe.
+// Startup and Setup use it before publishing a newly constructed application
+// so an invalid storage or module runtime cannot seal an installation.
+func (a *App) Ready(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("application readiness context is required")
+	}
+	if a == nil || a.db == nil {
+		return errors.New("application database is required")
+	}
+	sqlDB, err := a.db.DB()
+	if err != nil {
+		return fmt.Errorf("access readiness database: %w", err)
+	}
+	for _, check := range a.readinessChecks(sqlDB) {
+		checkContext, cancel := context.WithTimeout(ctx, check.Timeout)
+		err := check.Check(checkContext)
+		cancel()
+		if err != nil && check.Requirement == module.ReadinessRequired {
+			return fmt.Errorf("required readiness check %q: %w", check.Name, err)
+		}
+	}
+	return nil
+}
 
 func (a *App) live(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthResponse{

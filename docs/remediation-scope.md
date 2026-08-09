@@ -30,10 +30,10 @@ or would add an unnecessary service dependency to every application.
 | Audit | Bounded actor/request context, redacted before/after values, append-only database enforcement, and rollback on audit failure | Implemented |
 | HTTP safety | Request/header/body limits, trusted proxy configuration, explicit credentialed CORS origins, shared rate limits, secret redaction, production fail-fast, graceful shutdown | Implemented |
 | Shared rate limiting | Cross-instance login, upload, and sensitive-operation limits with portable database windows, privacy-preserving keys, fail-closed storage errors, retry metadata, and cleanup | Implemented as a core security boundary without requiring Redis |
-| Migration lifecycle | Goose as schema authority, explicit `migrate` process, database locking, read-only runtime version checks, empty-install and upgrade tests | Implemented; live PostgreSQL/MySQL execution remains a release environment gate |
+| Migration lifecycle | Goose as schema authority, API-owned automatic migrations under a durable high-authority DSN, database locking, permission-drift synchronization, empty-install and upgrade tests | Implemented; the worker remains non-mutating and live PostgreSQL/MySQL execution remains a release environment gate |
 | Storage primitives | Provider-neutral object operations, random object-key helpers, typed short-lived signed requests, bounded content verification, and Local/S3/OSS contracts | Implemented without imposing a file-object business table or HTTP API; live provider execution remains a release-environment gate |
 | Observability contract | W3C context propagation, low-cardinality spans and metrics for HTTP, database, jobs, rate limiting and storage, connection-pool gauges, and bounded readiness checks | Implemented as a vendor-neutral recorder/sink contract; exporter selection and operation belong to each deployment |
-| Delivery contract | Independent API, worker, migrate/operations, and web artifacts; non-root/read-only-compatible images; health endpoints; release metadata | Implemented in source and CI; local Docker daemon verification may still be unavailable |
+| Delivery contract | Independent API, worker, and web artifacts; one-time browser Setup; non-root/read-only-compatible images; health endpoints; release metadata | Implemented in source and CI; local Docker daemon verification may still be unavailable |
 
 ## Official opt-in framework modules
 
