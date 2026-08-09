@@ -1,5 +1,37 @@
 # Progress
 
+## 2026-08-09 — Cool-Tech Setup Refinement
+
+- Loaded `frontend-design`, its color/typography references, the Aginex
+  `add-admin-page` guidance, and resumed the existing file-backed task record.
+- Locked a polar aerospace-instrument direction that avoids generic neon-dark
+  AI styling and preserves the completed Setup interaction architecture.
+- Started C1 palette and typography audit.
+- Completed C1: mapped centralized warm tokens, the hard-coded warm shadow,
+  editorial display stack/oldstyle numerals, and the global Chinese Songti
+  override. C2 implementation is in progress.
+- Applied the cool semantic palette, technical grid, condensed display stack,
+  upright tabular numerals, tighter radii, and scoped Chinese sans typography.
+- The first focused CSS pass formatted cleanly but reported cascade-order
+  warnings for the locale override; moved it after the base selectors before
+  revalidation.
+- Focused CSS validation and the first cool-tech production build pass. Desktop
+  browser capture is clean; the first mobile Chinese capture reached step two
+  before a QA-script-only `document` context mistake, which is being repeated
+  without changing application code.
+- Corrected mobile capture passes: 390 px viewport/scroll widths match, controls
+  retain 44–51 px touch targets, and the scoped PingFang heading override is
+  active. One CJK headline wrap and one unidentified 404 resource remain for
+  the final polish pass.
+- Completed C2 after giving the mobile/tablet Chinese rail headline its natural
+  width; rebuilt capture measures the full title on one line with no overflow.
+  The only 404 is the unrelated existing `/favicon.ico`. C3 final Web gates are
+  now in progress.
+- Completed C3: `pnpm check:web`, all 93 Web tests, production `pnpm build:web`,
+  standalone artifact verification, focused stylesheet checks, stale-reference
+  scan, and final diff whitespace validation all pass. The isolated API/Web
+  preview processes were terminated after desktop and mobile Chinese QA.
+
 ## 2026-08-09 — Modern Setup Page Redesign
 
 - Loaded the explicitly requested `frontend-design` skill and all linked
@@ -13,6 +45,69 @@
   constrain edits to the relevant presentation surface.
 - Started phase D1 by locating the Setup page, wizard, and stylesheet and
   recording a modern editorial-industrial visual direction.
+- Completed three parallel read-only audits of component behavior, CSS/global
+  coupling, and test/E2E constraints. Phase D1 is complete; D2 implementation
+  is now in progress.
+- Baseline focused Setup-adjacent tests passed (3 files, 18 tests) before any
+  presentation changes.
+- Added the new commissioning stylesheet, switched all Setup route-state imports,
+  removed the superseded paper-ledger stylesheet, and added safe semantic hooks
+  (`data-step`, section labels, busy/pressed/current states) without touching
+  setup state logic.
+- First focused Biome check reported formatter-only differences; no semantic
+  diagnostic was emitted. Formatting and revalidation are next.
+- Formatted the touched Setup files and passed the focused check plus
+  `git diff --check`.
+- Completed D2. The new mobile-first commissioning visual system, container
+  query, safe-area handling, explicit light-theme primitive remapping, 44px+
+  controls, stronger border contrast, reduced motion, forced colors, hover
+  capability queries, and responsive initialization states are implemented.
+- Passed `pnpm check:web`, all 93 Vitest tests, and the production Web build.
+  Phase D3 browser and narrow/wide visual QA is in progress.
+- The isolated API reached Setup mode with the intended temporary config path,
+  then the sandbox denied its loopback bind. The next attempt uses scoped port
+  approval rather than changing any runtime/configuration assumption.
+- Started the isolated API on `127.0.0.1:18089` and Next preview on
+  `127.0.0.1:3309`. The screenshot helper has no standard help output, so its
+  local option declarations will be inspected before capture.
+- The first capture attempt found Puppeteer installed but its pinned downloaded
+  Chrome missing. Visual QA will reuse the existing system browser if present;
+  no browser download is necessary.
+- System Chrome exists at the standard macOS path; its first Puppeteer launch
+  was blocked by GUI sandboxing, so the capture will be retried with scoped
+  approval rather than altering browser dependencies.
+- Approved headless Chrome launched successfully, but the isolated Web port had
+  stopped accepting connections. Both server sessions will be polled before a
+  targeted restart; the browser setup itself is now verified.
+- The Web cause is now known: Next protects the workspace from concurrent dev
+  instances, and a user-owned dev server already runs on port 3000. It will not
+  be interrupted; visual QA will use a separately built production preview on
+  port 3309 against the isolated API.
+- Completed real-browser desktop and 390×844 mobile QA across English database,
+  verified connection, English administrator, and Chinese administrator states.
+  All measured states have no horizontal overflow, 44px locale controls, and
+  51px actions.
+- Confirmed the full-page skip-link appearance was a screenshot stitching
+  artifact; real viewport state is correct. The only 404 was optional
+  `/favicon.ico`, not a Setup or API failure.
+- Exercised step 3 with browser-only mocked initialization polling, preserving
+  the temporary server in Setup mode. Desktop and mobile progress/handoff states
+  render correctly with no horizontal overflow.
+- Verified dark-system isolation, reduced-motion behavior, and keyboard focus.
+  The skip link becomes visible with a 3px outline and focus proceeds to the
+  language selector as expected.
+- Verified fail-closed mode-query failure: no form is present, retry remains
+  available, and the page has no horizontal overflow. Increased only the
+  wide-screen probe/loading inline padding after visual review.
+- Re-ran `pnpm check:web`, `git diff --check`, and the final production build;
+  the standalone server artifact exists. Phase D3 is complete and final scope
+  review is in progress.
+- Final all-93-test run passed. A combined shell assertion then treated the
+  expected no-match exit from the stale-import search as failure; re-run that
+  assertion with explicit inverted search semantics.
+- Corrected the assertion semantics. Final `git diff --check`, standalone
+  artifact verification, and stale stylesheet-reference check all pass. D4 is
+  complete and the redesign is ready for delivery.
 
 ## 2026-08-09 — Web Internationalization
 

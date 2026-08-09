@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { LocaleSwitcher } from "@/components/locale-switcher";
-import "./setup.css";
+import "./commissioning.css";
 
 export default function SetupRouteLoading() {
   const t = useTranslations("Setup");

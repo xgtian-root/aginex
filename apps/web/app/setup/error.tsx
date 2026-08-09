@@ -3,7 +3,7 @@
 import { CircleAlert, RotateCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { LocaleSwitcher } from "@/components/locale-switcher";
-import "./setup.css";
+import "./commissioning.css";
 
 export default function SetupError({ reset }: { reset: () => void }) {
   const t = useTranslations("Setup");

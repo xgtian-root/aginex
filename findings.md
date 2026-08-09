@@ -1,5 +1,96 @@
 # Findings
 
+## Cool-Tech Setup Refinement — 2026-08-09
+
+### User Direction
+
+- The user wants the completed Setup redesign changed to a cool color palette
+  with a stronger technology character.
+- Direction: “polar aerospace instrumentation”—ice-blue canvas, midnight navy
+  structural rail, steel-blue controls, and a rare high-chroma cobalt signal.
+- Technology character should come from geometric/condensed typography, crisp
+  registration lines, tighter corner geometry, and technical background rhythm,
+  not neon glow, purple/cyan gradients, glass, or decorative monospace.
+
+### Scope
+
+- The work should remain presentation-only in
+  `apps/web/app/setup/commissioning.css` unless a localized typography override
+  requires a scoped selector.
+- Database verification, administrator creation, initialization polling,
+  fail-closed states, English/Chinese catalogs, and the previously verified
+  responsive/keyboard contracts remain unchanged.
+
+### C1 Audit Findings
+
+- Warm identity is centralized cleanly: ink/muted hues are aubergine 336,
+  canvas/surface/lines are sand 68–72, and signal/focus hues are persimmon
+  39–47. Replacing semantic tokens will recolor almost every state without
+  selector churn.
+- Two hard-coded warm values remain outside tokens: the form shadow uses hue
+  336, and the display stack is an Iowan/Palatino/Georgia serif. Both must move
+  to the cool system.
+- Current roundness (`0.7 / 1 / 1.4rem`) and italic oldstyle numerals reinforce
+  the editorial tone. Tighten radii and use tabular condensed numerals with
+  upright geometry for aerospace precision.
+- Global Simplified-Chinese rules force Setup headings back to Songti. Add a
+  route-scoped, higher-specificity sans override so Chinese and English share
+  the same technical typographic character without changing other pages.
+- Retain semantic green and red states, but cool their light surfaces and tune
+  line/control tokens separately so status meaning and 3:1 control boundaries
+  remain intact.
+- Existing circular registration geometry and three-part rule are purposeful;
+  recolor them and add a very low-contrast orthogonal grid to the light canvas
+  rather than adding glow, glass, or purple/cyan gradients.
+
+### C2 Design Decisions
+
+- Midnight structural ink: hue 255; ice canvas/surfaces/lines: 245–255; rare
+  cobalt signal/focus: 256–260.
+- Display stack: DIN Alternate / Avenir Next Condensed / Avenir Next, with
+  PingFang SC and other CJK sans fallbacks for Chinese. No new dependency or
+  font download.
+- Reduce corner radii to `0.45 / 0.7 / 0.95rem` and remove display italics;
+  preserve the asymmetric cut-corner form silhouette.
+- The first focused CSS check found only cascade-order warnings: the deliberately
+  stronger Chinese sans override preceded the base heading rules. Keep that
+  specificity, but place the locale override at the stylesheet tail so the
+  cascade is explicit and warning-free.
+- The first mobile browser script successfully switched locale, tested the
+  isolated SQLite DSN, and advanced to the administrator step; only its final
+  font-readiness call used the wrong JavaScript context. No installation write
+  was sent, so the same fresh Setup instance remains safe to reuse for QA.
+
+### C3 Visual QA Findings
+
+- Desktop at 1920×1080 reads as a cool commissioning console: midnight rail,
+  ice-blue grid canvas, and cobalt step/signal accents are distinct without
+  glow, glass, or gradient-text effects. Form controls and status hierarchy
+  remain clear.
+- Mobile Chinese at 390×844 has no horizontal overflow (`390 / 390` CSS px).
+  The locale select is 44 px high, visible action buttons are 51 px high, and
+  the computed step-heading stack resolves to PingFang SC with the intended
+  midnight text color.
+- The only visual polish issue is the Chinese rail headline: its inherited
+  Latin `ch` max-width separates `控制台` across lines on the narrow layout.
+  Give that one CJK heading the available width below the desktop split so the
+  product phrase stays intact.
+- Browser console reported one anonymous 404 resource during the direct-origin
+  preview; identify its URL before classifying it as an application regression.
+- The CJK width correction is verified after rebuilding: at 390 px the full
+  `启用你的控制台。` headline occupies one measured line (289 px), while page
+  scroll width still equals viewport width. The revised screenshot has no
+  orphaned product phrase or clipped geometry.
+- Network inspection identifies the lone 404 as `/favicon.ico`; all Setup mode,
+  locale refresh, CSRF, status, and database requests succeed. The missing
+  repository favicon predates and is outside this route-only visual change.
+- Final source scan finds no warm editorial font names, legacy warm OKLCH hues,
+  or stale `setup.css` imports in the Web app. All three Setup route states load
+  the single `commissioning.css` surface.
+- Final verification passes: repository Web typecheck/Biome, all 93 Vitest
+  cases, the production webpack build with a non-local public API URL, the
+  standalone server artifact assertion, and `git diff --check`.
+
 ## Modern Setup Redesign Findings — 2026-08-09
 
 ### Requirements and Constraints
@@ -28,6 +119,230 @@
   Inter/Roboto styling.
 - Motion is limited to a coordinated entrance and state feedback using
   transform/opacity with exponential easing and a reduced-motion fallback.
+
+### Setup Component Baseline
+
+- `SetupWizard` owns all runtime behavior; the presentational seam begins at
+  the returned `<main>` and the four child surfaces (`SetupLedger`, the three
+  step components, and probe/error states). The query/mutation/effect block can
+  remain untouched.
+- Step 1 requires a successful fingerprint-matched database test before the
+  continue button unlocks. Changing driver or DSN intentionally invalidates the
+  proof and resets the mutation state.
+- Step 2 validates matching 12+ character passwords, normalizes the email, and
+  immediately starts initialization when submitted. Step 3 polls status,
+  renders six machine stages, supports configuration review, and conditionally
+  exposes retry.
+- Accessibility behavior already includes a skip link, focus transfer to each
+  new `<h2>`, visible form labels, field error associations, `aria-current`,
+  progress/status announcements, and labeled secret toggles. The redesign must
+  strengthen rather than remove these semantics.
+- Existing class names are already well scoped under `.setup-page`; most of the
+  modern redesign can be delivered by replacing `setup.css` and making only
+  small additive markup/class changes for architectural decoration or status.
+- Current visual system is an editorial paper ledger with serif headlines,
+  yellow active-row highlight, hard rules, and a two-column 18–24rem sidebar.
+  It is distinctive but reads archival/print rather than contemporary product
+  commissioning, so the redesign should keep editorial hierarchy while moving
+  to cleaner surfaces, stronger spatial contrast, and a more modern progress
+  rail.
+
+### Style and Platform Baseline
+
+- `setup.css` is a self-contained 895-line stylesheet with desktop, 58rem,
+  40rem, 28rem, reduced-motion, and forced-colors branches. Replacing it in
+  place is safer than layering overrides because the current selectors already
+  cover every Setup state and probe surface.
+- Global typography is Avenir Next with native Chinese sans fallbacks; selected
+  display surfaces use Georgia or Songti SC. No web font is loaded, so the
+  redesign should make an intentional native stack: Avenir Next/PingFang for
+  interface copy and Iowan Old Style/Songti for restrained editorial display.
+- Global CSS already provides focus tokens, base buttons/inputs, locale
+  switcher, spinner, screen-reader utility, and a comprehensive reduced-motion
+  override. Setup may specialize these while keeping target sizes at 44px or
+  larger.
+- The root declares both light and dark color schemes, but Setup intentionally
+  sets `color-scheme: light`; this can remain a purposeful light commissioning
+  environment instead of inheriting the generic dark theme.
+- The existing CSS uses horizontal rule bands and square controls. The new
+  direction can feel more contemporary through a full-height dark progress
+  rail, a spacious pale canvas, restrained 12–18px corner geometry, offset
+  architectural background shapes, and an accented primary action—without
+  drifting into generic rounded-card or glassmorphism patterns.
+- Probe/loading/error states share the Setup tokens and should be redesigned at
+  the same time so initial runtime detection does not flash an unrelated style.
+
+### Copy and Route-State Findings
+
+- All existing Setup English and Simplified-Chinese copy is complete and
+  outcome-oriented; the redesign does not need catalog churn. Keeping the same
+  DOM text also minimizes E2E selector risk.
+- `loading.tsx` and `error.tsx` import the same stylesheet and use
+  `.setup-route-loading` / `.setup-probe`, so shared token and composition
+  changes will provide a coherent guarded-route experience automatically.
+- The long English production database hint and longer Chinese status/stage
+  labels are the primary wrapping stress cases. Controls must use `min-width: 0`,
+  `overflow-wrap`, and fluid grids rather than fixed one-line assumptions.
+- The browser API client uses relative same-origin requests by default, and the
+  Playwright configuration starts both the Go server and Next dev server. A
+  real fresh-install visual pass is therefore possible after implementation,
+  subject to using an isolated temporary installation/config path so existing
+  workspace data is not mutated.
+
+### Implementation Boundary
+
+- No unit test asserts Setup class names or DOM shape. Route error/loading
+  states use the same class vocabulary and can move to the replacement
+  stylesheet by changing only their local CSS import.
+- The implementation will replace the existing `setup.css` presentation layer
+  with a semantically named commissioning stylesheet and keep the React state
+  logic and message catalogs unchanged. This isolates the redesign from the
+  large active backend/i18n diff and makes rollback review straightforward.
+
+### Parallel Audit Conclusions
+
+- Setup’s strongest existing foundations—OKLCH colors, logical properties,
+  native controls, explicit states, reduced motion, and forced-colors—should be
+  retained. The dated feel comes primarily from the archival paper-ledger
+  styling, Georgia-heavy hierarchy, desktop-first breakpoints, and extremely
+  small mobile metadata.
+- The current decorative rule color is only about 1.74:1 against the paper and
+  is also used for control boundaries. The new palette must separate subtle
+  decorative lines from a roughly 3:1+ control-border token.
+- Setup forces a light scheme while global dark-mode tokens still leak into the
+  locale select and placeholders. The replacement stylesheet must explicitly
+  remap every reused global primitive inside all Setup shells.
+- Keep the original radio/fieldset/input/button semantics and every polling,
+  normalization, fingerprint, immediate-step-transition, bfcache/focus-refetch,
+  and `window.location.replace` behavior. The E2E suite deliberately exercises
+  those less obvious paths.
+- E2E selectors depend on English accessible names and visible copy, not class
+  names. Pure presentation changes are low risk; the current bilingual catalog
+  should remain untouched.
+- The focused message/runtime/API baseline was already run during the audit:
+  three files and all 18 tests passed before the redesign.
+
+### Issues Encountered
+
+- The first focused Biome check found only formatter output in the newly added
+  commissioning stylesheet and two compact JSX opening tags. No semantic lint,
+  type, or CSS correctness diagnostic was reported; apply the repository
+  formatter to the touched files before rerunning validation.
+
+### Isolated Visual-QA Environment
+
+- A fresh Setup runtime is selected solely by an initially absent
+  `AGINEX_CONFIG_FILE` together with empty database environment variables.
+- Safe browser QA can use dedicated loopback ports plus a unique `/tmp`
+  configuration path and upload root. The API public URL and web-origin allowlist
+  must match those ports; the Next dev server needs `AGINEX_API_INTERNAL_URL`
+  pointed at the isolated API so same-origin `/api/*` rewrites remain valid.
+- No database file is created until the Setup form is submitted, so inspecting
+  steps 1–2 against the isolated server does not seal an installation or mutate
+  existing workspace data.
+
+### Visual QA — Desktop 1920×1080
+
+- The fresh Setup route renders the intended asymmetric composition: dark
+  aubergine commissioning rail, warm mineral canvas, rare persimmon signals,
+  large editorial step heading, and a single actionable form surface.
+- Hierarchy survives the squint test: the ledger title and current step lead,
+  the form is clearly second, and disabled Continue remains subordinate to Test
+  connection.
+- The vertical progress spine, active peach step block, architectural contour
+  rings, and tricolor registration mark read as one coherent industrial system;
+  no cyan/purple gradient, glass panel, generic metric grid, or nested-card
+  pattern is present.
+- Form labels, hint copy, driver states, top navigation, and disabled controls
+  are legible at the captured desktop size. The main content fits within one
+  viewport with ample but intentional negative space and no clipping.
+- Next QA targets: mobile viewport, Chinese copy expansion, focus treatment,
+  verified connection state, and administrator step.
+
+### Visual QA — Mobile 390×844
+
+- English step 1 and Chinese step 2 both adapt rather than merely shrink: the
+  progress rail becomes three compact state tiles, header tools remain
+  reachable, the step index/title form a strong two-column lockup, fields stack,
+  and actions become full-width.
+- All four measured states have `scrollWidth === clientWidth === 390`; there is
+  no horizontal overflow. The locale select is exactly 44px high and every
+  measured action is about 51px high.
+- English and Simplified-Chinese wrapping is clean. Chinese display typography,
+  metadata, hints, credential note, and action labels remain legible without
+  truncation; the administrator form keeps the hierarchy intact.
+- Database verification and navigation to administrator worked through the real
+  isolated API, confirming that the presentation changes did not break native
+  control behavior or the tested-fingerprint unlock path.
+- The apparent skip-link anomaly is confirmed to be only Puppeteer's stitched
+  full-page rendering of a fixed element on a scrolled document. In the real
+  390×844 viewport the link rectangle is fully off-screen (`top: -84px`), the
+  transform is active, focus remains on the step `<h2>`, and the link is not the
+  active element.
+- The sole 404 is `/favicon.ico`; no Setup/API request failed. This unrelated
+  optional browser asset does not affect the redesigned route.
+- A real viewport capture at the scrolled Chinese administrator step confirms
+  the form, actions, contour decoration, and focused content remain correctly
+  aligned with no unexpected fixed UI visible.
+- The verified-connection state is visually strong and semantically redundant:
+  green surface, shield icon, bold outcome, and supporting text distinguish it
+  without relying on color alone. Test again becomes secondary and Continue
+  becomes the rare high-chroma primary action as intended.
+- Long absolute SQLite paths stay inside the input and scroll horizontally as a
+  native single-line field; the overall page still has no horizontal overflow.
+
+### Visual QA — Initialization
+
+- A browser-only intercepted `initializing / migrating` status exercised step 3
+  without publishing any configuration. At both 1440×1000 and 390×844 the
+  active stage is “Applying schema,” and `scrollWidth === clientWidth`.
+- Desktop cleanly balances the step narrative against the progress instrument;
+  mobile stacks the complete six-stage spine above the unique dark handoff
+  panel while retaining every state and label.
+- Complete, active, and pending stages differ through icon/number, border,
+  surface, text weight, and color. The animated signal is confined to the
+  handoff instrument, so progress remains calm and readable.
+- The third progress item activates correctly while the prior two display
+  completion checks. All step-3 content fits the viewport on desktop and scrolls
+  naturally on mobile with no clipping.
+
+### Accessibility and Preference QA
+
+- With operating-system dark mode emulated, Setup remains intentionally light:
+  the page/input/select backgrounds resolve to the local warm OKLCH tokens and
+  the container reports `color-scheme: light`. The previous global-token leak is
+  fixed.
+- With `prefers-reduced-motion: reduce`, both the step panel and ledger entrance
+  report `animation-name: none`; functional focus and loading semantics remain.
+- Keyboard Tab first reaches the skip link, which completes its short transition
+  into the visible viewport at `top: 12px`, retains a solid 3px focus outline,
+  and then advances to the explicitly labeled language select.
+- An immediate synchronous focus measurement briefly observed the link mid-
+  transition above the viewport; the post-transition 200ms measurement confirms
+  the final accessible state is correct and this is not a focus defect.
+
+### Visual QA — Fail-Closed State
+
+- A browser-only 500 response for system mode removes the Setup form entirely,
+  retains a clear retry action, preserves zero horizontal overflow, and renders
+  the guarded error state in the same warm canvas / aubergine / persimmon visual
+  language.
+- Desktop error copy currently sits too close to the architectural left rail.
+  Increase wide-screen inline padding for `.setup-probe` and
+  `.setup-route-loading`; keep the compact safe-area padding on mobile.
+
+### Final Change Boundary
+
+- The former tracked `apps/web/app/setup/setup.css` is intentionally replaced by
+  `apps/web/app/setup/commissioning.css`; page, loading, and error route imports
+  all point to the replacement, and no stale `setup.css` reference remains.
+- `setup-wizard.tsx` retains all query, mutation, normalization, polling, and
+  redirect logic. Its only changes are additive structural/accessibility state:
+  labeled sections, busy/pressed/current attributes, stable heading IDs, and
+  presentation data attributes.
+- The final temporary QA directory contains screenshots plus a zero-byte
+  SQLite test file. No `aginex-config.json` exists, proving the isolated
+  installation was never sealed.
 
 ### Resources
 

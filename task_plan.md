@@ -1,5 +1,28 @@
 # Aginex v1 Implementation Plan
 
+## Current Goal: Cool-Tech Setup Refinement (2026-08-09)
+
+Shift the completed Setup redesign from a warm editorial commissioning desk to
+a cool, precise aerospace-instrument visual language without changing its
+workflow, semantics, localization, or responsive behavior.
+
+### Cool-Tech Refinement Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| C1. Palette and typography audit | complete | Warm tokens, typography overrides, semantic states, and contrast-sensitive surfaces are mapped |
+| C2. Visual-system implementation | complete | Ice-blue neutrals, midnight structure, restrained cobalt signal, technical grid, and geometric type are applied cohesively |
+| C3. Verification and delivery | complete | Formatting, Web checks/tests/build, English/Chinese responsive browser QA, and diff checks pass |
+
+### Cool-Tech Guardrails
+
+- Avoid the generic AI-tech formula: no cyan glow on black, purple-blue
+  gradients, gradient text, glassmorphism, or monospace-as-technology shorthand.
+- Keep Setup intentionally light with a dark structural rail; use cool tinted
+  neutrals, one rare cobalt accent, and existing semantic success/danger colors.
+- Preserve every state and accessibility contract validated by the completed
+  modern Setup redesign.
+
 ## Current Goal: Modern Setup Page Redesign (2026-08-09)
 
 Redesign the existing three-step Setup experience with a distinctive modern
@@ -10,10 +33,10 @@ administrator validation, initialization, localization, and recovery path.
 
 | Phase | Status | Exit criteria |
 |---|---|---|
-| D1. Baseline and visual audit | in_progress | Current Setup states, component structure, CSS dependencies, screenshots, and active drift are mapped |
-| D2. Design direction and implementation | pending | A cohesive modern direction is implemented without altering Setup contracts or state transitions |
-| D3. Responsive and interaction hardening | pending | Narrow/wide layouts, keyboard focus, reduced motion, loading/error/success, and both locales are polished |
-| D4. Verification and delivery | pending | Focused tests, `pnpm check:web`, `pnpm build:web`, browser QA, and diff checks pass |
+| D1. Baseline and visual audit | complete | Current Setup states, component structure, CSS dependencies, screenshots, and active drift are mapped |
+| D2. Design direction and implementation | complete | A cohesive modern direction is implemented without altering Setup contracts or state transitions |
+| D3. Responsive and interaction hardening | complete | Narrow/wide layouts, keyboard focus, reduced motion, loading/error/success, and both locales are polished |
+| D4. Verification and delivery | complete | Focused tests, `pnpm check:web`, `pnpm build:web`, browser QA, and diff checks pass |
 
 ### Setup Redesign Guardrails
 
@@ -214,6 +237,15 @@ PostgreSQL dependencies.
 
 | Error | Attempt | Resolution |
 |---|---|---|
+| First mobile Chinese QA script reached the administrator step but referenced `document.fonts` from the Node context before screenshot capture | 1 | Wait for fonts inside `page.evaluate`, then repeat the same isolated browser path; the Setup installation was not submitted or sealed |
+| Initial cool-tech CSS check reported seven descending-specificity warnings for the route-scoped Chinese heading override | 1 | Move the higher-specificity locale override after all base and accessibility selectors, then rerun the focused check |
+| Initial Setup redesign Biome check reported formatter-only differences in the new stylesheet and two section opening tags | 1 | Run Biome format only on the five touched Setup files, then rerun the read-only check |
+| Isolated fresh-install API initialized Setup mode but stopped immediately when binding the sandboxed loopback port | 1 | Re-run the same explicitly scoped local preview server with loopback bind approval; keep all persistent paths under the unique `/private/tmp` directory |
+| The bundled screenshot helper does not implement a conventional `--help` path and rejected the request because `--output` was missing | 1 | Inspect the local script option declarations directly, then invoke it with explicit URL, output, and viewport arguments |
+| Bundled Puppeteer dependencies were present but its pinned downloaded Chrome binary was absent | 1 | Reuse an installed system Chrome executable through Puppeteer's supported executable-path environment rather than downloading another browser |
+| System Chrome was found, but the sandbox blocked Puppeteer from launching the GUI process | 1 | Re-run the explicit screenshot helper with scoped GUI approval against the loopback-only preview |
+| Approved headless Chrome launched, but the isolated Web port refused the connection | 1 | Polling showed Next dev correctly refused a second dev instance because the user already has one on port 3000; preserve it and use an isolated production preview on 3309 instead |
+| Final scope assertion chained a successful “no stale `setup.css` references” search whose expected exit code is 1, causing the shell gate itself to report failure | 1 | Re-run the assertion with an explicit inverted `if rg ...; then exit 1; fi` condition; tests and preceding diff/artifact checks were unaffected |
 | Initial internationalization planning patch expected the findings title `# Findings & Decisions` | 1 | Inspected the existing planning-file headers and reapplied against `# Findings` without replacing prior content |
 | Unquoted zsh path `apps/web/app/(workspace)/layout.tsx` expanded as a glob | 1 | Quote all App Router route-group paths in subsequent shell inspection commands |
 | Agent wait requested 1 second, below the collaboration tool's 10-second minimum | 1 | Use bounded waits of at least 10 seconds; no task work was affected |

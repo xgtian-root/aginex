@@ -248,7 +248,7 @@ export function SetupWizard() {
   }
 
   return (
-    <main className="setup-page">
+    <main className="setup-page" data-step={step}>
       <a className="skip-link" href="#setup-content">
         {t("skipLink")}
       </a>
@@ -442,7 +442,7 @@ function DatabaseStep({
 }) {
   const t = useTranslations("Setup");
   return (
-    <div className="setup-step-panel">
+    <section aria-labelledby="setup-step-01-title" className="setup-step-panel">
       <StepHeading
         caption={t("database.heading.caption")}
         headingRef={headingRef}
@@ -452,7 +452,7 @@ function DatabaseStep({
         {t("database.heading.description")}
       </StepHeading>
 
-      <form className="setup-form" onSubmit={onSubmit}>
+      <form aria-busy={pending} className="setup-form" onSubmit={onSubmit}>
         <fieldset className="driver-fieldset">
           <legend>{t("database.engineLabel")}</legend>
           <div className="driver-options">
@@ -509,6 +509,7 @@ function DatabaseStep({
                     ? t("database.hideConnectionString")
                     : t("database.showConnectionString")
                 }
+                aria-pressed={showDSN}
                 className="secret-toggle"
                 onClick={onToggleDSN}
                 type="button"
@@ -570,7 +571,7 @@ function DatabaseStep({
           </button>
         </div>
       </form>
-    </div>
+    </section>
   );
 }
 
@@ -601,7 +602,7 @@ function AdministratorStep({
 }) {
   const t = useTranslations("Setup");
   return (
-    <div className="setup-step-panel">
+    <section aria-labelledby="setup-step-02-title" className="setup-step-panel">
       <StepHeading
         caption={t("administrator.heading.caption")}
         headingRef={headingRef}
@@ -611,7 +612,7 @@ function AdministratorStep({
         {t("administrator.heading.description")}
       </StepHeading>
 
-      <form className="setup-form" onSubmit={onSubmit}>
+      <form aria-busy={pending} className="setup-form" onSubmit={onSubmit}>
         <div className="field setup-field">
           <div className="setup-field__label">
             <label htmlFor="administrator-email">
@@ -670,6 +671,7 @@ function AdministratorStep({
                     ? t("administrator.hidePassword")
                     : t("administrator.showPassword")
                 }
+                aria-pressed={showPassword}
                 className="secret-toggle"
                 onClick={onTogglePassword}
                 type="button"
@@ -731,7 +733,7 @@ function AdministratorStep({
           </button>
         </div>
       </form>
-    </div>
+    </section>
   );
 }
 
@@ -759,7 +761,10 @@ function InitializationStep({
   const currentStageLabel = t(`initialization.stages.${stage}`);
 
   return (
-    <div className="setup-step-panel setup-step-panel--initializing">
+    <section
+      aria-labelledby="setup-step-03-title"
+      className="setup-step-panel setup-step-panel--initializing"
+    >
       <StepHeading
         caption={
           error
@@ -783,6 +788,7 @@ function InitializationStep({
         <ol
           className="initialization-stages"
           aria-label={t("initialization.progressAriaLabel")}
+          aria-busy={pending}
         >
           {initializationStages.map((item, index) => {
             const complete = currentIndex > index;
@@ -790,7 +796,11 @@ function InitializationStep({
               stage === item || (stage === "waiting" && index === 0);
             return (
               <li
+                aria-current={active ? "step" : undefined}
                 className={
+                  complete ? "complete" : active ? "active" : "pending"
+                }
+                data-state={
                   complete ? "complete" : active ? "active" : "pending"
                 }
                 key={item}
@@ -814,6 +824,8 @@ function InitializationStep({
           className={
             error ? "initialization-signal error" : "initialization-signal"
           }
+          data-state={error ? "error" : "running"}
+          role={error ? "alert" : "status"}
         >
           {error ? (
             <CircleAlert aria-hidden size={24} />
@@ -858,7 +870,7 @@ function InitializationStep({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -882,7 +894,7 @@ function StepHeading({
       </div>
       <div>
         <p className="eyebrow">{caption}</p>
-        <h2 ref={headingRef} tabIndex={-1}>
+        <h2 id={`setup-step-${index}-title`} ref={headingRef} tabIndex={-1}>
           {title}
         </h2>
         <p>{children}</p>

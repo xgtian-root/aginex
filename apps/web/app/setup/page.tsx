@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { RuntimeUnavailable } from "@/components/runtime-unavailable";
 import { SetupWizard } from "@/components/setup-wizard";
 import { getRuntimeMode } from "@/lib/runtime-mode.server";
-import "./setup.css";
+import "./commissioning.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Metadata.setup");
