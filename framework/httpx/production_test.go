@@ -79,3 +79,28 @@ func TestCredentialLooksInsecure(t *testing.T) {
 		t.Fatal("non-template passphrase was rejected")
 	}
 }
+
+func TestUserPasswordLooksInsecureDoesNotImposeLengthOrDiversity(t *testing.T) {
+	for _, password := range []string{
+		"",
+		" abc123",
+		"abc123 ",
+		"change-me-before-production",
+		"your-password-goes-here",
+		strings.Repeat("ab", 3),
+	} {
+		if !UserPasswordLooksInsecure(password) {
+			t.Errorf("user password %q was accepted", password)
+		}
+	}
+
+	for _, password := range []string{
+		"x",
+		"123456",
+		"123456" + strings.Repeat("z", 2048),
+	} {
+		if UserPasswordLooksInsecure(password) {
+			t.Errorf("user password of length %d was rejected", len(password))
+		}
+	}
+}

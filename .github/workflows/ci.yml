@@ -217,7 +217,13 @@ jobs:
       AGINEX_JOBS_WORKER_ID: aginex-e2e-worker
       AGINEX_STORAGE_DRIVER: local
       AGINEX_STORAGE_LOCAL_ROOT: /tmp/aginex-e2e-uploads
-      AGINEX_E2E_DATABASE_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex?sslmode=disable
+      AGINEX_E2E_DATABASE_DRIVER: postgres
+      AGINEX_E2E_DATABASE_HOST: 127.0.0.1
+      AGINEX_E2E_DATABASE_PORT: "5432"
+      AGINEX_E2E_DATABASE_NAME: aginex
+      AGINEX_E2E_DATABASE_USERNAME: aginex
+      AGINEX_E2E_DATABASE_PASSWORD: aginex
+      AGINEX_E2E_DATABASE_SSL_MODE: disable
       AGINEX_E2E_ADMIN_EMAIL: e2e-admin@example.com
       AGINEX_E2E_ADMIN_PASSWORD: correct e2e administrator password
       NEXT_PUBLIC_API_URL: http://127.0.0.1:8080

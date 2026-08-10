@@ -10,7 +10,7 @@ type Problem = httpx.Problem
 
 type LoginRequest struct {
 	Email    string `json:"email" format:"email" maxLength:"320" binding:"required,email,max=320"`
-	Password string `json:"password" minLength:"12" maxLength:"1024" binding:"required,min=12,max=1024"`
+	Password string `json:"password" writeOnly:"true" binding:"required"`
 }
 
 type CSRFTokenResponse struct {

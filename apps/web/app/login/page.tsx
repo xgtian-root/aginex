@@ -101,7 +101,6 @@ function LoginForm() {
               autoComplete="current-password"
               className="input"
               id="password"
-              minLength={12}
               name="password"
               required
               type="password"

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -422,6 +423,9 @@ func validateWithoutDatabase(cfg Config) error {
 	if err := validateTrustedProxies(cfg.HTTP.TrustedProxies); err != nil {
 		return err
 	}
+	if err := validateBootstrapLoginBodyLimit(cfg); err != nil {
+		return err
+	}
 	switch cfg.Storage.Driver {
 	case "local", "s3", "oss":
 	default:
@@ -448,6 +452,29 @@ func validateWithoutDatabase(cfg Config) error {
 	}
 	if cfg.Environment == "production" {
 		return validateProduction(cfg)
+	}
+	return nil
+}
+
+func validateBootstrapLoginBodyLimit(cfg Config) error {
+	if cfg.Bootstrap.AdminEmail == "" || cfg.Bootstrap.AdminPassword == "" {
+		return nil
+	}
+	body, err := json.Marshal(struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}{
+		Email:    cfg.Bootstrap.AdminEmail,
+		Password: cfg.Bootstrap.AdminPassword,
+	})
+	if err != nil {
+		return fmt.Errorf("encode bootstrap administrator login request: %w", err)
+	}
+	if int64(len(body)) > cfg.HTTP.MaxBodyBytes {
+		return fmt.Errorf(
+			"AGINEX_HTTP_MAX_BODY_BYTES must be at least %d bytes to submit the configured bootstrap administrator credential",
+			len(body),
+		)
 	}
 	return nil
 }
@@ -490,12 +517,7 @@ func validateProduction(cfg Config) error {
 		)
 	}
 	if cfg.Bootstrap.AdminPassword != "" {
-		if len(cfg.Bootstrap.AdminPassword) < 12 {
-			return fmt.Errorf(
-				"AGINEX_BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 bytes in production",
-			)
-		}
-		if httpx.CredentialLooksInsecure(
+		if httpx.UserPasswordLooksInsecure(
 			cfg.Bootstrap.AdminPassword,
 		) {
 			return fmt.Errorf(

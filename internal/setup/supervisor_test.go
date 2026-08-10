@@ -21,7 +21,7 @@ import (
 const (
 	testOrigin        = "https://admin.example"
 	testSessionSecret = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
-	testDSN           = "postgres://db.example/aginex?sslmode=require"
+	testDSN           = "postgres://aginex:database-secret@db.example:5432/aginex?sslmode=require"
 	testPassword      = "correct horse battery staple"
 )
 
@@ -191,7 +191,7 @@ func TestDatabaseTestRequiresCSRFValidJSONAndReturnsSafeErrors(t *testing.T) {
 	}
 	supervisor := newTestSupervisor(t, config)
 	body := marshalJSON(t, SetupDatabaseTestRequest{
-		Database: DatabaseConfig{Driver: "postgres", DSN: testDSN},
+		Database: testPostgresInput(),
 	})
 
 	missingCSRF := performJSONRequest(
@@ -241,16 +241,19 @@ func TestDatabaseTestRequiresCSRFValidJSONAndReturnsSafeErrors(t *testing.T) {
 	)
 	assertProblem(t, wrongOrigin, http.StatusForbidden, "CORS_FORBIDDEN")
 
-	unknown := []byte(`{"database":{"driver":"postgres","dsn":"safe"},"extra":true}`)
+	legacyDSN := []byte(`{"database":{"driver":"postgres","dsn":"safe"}}`)
 	invalid := performJSONRequest(
 		supervisor,
 		http.MethodPost,
 		SetupDatabaseTestPath,
-		unknown,
+		legacyDSN,
 		cookie,
 		token,
 	)
 	assertProblem(t, invalid, http.StatusBadRequest, "REQUEST_INVALID")
+	if calls.Load() != 1 {
+		t.Fatal("legacy DSN request reached the database tester")
+	}
 
 	unsupported := performRequestWithHeaders(
 		supervisor,
@@ -286,7 +289,7 @@ func TestSetupWritesRequireExplicitOriginEvenWithValidReferer(t *testing.T) {
 	})
 	cookie, token := getCSRF(t, supervisor)
 	body := marshalJSON(t, SetupDatabaseTestRequest{
-		Database: DatabaseConfig{Driver: "postgres", DSN: testDSN},
+		Database: testPostgresInput(),
 	})
 	response := performRequestWithHeaders(
 		supervisor,
@@ -318,7 +321,13 @@ func TestDatabaseTestSuccessAndRequestLimits(t *testing.T) {
 	})
 	cookie, token := getCSRF(t, supervisor)
 	body := marshalJSON(t, SetupDatabaseTestRequest{
-		Database: DatabaseConfig{Driver: "sqlite", DSN: "data/aginex.db"},
+		Database: DatabaseInput{
+			Driver: "sqlite",
+			SQLite: &SQLiteDatabaseInput{
+				Directory: "data",
+				Filename:  "aginex.db",
+			},
+		},
 	})
 	response := performJSONRequest(
 		supervisor,
@@ -997,29 +1006,53 @@ func TestCompleteValidatesAdministratorBeforeStarting(t *testing.T) {
 		}),
 	})
 	cookie, token := getCSRF(t, supervisor)
-	tests := []SetupCompleteRequest{
+	tests := []SetupCompleteInput{
 		{
-			Database: DatabaseConfig{Driver: "oracle", DSN: "valid"},
+			Database: DatabaseInput{Driver: "oracle"},
 			Administrator: AdministratorConfig{
 				Email: "admin@example.com", Password: testPassword,
 			},
 		},
 		{
-			Database: DatabaseConfig{Driver: "sqlite", DSN: " data/db.sqlite"},
+			Database: DatabaseInput{
+				Driver: "sqlite",
+				SQLite: &SQLiteDatabaseInput{
+					Directory: " data",
+					Filename:  "db.sqlite",
+				},
+			},
 			Administrator: AdministratorConfig{
 				Email: "admin@example.com", Password: testPassword,
 			},
 		},
 		{
-			Database: DatabaseConfig{Driver: "sqlite", DSN: "data/db.sqlite"},
+			Database: DatabaseInput{
+				Driver: "sqlite",
+				SQLite: &SQLiteDatabaseInput{
+					Directory: "data",
+					Filename:  "db.sqlite",
+				},
+			},
 			Administrator: AdministratorConfig{
 				Email: "Admin <admin@example.com>", Password: testPassword,
 			},
 		},
 		{
-			Database: DatabaseConfig{Driver: "sqlite", DSN: "data/db.sqlite"},
+			Database: DatabaseInput{
+				Driver: "sqlite",
+				SQLite: &SQLiteDatabaseInput{
+					Directory: "data",
+					Filename:  "db.sqlite",
+				},
+			},
 			Administrator: AdministratorConfig{
 				Email: "admin@example.com", Password: "passwordpassword",
+			},
+		},
+		{
+			Database: testPostgresInput(),
+			Administrator: AdministratorConfig{
+				Email: "admin@example.com", Password: "",
 			},
 		},
 	}
@@ -1036,6 +1069,61 @@ func TestCompleteValidatesAdministratorBeforeStarting(t *testing.T) {
 	}
 	if initializations.Load() != 0 {
 		t.Fatalf("initializations = %d", initializations.Load())
+	}
+}
+
+func TestCompleteAcceptsAdministratorPasswordsWithoutLengthBounds(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+	}{
+		{name: "single character", password: "x"},
+		{name: "six characters", password: "123456"},
+		{
+			name:     "longer than former limit",
+			password: "123456" + strings.Repeat("z", 2048),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			received := make(chan string, 1)
+			supervisor := newTestSupervisor(t, Config{
+				Mode: ModeSetup,
+				Initializer: ApplicationInitializerFunc(func(
+					_ context.Context,
+					request SetupCompleteRequest,
+					_ ProgressReporter,
+				) (Candidate, error) {
+					received <- request.Administrator.Password
+					return validCandidate(), nil
+				}),
+			})
+			cookie, token := getCSRF(t, supervisor)
+			response := performJSONRequest(
+				supervisor,
+				http.MethodPost,
+				SetupCompletePath,
+				marshalJSON(t, SetupCompleteInput{
+					Database: testPostgresInput(),
+					Administrator: AdministratorConfig{
+						Email:    "admin@example.com",
+						Password: test.password,
+					},
+				}),
+				cookie,
+				token,
+			)
+			assertStatus(t, response, http.StatusAccepted)
+
+			select {
+			case password := <-received:
+				if password != test.password {
+					t.Fatalf("initializer password length = %d, want %d", len(password), len(test.password))
+				}
+			case <-time.After(time.Second):
+				t.Fatal("initializer did not receive administrator password")
+			}
+		})
 	}
 }
 
@@ -1423,7 +1511,13 @@ func TestSetupWriteRateLimitIsProcessLocalAndBounded(t *testing.T) {
 	})
 	cookie, token := getCSRF(t, supervisor)
 	body := marshalJSON(t, SetupDatabaseTestRequest{
-		Database: DatabaseConfig{Driver: "sqlite", DSN: "data/db.sqlite"},
+		Database: DatabaseInput{
+			Driver: "sqlite",
+			SQLite: &SQLiteDatabaseInput{
+				Directory: "data",
+				Filename:  "db.sqlite",
+			},
+		},
 	})
 	first := performJSONRequest(
 		supervisor,
@@ -1589,13 +1683,27 @@ func validCandidate() Candidate {
 
 func validCompleteBody(t *testing.T) []byte {
 	t.Helper()
-	return marshalJSON(t, SetupCompleteRequest{
-		Database: DatabaseConfig{Driver: "postgres", DSN: testDSN},
+	return marshalJSON(t, SetupCompleteInput{
+		Database: testPostgresInput(),
 		Administrator: AdministratorConfig{
 			Email:    "admin@example.com",
 			Password: testPassword,
 		},
 	})
+}
+
+func testPostgresInput() DatabaseInput {
+	return DatabaseInput{
+		Driver: "postgres",
+		Postgres: &PostgresDatabaseInput{
+			Host:     "db.example",
+			Port:     5432,
+			Database: "aginex",
+			Username: "aginex",
+			Password: "database-secret",
+			SSLMode:  "require",
+		},
+	}
 }
 
 func getCSRF(t *testing.T, handler http.Handler) (*http.Cookie, string) {

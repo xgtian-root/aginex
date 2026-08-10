@@ -91,10 +91,13 @@ func TestFreshRuntimeCompletesSetupAndPermanentlySwapsRoutes(t *testing.T) {
 	}
 
 	databasePath := filepath.Join(t.TempDir(), "configured.db")
-	body, err := json.Marshal(setup.SetupCompleteRequest{
-		Database: setup.DatabaseConfig{
+	body, err := json.Marshal(setup.SetupCompleteInput{
+		Database: setup.DatabaseInput{
 			Driver: "sqlite",
-			DSN:    databasePath,
+			SQLite: &setup.SQLiteDatabaseInput{
+				Directory: filepath.Dir(databasePath),
+				Filename:  filepath.Base(databasePath),
+			},
 		},
 		Administrator: setup.AdministratorConfig{
 			Email:    "admin@example.com",

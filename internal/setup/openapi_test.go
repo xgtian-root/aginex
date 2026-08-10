@@ -2,6 +2,7 @@ package setup
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -55,15 +56,200 @@ func TestDocumentOpenAPIAddsSetupContractWithoutRuntimeRegistration(t *testing.T
 	}
 
 	schemas := document.Components.Schemas.Map()
-	database := schemas["DatabaseConfig"]
+	database := schemas["DatabaseInput"]
+	postgres := schemas["PostgresDatabaseInput"]
+	mysql := schemas["MySQLDatabaseInput"]
 	administrator := schemas["AdministratorConfig"]
-	if database == nil || database.Properties["dsn"] == nil ||
-		!database.Properties["dsn"].WriteOnly {
-		t.Fatalf("database DSN schema is not write-only: %#v", database)
+	assertDatabaseInputUnion(t, schemas, database)
+	if postgres == nil || postgres.Properties["password"] == nil ||
+		!postgres.Properties["password"].WriteOnly ||
+		postgres.Properties["password"].MinLength == nil ||
+		*postgres.Properties["password"].MinLength != 1 {
+		t.Fatalf("PostgreSQL password schema is not protected: %#v", postgres)
 	}
-	if administrator == nil || administrator.Properties["password"] == nil ||
-		!administrator.Properties["password"].WriteOnly {
-		t.Fatalf("administrator password schema is not write-only: %#v", administrator)
+	if mysql == nil || mysql.Properties["password"] == nil ||
+		!mysql.Properties["password"].WriteOnly ||
+		mysql.Properties["password"].MinLength == nil ||
+		*mysql.Properties["password"].MinLength != 1 {
+		t.Fatalf("MySQL password schema is not protected: %#v", mysql)
+	}
+	if administrator == nil || administrator.Properties["password"] == nil {
+		t.Fatalf("administrator password schema is missing: %#v", administrator)
+	}
+	administratorPassword := administrator.Properties["password"]
+	if !administratorPassword.WriteOnly ||
+		administratorPassword.MinLength != nil ||
+		administratorPassword.MaxLength != nil {
+		t.Fatalf(
+			"administrator password schema has unsafe metadata or length bounds: %#v",
+			administratorPassword,
+		)
+	}
+}
+
+func TestDatabaseInputOpenAPISchemaRejectsMismatchedVariants(t *testing.T) {
+	config := huma.DefaultConfig("Aginex API", "1.0.0")
+	document := config.OpenAPI
+	DocumentOpenAPI(document)
+	database := document.Components.Schemas.Map()["DatabaseInput"]
+	if database == nil {
+		t.Fatal("DatabaseInput schema is missing")
+	}
+
+	sqlite := map[string]any{
+		"directory": "/var/lib/aginex",
+		"filename":  "aginex.db",
+	}
+	postgres := map[string]any{
+		"host":     "db.example.test",
+		"port":     float64(5432),
+		"database": "aginex",
+		"username": "aginex",
+		"password": "secret",
+		"sslMode":  "require",
+	}
+	mysql := map[string]any{
+		"host":     "db.example.test",
+		"port":     float64(3306),
+		"database": "aginex",
+		"username": "aginex",
+		"password": "secret",
+		"tlsMode":  "required",
+	}
+	tests := []struct {
+		name  string
+		value map[string]any
+		valid bool
+	}{
+		{
+			name:  "sqlite",
+			value: map[string]any{"driver": "sqlite", "sqlite": sqlite},
+			valid: true,
+		},
+		{
+			name:  "postgres",
+			value: map[string]any{"driver": "postgres", "postgres": postgres},
+			valid: true,
+		},
+		{
+			name:  "mysql",
+			value: map[string]any{"driver": "mysql", "mysql": mysql},
+			valid: true,
+		},
+		{
+			name:  "matching object missing",
+			value: map[string]any{"driver": "sqlite"},
+		},
+		{
+			name:  "driver and object mismatch",
+			value: map[string]any{"driver": "sqlite", "postgres": postgres},
+		},
+		{
+			name: "multiple driver objects",
+			value: map[string]any{
+				"driver": "sqlite", "sqlite": sqlite, "mysql": mysql,
+			},
+		},
+		{
+			name:  "unknown driver",
+			value: map[string]any{"driver": "cockroach", "postgres": postgres},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := &huma.ValidateResult{}
+			huma.Validate(
+				document.Components.Schemas,
+				database,
+				huma.NewPathBuffer(nil, 0),
+				huma.ModeWriteToServer,
+				test.value,
+				result,
+			)
+			if test.valid && len(result.Errors) != 0 {
+				t.Fatalf("valid input errors = %v", result.Errors)
+			}
+			if !test.valid && len(result.Errors) == 0 {
+				t.Fatal("invalid input unexpectedly matched DatabaseInput schema")
+			}
+		})
+	}
+}
+
+func assertDatabaseInputUnion(
+	t *testing.T,
+	schemas map[string]*huma.Schema,
+	database *huma.Schema,
+) {
+	t.Helper()
+	if database == nil {
+		t.Fatal("DatabaseInput schema is missing")
+	}
+	if database.Type != "" || len(database.Properties) != 0 ||
+		database.AdditionalProperties != nil {
+		t.Fatalf("DatabaseInput retained its permissive base object: %#v", database)
+	}
+	if database.Discriminator == nil ||
+		database.Discriminator.PropertyName != "driver" {
+		t.Fatalf("DatabaseInput discriminator = %#v", database.Discriminator)
+	}
+
+	variants := []struct {
+		driver    string
+		component string
+		nested    string
+		nestedRef string
+	}{
+		{"sqlite", "DatabaseInputSQLite", "sqlite", "SQLiteDatabaseInput"},
+		{"postgres", "DatabaseInputPostgres", "postgres", "PostgresDatabaseInput"},
+		{"mysql", "DatabaseInputMySQL", "mysql", "MySQLDatabaseInput"},
+	}
+	if len(database.OneOf) != len(variants) {
+		t.Fatalf("DatabaseInput oneOf = %#v", database.OneOf)
+	}
+	for index, expected := range variants {
+		ref := "#/components/schemas/" + expected.component
+		if database.OneOf[index].Ref != ref {
+			t.Fatalf("DatabaseInput oneOf[%d] ref = %q", index, database.OneOf[index].Ref)
+		}
+		if database.Discriminator.Mapping[expected.driver] != ref {
+			t.Fatalf(
+				"DatabaseInput discriminator mapping[%q] = %q",
+				expected.driver,
+				database.Discriminator.Mapping[expected.driver],
+			)
+		}
+
+		variant := schemas[expected.component]
+		if variant == nil || variant.Type != huma.TypeObject ||
+			variant.AdditionalProperties != false ||
+			len(variant.Properties) != 2 ||
+			variant.Properties[expected.nested] == nil ||
+			variant.Properties["driver"] == nil {
+			t.Fatalf("%s schema is not closed: %#v", expected.component, variant)
+		}
+		if !reflect.DeepEqual(variant.Required, []string{"driver", expected.nested}) {
+			t.Fatalf("%s required = %#v", expected.component, variant.Required)
+		}
+		if !reflect.DeepEqual(
+			variant.Properties["driver"].Enum,
+			[]any{expected.driver},
+		) {
+			t.Fatalf(
+				"%s driver enum = %#v",
+				expected.component,
+				variant.Properties["driver"].Enum,
+			)
+		}
+		if variant.Properties[expected.nested].Ref !=
+			"#/components/schemas/"+expected.nestedRef {
+			t.Fatalf(
+				"%s nested ref = %q",
+				expected.component,
+				variant.Properties[expected.nested].Ref,
+			)
+		}
 	}
 }
 

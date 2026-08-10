@@ -99,6 +99,19 @@ func TestOpenAPIIncludesTypedBodiesAndDoesNotExposeStorageKeys(t *testing.T) {
 	if login.Security == nil || len(login.Security) != 0 {
 		t.Fatal("login must explicitly override authentication as a public operation")
 	}
+	loginSchema := document.Components.Schemas.Map()["LoginRequest"]
+	if loginSchema == nil || loginSchema.Properties["password"] == nil {
+		t.Fatalf("LoginRequest password schema is missing: %#v", loginSchema)
+	}
+	loginPassword := loginSchema.Properties["password"]
+	if !loginPassword.WriteOnly ||
+		loginPassword.MinLength != nil ||
+		loginPassword.MaxLength != nil {
+		t.Fatalf(
+			"LoginRequest password has unsafe metadata or length bounds: %#v",
+			loginPassword,
+		)
+	}
 
 	createProduct := operationAt(document, module.MethodPost, "/api/v1/products")
 	if createProduct == nil || createProduct.RequestBody == nil ||

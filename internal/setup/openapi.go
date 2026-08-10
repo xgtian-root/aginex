@@ -26,6 +26,62 @@ type documentedOperation struct {
 	csrf        bool
 }
 
+// These named documentation-only variants make DatabaseInput a closed,
+// discriminated union without changing the runtime JSON decoding shape.
+type databaseInputSQLite struct {
+	Driver string              `json:"driver" enum:"sqlite"`
+	SQLite SQLiteDatabaseInput `json:"sqlite"`
+}
+
+type databaseInputPostgres struct {
+	Driver   string                `json:"driver" enum:"postgres"`
+	Postgres PostgresDatabaseInput `json:"postgres"`
+}
+
+type databaseInputMySQL struct {
+	Driver string             `json:"driver" enum:"mysql"`
+	MySQL  MySQLDatabaseInput `json:"mysql"`
+}
+
+var _ huma.SchemaTransformer = (*DatabaseInput)(nil)
+
+// TransformSchema replaces DatabaseInput's permissive pointer-based object
+// schema with three closed variants. DatabaseInput remains the registered
+// component type, so runtime decoding and existing request contracts are
+// unchanged while generated clients receive a discriminated union.
+func (*DatabaseInput) TransformSchema(
+	registry huma.Registry,
+	_ *huma.Schema,
+) *huma.Schema {
+	sqlite := registry.Schema(
+		reflect.TypeFor[databaseInputSQLite](),
+		true,
+		"DatabaseInputSQLite",
+	)
+	postgres := registry.Schema(
+		reflect.TypeFor[databaseInputPostgres](),
+		true,
+		"DatabaseInputPostgres",
+	)
+	mysql := registry.Schema(
+		reflect.TypeFor[databaseInputMySQL](),
+		true,
+		"DatabaseInputMySQL",
+	)
+
+	return &huma.Schema{
+		OneOf: []*huma.Schema{sqlite, postgres, mysql},
+		Discriminator: &huma.Discriminator{
+			PropertyName: "driver",
+			Mapping: map[string]string{
+				"sqlite":   sqlite.Ref,
+				"postgres": postgres.Ref,
+				"mysql":    mysql.Ref,
+			},
+		},
+	}
+}
+
 // DocumentOpenAPI adds the mode probe and setup-only wire contract to a
 // release OpenAPI document. It only mutates the document: runtime application
 // routers must not register setup handlers from this function.
@@ -83,7 +139,7 @@ func DocumentOpenAPI(openapi *huma.OpenAPI) {
 			operationID: CompleteSetupOperationID,
 			summary:     "Initialize and activate the application",
 			status:      http.StatusAccepted,
-			request:     reflect.TypeFor[SetupCompleteRequest](),
+			request:     reflect.TypeFor[SetupCompleteInput](),
 			response:    reflect.TypeFor[SetupAcceptedResponse](),
 			csrf:        true,
 			errors: []int{

@@ -226,15 +226,19 @@ func (s *Supervisor) testDatabase(c *gin.Context) {
 		return
 	}
 	var request SetupDatabaseTestRequest
-	if !decodeJSONRequest(c, &request) ||
-		!validDatabaseConfig(request.Database) {
+	if !decodeJSONRequest(c, &request) {
+		writeInvalidRequest(c)
+		return
+	}
+	database, err := resolveDatabaseInput(request.Database)
+	if err != nil {
 		writeInvalidRequest(c)
 		return
 	}
 
 	ctx, cancel := contextWithTimeout(c, s.databaseTestTimeout)
 	defer cancel()
-	if err := invokeDatabaseTester(s.tester, ctx, request.Database); err != nil {
+	if err := invokeDatabaseTester(s.tester, ctx, database); err != nil {
 		httpx.WriteProblem(
 			c,
 			http.StatusUnprocessableEntity,
@@ -259,10 +263,20 @@ func (s *Supervisor) completeSetup(c *gin.Context) {
 		writeSetupNotFound(c)
 		return
 	}
-	var request SetupCompleteRequest
-	if !decodeJSONRequest(c, &request) || !validCompleteRequest(request) {
+	var input SetupCompleteInput
+	if !decodeJSONRequest(c, &input) ||
+		!validAdministratorConfig(input.Administrator) {
 		writeInvalidRequest(c)
 		return
+	}
+	database, err := resolveDatabaseInput(input.Database)
+	if err != nil {
+		writeInvalidRequest(c)
+		return
+	}
+	request := SetupCompleteRequest{
+		Database:      database,
+		Administrator: input.Administrator,
 	}
 
 	result, generation := s.beginAttempt()
@@ -326,29 +340,11 @@ func decodeJSONRequest(c *gin.Context, target any) bool {
 	return true
 }
 
-func validCompleteRequest(request SetupCompleteRequest) bool {
-	return validDatabaseConfig(request.Database) &&
-		validAdministratorConfig(request.Administrator)
-}
-
-func validDatabaseConfig(config DatabaseConfig) bool {
-	switch config.Driver {
-	case "sqlite", "postgres", "mysql":
-	default:
-		return false
-	}
-	return config.DSN != "" &&
-		config.DSN == strings.TrimSpace(config.DSN) &&
-		len(config.DSN) <= 8192
-}
-
 func validAdministratorConfig(config AdministratorConfig) bool {
 	if config.Email == "" ||
 		config.Email != strings.TrimSpace(config.Email) ||
 		len(config.Email) > 320 ||
-		len(config.Password) < 12 ||
-		len(config.Password) > 1024 ||
-		httpx.CredentialLooksInsecure(config.Password) {
+		httpx.UserPasswordLooksInsecure(config.Password) {
 		return false
 	}
 	address, err := mail.ParseAddress(config.Email)

@@ -38,22 +38,91 @@ import {
 } from "@/lib/api";
 import { localizeApiError } from "@/lib/problem-message";
 
-type DatabaseInput = SetupDatabaseTest["database"];
 type AdministratorInput = SetupComplete["administrator"];
 type WizardStep = 1 | 2 | 3;
+type DatabaseInput = SetupDatabaseTest["database"];
+type DatabaseDriver = DatabaseInput["driver"];
+type PostgresSSLMode = Extract<
+  DatabaseInput,
+  { driver: "postgres" }
+>["postgres"]["sslMode"];
+type MySQLTLSMode = Extract<
+  DatabaseInput,
+  { driver: "mysql" }
+>["mysql"]["tlsMode"];
+type DatabaseDraft =
+  | {
+      driver: "sqlite";
+      directory: string;
+      filename: string;
+    }
+  | {
+      driver: "postgres";
+      host: string;
+      port: string;
+      database: string;
+      username: string;
+      password: string;
+      sslMode: PostgresSSLMode;
+    }
+  | {
+      driver: "mysql";
+      host: string;
+      port: string;
+      database: string;
+      username: string;
+      password: string;
+      tlsMode: MySQLTLSMode;
+    };
 
-const databaseDefaults: Record<DatabaseInput["driver"], string> = {
-  sqlite: "data/aginex.db",
-  postgres:
-    "postgres://aginex:password@database.example:5432/aginex?sslmode=require",
-  mysql: "aginex:password@tcp(database.example:3306)/aginex?parseTime=true",
+type DatabaseDefaults = {
+  [Driver in DatabaseDriver]: Extract<DatabaseDraft, { driver: Driver }>;
 };
+
+const databaseDefaults = {
+  sqlite: {
+    driver: "sqlite",
+    directory: "data",
+    filename: "aginex.db",
+  },
+  postgres: {
+    driver: "postgres",
+    host: "localhost",
+    port: "5432",
+    database: "aginex",
+    username: "aginex",
+    password: "",
+    sslMode: "require",
+  },
+  mysql: {
+    driver: "mysql",
+    host: "localhost",
+    port: "3306",
+    database: "aginex",
+    username: "aginex",
+    password: "",
+    tlsMode: "disabled",
+  },
+} satisfies DatabaseDefaults;
 
 const databaseDrivers = [
   "sqlite",
   "postgres",
   "mysql",
-] as const satisfies ReadonlyArray<DatabaseInput["driver"]>;
+] as const satisfies ReadonlyArray<DatabaseDriver>;
+
+const postgresSSLModes = [
+  "disable",
+  "require",
+  "verify-ca",
+  "verify-full",
+] as const satisfies ReadonlyArray<PostgresSSLMode>;
+
+const mysqlTLSModes = [
+  "disabled",
+  "required",
+  "skip-verify",
+] as const satisfies ReadonlyArray<MySQLTLSMode>;
 
 const initializationStages = [
   "validating_database",
@@ -68,26 +137,28 @@ export function SetupWizard() {
   const t = useTranslations("Setup");
   const translate = useTranslations();
   const [step, setStep] = useState<WizardStep>(1);
-  const [database, setDatabase] = useState<DatabaseInput>({
-    driver: "sqlite",
-    dsn: databaseDefaults.sqlite,
-  });
+  const [database, setDatabase] = useState<DatabaseDraft>(
+    databaseDefaults.sqlite,
+  );
   const [administrator, setAdministrator] = useState<AdministratorInput>({
     email: "",
     password: "",
   });
   const [confirmation, setConfirmation] = useState("");
-  const [testedFingerprint, setTestedFingerprint] = useState("");
-  const [showDSN, setShowDSN] = useState(false);
+  const [databaseVerified, setDatabaseVerified] = useState(false);
+  const [showDatabasePassword, setShowDatabasePassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [adminError, setAdminError] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  const normalizedDatabase = useMemo<DatabaseInput>(
-    () => ({ ...database, dsn: database.dsn.trim() }),
+  const normalizedDatabaseDraft = useMemo(
+    () => normalizeDatabaseDraft(database),
     [database],
   );
-  const databaseFingerprint = JSON.stringify(normalizedDatabase);
+  const normalizedDatabase = useMemo<DatabaseInput>(
+    () => databaseInputFromDraft(normalizedDatabaseDraft),
+    [normalizedDatabaseDraft],
+  );
 
   const mode = useQuery({
     queryKey: ["system-mode"],
@@ -112,8 +183,7 @@ export function SetupWizard() {
 
   const databaseTest = useMutation({
     mutationFn: testSetupDatabase,
-    onSuccess: (_result, request) =>
-      setTestedFingerprint(JSON.stringify(request.database)),
+    onSuccess: () => setDatabaseVerified(true),
   });
   const initialization = useMutation({
     mutationFn: completeSetup,
@@ -188,25 +258,27 @@ export function SetupWizard() {
     );
   }
 
-  const tested = testedFingerprint === databaseFingerprint;
+  const tested = databaseVerified;
   const currentStage = setupStatus.data?.stage ?? "waiting";
 
-  function updateDriver(driver: DatabaseInput["driver"]) {
-    setDatabase({ driver, dsn: databaseDefaults[driver] });
-    setTestedFingerprint("");
+  function updateDriver(driver: DatabaseDriver) {
+    setDatabase(databaseDefaults[driver]);
+    setDatabaseVerified(false);
+    setShowDatabasePassword(false);
     databaseTest.reset();
   }
 
-  function updateDSN(dsn: string) {
-    setDatabase((current: DatabaseInput) => ({ ...current, dsn }));
-    setTestedFingerprint("");
+  function updateDatabase(next: DatabaseDraft) {
+    setDatabase(next);
+    setDatabaseVerified(false);
     databaseTest.reset();
   }
 
   function testConnection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (databaseTest.isPending) return;
-    setDatabase(normalizedDatabase);
+    setDatabase(normalizedDatabaseDraft);
+    setDatabaseVerified(false);
     databaseTest.mutate({ database: normalizedDatabase });
   }
 
@@ -243,7 +315,7 @@ export function SetupWizard() {
 
   function reviewConfiguration() {
     initialization.reset();
-    setTestedFingerprint("");
+    setDatabaseVerified(false);
     setStep(1);
   }
 
@@ -283,12 +355,14 @@ export function SetupWizard() {
               }
               headingRef={headingRef}
               onContinue={() => setStep(2)}
+              onDatabaseChange={updateDatabase}
               onDriverChange={updateDriver}
-              onDSNChange={updateDSN}
               onSubmit={testConnection}
-              onToggleDSN={() => setShowDSN((visible) => !visible)}
+              onToggleDatabasePassword={() =>
+                setShowDatabasePassword((visible) => !visible)
+              }
               pending={databaseTest.isPending}
-              showDSN={showDSN}
+              showDatabasePassword={showDatabasePassword}
               tested={tested}
             />
           )}
@@ -312,7 +386,7 @@ export function SetupWizard() {
               canRetry={
                 tested &&
                 administrator.email.trim().length > 0 &&
-                administrator.password.length >= 12
+                administrator.password.length > 0
               }
               error={
                 setupStatus.data?.status === "failed"
@@ -420,24 +494,24 @@ function DatabaseStep({
   error,
   headingRef,
   onContinue,
+  onDatabaseChange,
   onDriverChange,
-  onDSNChange,
   onSubmit,
-  onToggleDSN,
+  onToggleDatabasePassword,
   pending,
-  showDSN,
+  showDatabasePassword,
   tested,
 }: {
-  database: DatabaseInput;
+  database: DatabaseDraft;
   error: string;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   onContinue: () => void;
-  onDriverChange: (driver: DatabaseInput["driver"]) => void;
-  onDSNChange: (dsn: string) => void;
+  onDatabaseChange: (database: DatabaseDraft) => void;
+  onDriverChange: (driver: DatabaseDriver) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onToggleDSN: () => void;
+  onToggleDatabasePassword: () => void;
   pending: boolean;
-  showDSN: boolean;
+  showDatabasePassword: boolean;
   tested: boolean;
 }) {
   const t = useTranslations("Setup");
@@ -452,7 +526,12 @@ function DatabaseStep({
         {t("database.heading.description")}
       </StepHeading>
 
-      <form aria-busy={pending} className="setup-form" onSubmit={onSubmit}>
+      <form
+        aria-busy={pending}
+        aria-describedby={error ? "database-error" : undefined}
+        className="setup-form"
+        onSubmit={onSubmit}
+      >
         <fieldset className="driver-fieldset">
           <legend>{t("database.engineLabel")}</legend>
           <div className="driver-options">
@@ -473,61 +552,13 @@ function DatabaseStep({
           <p className="field-hint">{t("database.productionHint")}</p>
         </fieldset>
 
-        <div className="field setup-field">
-          <div className="setup-field__label">
-            <label htmlFor="database-dsn">
-              {database.driver === "sqlite"
-                ? t("database.pathLabel")
-                : t("database.connectionStringLabel")}
-            </label>
-            <span>{t("database.required")}</span>
-          </div>
-          <div className="secret-input">
-            <input
-              aria-describedby={
-                error ? "database-dsn-hint database-error" : "database-dsn-hint"
-              }
-              aria-invalid={Boolean(error)}
-              autoComplete="off"
-              className="input"
-              id="database-dsn"
-              maxLength={8192}
-              name="dsn"
-              onChange={(event) => onDSNChange(event.target.value)}
-              disabled={pending}
-              required
-              spellCheck={false}
-              type={
-                database.driver === "sqlite" || showDSN ? "text" : "password"
-              }
-              value={database.dsn}
-            />
-            {database.driver !== "sqlite" && (
-              <button
-                aria-label={
-                  showDSN
-                    ? t("database.hideConnectionString")
-                    : t("database.showConnectionString")
-                }
-                aria-pressed={showDSN}
-                className="secret-toggle"
-                onClick={onToggleDSN}
-                type="button"
-              >
-                {showDSN ? (
-                  <EyeOff aria-hidden size={17} />
-                ) : (
-                  <Eye aria-hidden size={17} />
-                )}
-              </button>
-            )}
-          </div>
-          <p className="field-hint" id="database-dsn-hint">
-            {database.driver === "sqlite"
-              ? t("database.sqliteHint")
-              : t("database.serverHint")}
-          </p>
-        </div>
+        <DatabaseConfigurationFields
+          database={database}
+          onChange={onDatabaseChange}
+          onTogglePassword={onToggleDatabasePassword}
+          pending={pending}
+          showPassword={showDatabasePassword}
+        />
 
         {error && <InlineError id="database-error">{error}</InlineError>}
         {tested && (
@@ -572,6 +603,290 @@ function DatabaseStep({
         </div>
       </form>
     </section>
+  );
+}
+
+function DatabaseConfigurationFields({
+  database,
+  onChange,
+  onTogglePassword,
+  pending,
+  showPassword,
+}: {
+  database: DatabaseDraft;
+  onChange: (database: DatabaseDraft) => void;
+  onTogglePassword: () => void;
+  pending: boolean;
+  showPassword: boolean;
+}) {
+  const t = useTranslations("Setup");
+
+  if (database.driver === "sqlite") {
+    return (
+      <div className="setup-field-grid setup-field-grid--sqlite">
+        <DatabaseField
+          hint={t("database.directoryHint")}
+          id="database-directory"
+          label={t("database.directoryLabel")}
+        >
+          <input
+            aria-describedby="database-directory-hint"
+            autoCapitalize="none"
+            autoComplete="off"
+            className="input"
+            disabled={pending}
+            id="database-directory"
+            maxLength={4096}
+            name="directory"
+            onChange={(event) =>
+              onChange({ ...database, directory: event.target.value })
+            }
+            required
+            spellCheck={false}
+            type="text"
+            value={database.directory}
+          />
+        </DatabaseField>
+        <DatabaseField
+          hint={t("database.filenameHint")}
+          id="database-filename"
+          label={t("database.filenameLabel")}
+        >
+          <input
+            aria-describedby="database-filename-hint"
+            autoCapitalize="none"
+            autoComplete="off"
+            className="input"
+            disabled={pending}
+            id="database-filename"
+            maxLength={255}
+            name="filename"
+            onChange={(event) =>
+              onChange({ ...database, filename: event.target.value })
+            }
+            required
+            spellCheck={false}
+            type="text"
+            value={database.filename}
+          />
+        </DatabaseField>
+      </div>
+    );
+  }
+
+  return (
+    <div className="setup-database-fields">
+      <div className="setup-field-grid setup-field-grid--endpoint">
+        <DatabaseField id="database-host" label={t("database.hostLabel")}>
+          <input
+            autoCapitalize="none"
+            autoComplete="off"
+            className="input"
+            disabled={pending}
+            id="database-host"
+            maxLength={255}
+            name="host"
+            onChange={(event) =>
+              onChange({ ...database, host: event.target.value })
+            }
+            required
+            spellCheck={false}
+            type="text"
+            value={database.host}
+          />
+        </DatabaseField>
+        <DatabaseField id="database-port" label={t("database.portLabel")}>
+          <input
+            autoComplete="off"
+            className="input"
+            disabled={pending}
+            id="database-port"
+            inputMode="numeric"
+            max={65535}
+            min={1}
+            name="port"
+            onChange={(event) =>
+              onChange({ ...database, port: event.target.value })
+            }
+            required
+            type="number"
+            value={database.port}
+          />
+        </DatabaseField>
+      </div>
+
+      <div className="setup-field-grid">
+        <DatabaseField
+          id="database-name"
+          label={t("database.databaseNameLabel")}
+        >
+          <input
+            autoCapitalize="none"
+            autoComplete="off"
+            className="input"
+            disabled={pending}
+            id="database-name"
+            maxLength={128}
+            name="database"
+            onChange={(event) =>
+              onChange({ ...database, database: event.target.value })
+            }
+            required
+            spellCheck={false}
+            type="text"
+            value={database.database}
+          />
+        </DatabaseField>
+        <DatabaseField
+          id="database-username"
+          label={t("database.usernameLabel")}
+        >
+          <input
+            autoCapitalize="none"
+            autoComplete="off"
+            className="input"
+            disabled={pending}
+            id="database-username"
+            maxLength={128}
+            name="username"
+            onChange={(event) =>
+              onChange({ ...database, username: event.target.value })
+            }
+            required
+            spellCheck={false}
+            type="text"
+            value={database.username}
+          />
+        </DatabaseField>
+      </div>
+
+      <div className="setup-field-grid">
+        <DatabaseField
+          id="database-password"
+          label={t("database.databasePasswordLabel")}
+        >
+          <div className="secret-input">
+            <input
+              autoComplete="off"
+              className="input"
+              disabled={pending}
+              id="database-password"
+              maxLength={1024}
+              name="databasePassword"
+              onChange={(event) =>
+                onChange({ ...database, password: event.target.value })
+              }
+              required
+              spellCheck={false}
+              type={showPassword ? "text" : "password"}
+              value={database.password}
+            />
+            <button
+              aria-label={
+                showPassword
+                  ? t("database.hideDatabasePassword")
+                  : t("database.showDatabasePassword")
+              }
+              aria-pressed={showPassword}
+              className="secret-toggle"
+              disabled={pending}
+              onClick={onTogglePassword}
+              type="button"
+            >
+              {showPassword ? (
+                <EyeOff aria-hidden size={17} />
+              ) : (
+                <Eye aria-hidden size={17} />
+              )}
+            </button>
+          </div>
+        </DatabaseField>
+
+        {database.driver === "postgres" ? (
+          <DatabaseField
+            id="database-ssl-mode"
+            label={t("database.sslModeLabel")}
+          >
+            <select
+              className="input"
+              disabled={pending}
+              id="database-ssl-mode"
+              name="sslMode"
+              onChange={(event) =>
+                onChange({
+                  ...database,
+                  sslMode: event.target.value as PostgresSSLMode,
+                })
+              }
+              required
+              value={database.sslMode}
+            >
+              {postgresSSLModes.map((mode) => (
+                <option key={mode} value={mode}>
+                  {t(`database.sslModes.${mode}`)}
+                </option>
+              ))}
+            </select>
+          </DatabaseField>
+        ) : (
+          <DatabaseField
+            id="database-tls-mode"
+            label={t("database.tlsModeLabel")}
+          >
+            <select
+              className="input"
+              disabled={pending}
+              id="database-tls-mode"
+              name="tlsMode"
+              onChange={(event) =>
+                onChange({
+                  ...database,
+                  tlsMode: event.target.value as MySQLTLSMode,
+                })
+              }
+              required
+              value={database.tlsMode}
+            >
+              {mysqlTLSModes.map((mode) => (
+                <option key={mode} value={mode}>
+                  {t(`database.tlsModes.${mode}`)}
+                </option>
+              ))}
+            </select>
+          </DatabaseField>
+        )}
+      </div>
+
+      <p className="field-hint">{t("database.serverHint")}</p>
+    </div>
+  );
+}
+
+function DatabaseField({
+  children,
+  hint,
+  id,
+  label,
+}: {
+  children: ReactNode;
+  hint?: string;
+  id: string;
+  label: string;
+}) {
+  const t = useTranslations("Setup");
+  return (
+    <div className="field setup-field">
+      <div className="setup-field__label">
+        <label htmlFor={id}>{label}</label>
+        <span>{t("database.required")}</span>
+      </div>
+      {children}
+      {hint && (
+        <p className="field-hint" id={`${id}-hint`}>
+          {hint}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -645,15 +960,13 @@ function AdministratorStep({
               <label htmlFor="administrator-password">
                 {t("administrator.passwordLabel")}
               </label>
-              <span>{t("administrator.passwordLengthHint")}</span>
+              <span>{t("administrator.required")}</span>
             </div>
             <div className="secret-input">
               <input
                 autoComplete="new-password"
                 className="input"
                 id="administrator-password"
-                maxLength={1024}
-                minLength={12}
                 name="password"
                 onChange={(event) =>
                   onAdministratorChange({
@@ -697,8 +1010,6 @@ function AdministratorStep({
               autoComplete="new-password"
               className="input"
               id="administrator-password-confirmation"
-              maxLength={1024}
-              minLength={12}
               name="password-confirmation"
               onChange={(event) => onConfirmationChange(event.target.value)}
               required
@@ -960,6 +1271,70 @@ function SetupClientUnavailable({
       </button>
     </main>
   );
+}
+
+function normalizeDatabaseDraft(database: DatabaseDraft): DatabaseDraft {
+  switch (database.driver) {
+    case "sqlite":
+      return {
+        ...database,
+        directory: database.directory.trim(),
+        filename: database.filename.trim(),
+      };
+    case "postgres":
+      return {
+        ...database,
+        host: database.host.trim(),
+        port: database.port.trim(),
+        database: database.database.trim(),
+        username: database.username.trim(),
+      };
+    case "mysql":
+      return {
+        ...database,
+        host: database.host.trim(),
+        port: database.port.trim(),
+        database: database.database.trim(),
+        username: database.username.trim(),
+      };
+  }
+}
+
+function databaseInputFromDraft(database: DatabaseDraft): DatabaseInput {
+  switch (database.driver) {
+    case "sqlite":
+      return {
+        driver: database.driver,
+        sqlite: {
+          directory: database.directory,
+          filename: database.filename,
+        },
+      };
+    case "postgres":
+      return {
+        driver: database.driver,
+        postgres: {
+          host: database.host,
+          port: Number(database.port),
+          database: database.database,
+          username: database.username,
+          password: database.password,
+          sslMode: database.sslMode,
+        },
+      };
+    case "mysql":
+      return {
+        driver: database.driver,
+        mysql: {
+          host: database.host,
+          port: Number(database.port),
+          database: database.database,
+          username: database.username,
+          password: database.password,
+          tlsMode: database.tlsMode,
+        },
+      };
+  }
 }
 
 function isSetupInProgress(error: unknown) {

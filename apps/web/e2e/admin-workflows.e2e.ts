@@ -4,14 +4,26 @@ const adminEmail =
   process.env.AGINEX_E2E_ADMIN_EMAIL ?? "e2e-admin@example.com";
 const adminPassword =
   process.env.AGINEX_E2E_ADMIN_PASSWORD ?? "correct e2e administrator password";
-const setupDatabaseDSN =
-  process.env.AGINEX_E2E_DATABASE_DSN ??
-  "postgres://aginex:aginex@127.0.0.1:5432/aginex?sslmode=disable";
 const setupDatabaseDriver =
   process.env.AGINEX_E2E_DATABASE_DRIVER ?? "postgres";
 const setupDatabaseEngine = databaseEngineLabel(setupDatabaseDriver);
-const setupDatabaseFieldLabel =
-  setupDatabaseDriver === "sqlite" ? "Database path" : "Connection string";
+const setupDatabaseDirectory =
+  process.env.AGINEX_E2E_DATABASE_DIRECTORY ?? "data";
+const setupDatabaseFilename =
+  process.env.AGINEX_E2E_DATABASE_FILENAME ?? "aginex.db";
+const setupDatabaseHost = process.env.AGINEX_E2E_DATABASE_HOST ?? "127.0.0.1";
+const setupDatabasePort =
+  process.env.AGINEX_E2E_DATABASE_PORT ??
+  (setupDatabaseDriver === "mysql" ? "3306" : "5432");
+const setupDatabaseName = process.env.AGINEX_E2E_DATABASE_NAME ?? "aginex";
+const setupDatabaseUsername =
+  process.env.AGINEX_E2E_DATABASE_USERNAME ?? "aginex";
+const setupDatabasePassword =
+  process.env.AGINEX_E2E_DATABASE_PASSWORD ?? "aginex";
+const setupDatabaseSSLMode =
+  process.env.AGINEX_E2E_DATABASE_SSL_MODE ?? "disable";
+const setupDatabaseTLSMode =
+  process.env.AGINEX_E2E_DATABASE_TLS_MODE ?? "disabled";
 const apiURL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 const durableJobsEnabled = process.env.AGINEX_JOBS_DRIVER === "postgres";
 
@@ -90,9 +102,34 @@ function databaseEngineLabel(driver: string) {
 
 async function verifySetupDatabase(page: Page) {
   await page.getByLabel(setupDatabaseEngine).check();
-  await page.getByLabel(setupDatabaseFieldLabel).fill(setupDatabaseDSN);
+  switch (setupDatabaseDriver) {
+    case "sqlite":
+      await page.getByLabel("Database directory").fill(setupDatabaseDirectory);
+      await page.getByLabel("Database file name").fill(setupDatabaseFilename);
+      break;
+    case "postgres":
+      await fillServerDatabaseFields(page);
+      await page.getByLabel("SSL mode").selectOption(setupDatabaseSSLMode);
+      break;
+    case "mysql":
+      await fillServerDatabaseFields(page);
+      await page.getByLabel("TLS mode").selectOption(setupDatabaseTLSMode);
+      break;
+    default:
+      throw new Error(
+        `unsupported E2E database driver: ${setupDatabaseDriver}`,
+      );
+  }
   await page.getByRole("button", { name: "Test connection" }).click();
   await expect(page.getByText("Connection verified")).toBeVisible();
+}
+
+async function fillServerDatabaseFields(page: Page) {
+  await page.getByLabel("Host", { exact: true }).fill(setupDatabaseHost);
+  await page.getByLabel("Port", { exact: true }).fill(setupDatabasePort);
+  await page.getByLabel("Database name").fill(setupDatabaseName);
+  await page.getByLabel("Username").fill(setupDatabaseUsername);
+  await page.getByLabel("Database password").fill(setupDatabasePassword);
 }
 
 async function assertSetupClosed(page: Page) {

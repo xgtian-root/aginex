@@ -1,5 +1,315 @@
 # Findings
 
+## Administrator Password Length Limits — 2026-08-10
+
+- User direction: remove administrator password length restrictions. Scope is
+  the first-run Setup administrator credential plus every downstream boundary
+  needed to create and authenticate that same credential.
+- The intended change removes explicit minimum and maximum length checks while
+  keeping a non-empty credential, request-size bounds, secret redaction,
+  throttling, and the existing password hashing boundary.
+- Length assumptions exist in `AdministratorConfig`, Setup HTTP validation,
+  Wizard button state/HTML attributes/copy, the Argon2 `Hash` and `Verify`
+  helpers, the login request schema/binding and Login HTML input, and the
+  production environment-bootstrap validator. Removing only the Setup form
+  would create credentials that cannot be hashed or used to sign in.
+- `CredentialLooksInsecure` is not written as a minimum length rule, but its
+  eight-distinct-character test creates an effective minimum of eight. The
+  administrator path must stop using that diversity heuristic if short values
+  such as a six-character operator-selected password are to work. Session
+  secrets must retain the stronger helper unchanged.
+- The implementation will keep password non-emptiness and reject placeholder,
+  repeated-template, or surrounding-whitespace values during administrator
+  creation without enforcing diversity or byte count. Login must accept the
+  exact stored value; the global HTTP body limit remains the physical bound.
+- Setup requests are already capped at 64 KiB and normal application requests
+  use the configured HTTP body ceiling (12 MiB by default). These provider-wide
+  transport limits remain; no password-specific `minLength`, `maxLength`,
+  `min`, `max`, `len <`, or `len >` policy should remain.
+- Runtime implementation now accepts one-character, six-character, and values
+  beyond the old 1024-byte maximum through Setup, production environment
+  bootstrap, Argon2 Hash/Verify, and the real login handler. Empty values remain
+  invalid, and user-password creation still rejects surrounding whitespace,
+  known placeholders, and repeated templates without applying diversity.
+- The infrastructure/session-secret helper retains its original diversity
+  policy. Repeated-template detection was changed from quadratic prefix scans
+  to a linear prefix-function algorithm so accepting longer administrator
+  passwords does not amplify validation cost.
+- Generated OpenAPI now describes both `AdministratorConfig.password` and
+  `LoginRequest.password` as only `type: string` plus `writeOnly: true`; neither
+  contains a minimum or maximum. Required-object fields and runtime non-empty
+  validation remain separate from password length metadata.
+- Environment bootstrap now performs a transport-consistency check: it encodes
+  the actual future login JSON and rejects only when the configured global body
+  ceiling is too small, directing the operator to increase
+  `AGINEX_HTTP_MAX_BODY_BYTES`. This prevents creation of an unusable password
+  without reintroducing a password-field maximum or exposing its value.
+- Final contract output is deterministic. OpenAPI SHA-256 is
+  `2fe71878a50f838b41a5e4403a4b099ad5dcfd3c2840fd9746b566a91411fcf0`;
+  generated TypeScript remains
+  `cbdf230f168e7a6b6b8220c1c4a1ea2721dfaacc5fce3342812c9759ef742478`
+  because TypeScript's string type never encoded the removed JSON Schema
+  length annotations.
+
+## Local PostgreSQL and MariaDB Verification — 2026-08-10
+
+- PostgreSQL 14.20 (Homebrew) listens on loopback port 5432. The requested
+  `aginex` login role was absent before this task, was created as a non-superuser,
+  and owns the newly created `aginex` database.
+- MariaDB 12.0.2 listens on port 3306. The requested root credential connects
+  over TCP, and database `aginex` exists with `utf8mb4` /
+  `utf8mb4_unicode_ci` defaults.
+- Direct authenticated selections reported `current_user=aginex` and
+  `current_database=aginex` on PostgreSQL, and selected schema `aginex` under
+  `root@localhost` on MariaDB.
+- An isolated development-mode Aginex Setup API received the exact new public
+  structured inputs. PostgreSQL used host/port/database/user plus
+  `sslMode=disable`; MariaDB used the MySQL branch plus `tlsMode=disabled`.
+  Both `/api/v1/setup/database/test` calls returned HTTP 200 with `status=ok`.
+- Independent full Setup runs also completed migrations and bootstrap on both
+  servers, reached application mode, and returned HTTP 200 readiness. Each
+  retained database now has 17 base tables, applied Goose version 8, and one
+  active integration administrator created by its respective run.
+- PostgreSQL's migration matrix additionally passed `Up -> DownToZero -> Up`
+  before the final complete Setup. The final database is left migrated, not
+  empty. Local encrypted PostgreSQL/MySQL transport was not tested: the chosen
+  local modes intentionally disabled SSL/TLS.
+- All temporary Aginex test processes were stopped. The root task's isolated
+  config path was never published, while both requested databases, the
+  PostgreSQL role, schemas, migration state, and bootstrap data remain intact.
+
+## Structured Setup Database Configuration — 2026-08-10
+
+### User Direction
+
+- SQLite Setup must collect a storage directory and database name separately.
+- PostgreSQL and MySQL Setup must collect necessary connection fields rather
+  than exposing a raw connection-string input.
+- The backend owns final DSN construction for all structured inputs.
+
+### Investigation Status
+
+- Repository was clean on `main` before implementation.
+- Existing Setup, generated contract, persistence, and regression boundaries
+  are being audited before choosing the wire shape.
+
+### Initial Backend Findings
+
+- `internal/setup.DatabaseConfig` currently serves two incompatible roles: it
+  is the browser request shape (`driver` plus write-only raw `dsn`) and the
+  internal/persisted installation value passed into runtime configuration.
+- Both database-test and completion handlers validate only the driver enum,
+  trimmed non-empty DSN, and an 8192-byte limit before handing the value to the
+  server initializer.
+- The server initializer copies that value directly into `config.Database` for
+  validation/opening and later persists the same DSN through the Setup
+  installation boundary.
+- The production composition deliberately rejects SQLite and MySQL when
+  `Environment == production`, though development/test and derived
+  compositions retain all three drivers. This pre-existing policy must remain
+  explicit in UX/error behavior.
+
+### Direction Under Evaluation
+
+- Separate browser-facing structured input DTOs from the existing internal
+  `DatabaseConfig`. Convert and validate once at the HTTP boundary so raw
+  PostgreSQL/MySQL DSNs are no longer accepted while runtime persistence can
+  continue storing the assembled high-authority DSN.
+- Prefer a driver-discriminated nested request shape so strict JSON decoding can
+  reject irrelevant/mixed driver fields and OpenAPI can describe each driver's
+  password as write-only.
+
+### Runtime and Persistence Details
+
+- SQLite opening already calls `os.MkdirAll(filepath.Dir(dsn), 0750)` before
+  handing the path to the SQLite dialector. A structured directory plus file
+  name can therefore assemble to one cleaned path without changing the runtime
+  database abstraction.
+- PostgreSQL currently accepts whatever GORM's PostgreSQL dialector accepts;
+  MySQL likewise passes the DSN to `go-sql-driver/mysql` through GORM with
+  version discovery disabled. Correct escaping is essential when constructing
+  credentials, database names, IPv6 hosts, and query options.
+- Managed installation files intentionally persist the assembled DSN, while
+  environment-owned installations persist only a driver marker. The public DTO
+  change does not require an installation schema migration.
+- `config.Validate` validates supported drivers and cross-provider invariants
+  but does not itself validate or parse DSN contents. The Setup conversion
+  boundary must enforce all structured-field invariants before opening.
+
+### Preliminary Field Model
+
+- SQLite: `directory` and `databaseName`; the latter must be a single filename,
+  not a path. The directory may be absolute or a clean relative path chosen by
+  the operator.
+- PostgreSQL/MySQL: host, port, database name, username, password, plus a small
+  explicit security/connection option set. Standard-library URL construction
+  is suitable for PostgreSQL; the MySQL driver's own formatter is preferable
+  to hand-written DSN escaping.
+
+### Initial Frontend Findings
+
+- `SetupWizard` owns one generated `DatabaseConfig` object with a raw `dsn`,
+  resets it to a driver-specific connection-string example, and fingerprints
+  normalized JSON so any edit invalidates the successful connection test.
+- The database step currently renders one input. PostgreSQL/MySQL DSNs are
+  masked wholesale with a visibility toggle; SQLite shows a plain path.
+- The same normalized database object is submitted to test, completion, and
+  retry paths, so a structured discriminated state can preserve the existing
+  exact-configuration verification invariant with JSON fingerprinting.
+- English and Simplified Chinese catalogs explicitly refer to “connection
+  string”/“DSN” and will need outcome-oriented field labels, help text, and
+  success copy. Current E2E selectors also branch between `Database path` and
+  `Connection string`.
+- No focused component test was found by the first scoped search; API safety
+  tests and the serial Playwright flow directly construct/assert the old raw
+  DSN shape.
+
+### UX Direction
+
+- Render two labeled SQLite controls (directory and database file name).
+- Render a responsive host/port row plus database, username, password, and
+  driver-specific transport-security controls for server databases. Keep only
+  password masked, with its existing accessible reveal interaction.
+- Preserve 44px controls, visible labels, field-level hints, test invalidation,
+  and keyboard/responsive behavior from the completed Setup design.
+
+### Chosen Conversion Boundary
+
+- Keep `DatabaseConfig {Driver, DSN}` as an internal runtime/install value.
+- Make the HTTP request schemas carry a new structured `DatabaseInput` and
+  convert it to `DatabaseConfig` in `testDatabase`/`completeSetup` before the
+  request crosses into the asynchronous Supervisor lifecycle.
+- Introduce a distinct internal initialization request containing the assembled
+  database config and administrator config. This keeps the detached request,
+  test invocation, application initializer, and installation store free of the
+  public password-bearing per-driver structures and preserves their existing
+  exactly-once cleanup/zeroing behavior.
+- The Supervisor currently clears `request.Database.DSN` and the administrator
+  password after every detached attempt, then commits that same internal config
+  after candidate readiness. Retaining this boundary avoids persisting or
+  logging the structured input object.
+
+### Server Option Direction
+
+- PostgreSQL will use a URL DSN assembled with `url.UserPassword`,
+  `net.JoinHostPort`, an escaped database path, and an allowlisted SSL mode.
+- MySQL will use the already-direct `github.com/go-sql-driver/mysql` dependency
+  and `Config.FormatDSN`, with TCP host/port, `parseTime=true`, and an explicit
+  allowlisted TLS mode rather than accepting arbitrary query parameters.
+- Default ports are frontend conveniences; the wire contract still requires an
+  explicit integer in the 1–65535 range so the submitted configuration is
+  unambiguous.
+
+### Presentation and Verification Seams
+
+- Existing Setup CSS already centralizes form layout, labels, inputs, secret
+  controls, responsive breakpoints, high-contrast, forced-colors, and reduced
+  motion. A small reusable two-column field grid can extend it without a new
+  component system.
+- The repository contract path is `pnpm generate:contracts`, which runs the Go
+  OpenAPI generator, `openapi-typescript`, and Biome formatting. Web completion
+  still requires `pnpm check:web`, `pnpm test:web`, and `pnpm build:web`.
+- The serial Playwright flow receives a driver plus raw DSN from environment.
+  It must parse that external test fixture into the same driver-specific form
+  fields, because deployment environment configuration may remain DSN-based
+  even though the browser Setup API no longer is.
+- Schema tags already use Huma's `minimum`/`maximum`, `minLength`/`maxLength`,
+  enum, and `writeOnly` metadata, so port bounds and secret classification can
+  be expressed in generated OpenAPI.
+
+### DB1 Audit Closure
+
+- Focused baseline gates passed before implementation:
+  `go test ./internal/setup ./cmd/server -count=1` and the existing Web suite
+  (7 files / 93 tests).
+- No database schema migration is involved. Existing managed installation v1,
+  configured restart, worker startup, and environment DSN injection remain
+  byte-for-byte compatible because only browser Setup wire input changes.
+- Strict JSON decoding makes this intentionally breaking for old Setup clients:
+  a legacy `dsn` field becomes an unknown field and returns the existing generic
+  400 problem. Keeping a deprecated raw-DSN escape hatch would conflict with
+  the requested backend-owned assembly boundary.
+- The production PostgreSQL gate runs before database opening and stays intact;
+  the UI continues explaining that SQLite/MySQL are for development, tests, and
+  derived compositions.
+- Browser Setup documentation, API safety tests, serial PostgreSQL E2E, SQLite
+  image smoke, OpenAPI assertions, and generated clients all directly depend
+  on the old shape and are included in DB4.
+
+### Locked Wire Fields
+
+- Top level: `database.driver` plus exactly one of `sqlite`, `postgres`, or
+  `mysql`.
+- SQLite nested fields: `directory`, `filename`.
+- PostgreSQL: `host`, `port`, `database`, `username`, `password`, `sslMode` with
+  `disable|require|verify-ca|verify-full`.
+- MySQL: the same five connection fields plus `tlsMode` with
+  `disabled|required|skip-verify`; the assembled DSN always enables
+  `parseTime=true`.
+
+### Automation and Documentation Implementation Notes
+
+- The real browser workflow now consumes structured E2E environment fields and
+  fills the same visible per-driver labels as an operator. CI supplies explicit
+  PostgreSQL host `127.0.0.1`, port `5432`, database/user/password `aginex`, and
+  `sslMode=disable` for its local service.
+- SQLite image smoke now posts `directory=/data` and
+  `filename=aginex.db` for both test and completion, retaining its configured
+  restart and permanent Setup-closure assertions.
+- Documentation now distinguishes browser structured input from environment
+  `AGINEX_DATABASE_DSN`: Setup assembles and persists a managed DSN, while
+  preconfigured deployments and workers retain the existing environment-owned
+  connection-string contract.
+- SQLite directory copy explicitly identifies it as a backend host/container
+  path, avoiding the unsafe implication that a browser directory picker can
+  grant access to the server filesystem.
+
+### Implementation Review Findings
+
+- Backend conversion now has one `resolveDatabaseInput` dispatch that requires
+  exactly one driver-matching nested object. PostgreSQL uses escaped URL
+  user-info plus `net.JoinHostPort`; MySQL uses the canonical formatter and
+  round-trips the DSN through `ParseDSN` to prove delimiter-bearing credentials
+  still resolve to the submitted endpoint and identity.
+- SQLite validation keeps filenames to one portable basename and rejects
+  parent segments, URI/query syntax, volume names, separators, and control
+  characters before joining the selected backend directory.
+- Review found database passwords were initially treated as optional in both
+  schema and UI. Because these are part of the requested necessary server
+  fields, backend and frontend owners were asked to require 1–1024 bytes while
+  continuing to preserve meaningful surrounding spaces and never trim secrets.
+- Review also asked the backend owner to make an explicit tested decision on
+  natural trailing directory separators (`/data/`) versus canonical-only
+  input, without weakening the `..` traversal rejection.
+- Frontend state is now a discriminated driver draft with string ports for
+  usable empty/edit states, normalized non-secret text, and exactly one nested
+  API object. A simple verified flag is reset on every edit, eliminating the
+  previous duplicate password-bearing JSON fingerprint string.
+- The new form is single-column by default and becomes a two-column grid at
+  36rem; host/port and SQLite directory/filename receive purpose-specific
+  proportions within the existing 29rem+ desktop form boundary.
+
+### Final Independent Review
+
+- No P0/P1 issue, credential response leak, stale browser raw-DSN fixture, or
+  inconsistency across database test, initializer, and installation persistence
+  was found.
+- One P2 contract gap remained after the first generation: runtime required
+  exactly one matching nested driver object, but `DatabaseInput` OpenAPI listed
+  all three objects as optional, so generated TypeScript admitted missing,
+  mismatched, or multiple driver objects that the API would return 400 for.
+- Huma v2 supports a named-type `SchemaTransformer`, `oneOf`, and discriminator
+  mapping. The fix is to keep the runtime decoding struct but document it as a
+  pure union of three named wrapper schemas, each with a literal driver and one
+  required nested value. The base optional properties must not remain, or the
+  generated intersection would continue allowing mixed objects.
+- The gap is closed: OpenAPI validation rejects missing, mismatched, multiple,
+  and unknown driver variants; generated TypeScript emits a three-branch
+  discriminated union; compile-only Web assertions protect the generated-client
+  behavior. The public schema remains named `DatabaseInput`, so both Setup
+  operations share the same strict contract without changing internal DSN
+  persistence.
+
 ## Cool-Tech Setup Refinement — 2026-08-09
 
 ### User Direction

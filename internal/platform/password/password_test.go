@@ -21,20 +21,32 @@ func TestHashAndVerify(t *testing.T) {
 	}
 }
 
-func TestHashRejectsShortPassword(t *testing.T) {
-	if _, err := Hash("short"); err == nil {
-		t.Fatal("expected a short password to be rejected")
+func TestHashAndVerifyAcceptPasswordsWithoutLengthBounds(t *testing.T) {
+	for _, value := range []string{
+		"x",
+		"123456",
+		"123456" + strings.Repeat("z", 2048),
+	} {
+		encoded, err := Hash(value)
+		if err != nil {
+			t.Fatalf("Hash password of length %d: %v", len(value), err)
+		}
+		if !Verify(encoded, value) {
+			t.Fatalf("password of length %d did not verify", len(value))
+		}
+		if Verify(encoded, "") {
+			t.Fatalf("empty password matched hash for length %d", len(value))
+		}
 	}
 }
 
-func TestPasswordBoundsRejectOversizedInputAndUnsafeStoredCost(t *testing.T) {
-	oversized := make([]byte, maxPasswordBytes+1)
-	for index := range oversized {
-		oversized[index] = 'a'
+func TestHashRejectsEmptyPassword(t *testing.T) {
+	if _, err := Hash(""); err == nil {
+		t.Fatal("Hash accepted an empty password")
 	}
-	if _, err := Hash(string(oversized)); err == nil {
-		t.Fatal("Hash accepted an oversized password")
-	}
+}
+
+func TestCredentialHashBoundsRejectUnsafeStoredCost(t *testing.T) {
 	if Verify(
 		"$argon2id$v=19$m=4294967295,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA",
 		"correct horse battery staple",
@@ -45,12 +57,6 @@ func TestPasswordBoundsRejectOversizedInputAndUnsafeStoredCost(t *testing.T) {
 		"$argon2id$v=19$m=4294967295,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA",
 	) {
 		t.Fatal("ValidHash accepted an unsafe Argon2 memory cost")
-	}
-	if Verify(
-		"$argon2id$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA",
-		string(oversized),
-	) {
-		t.Fatal("Verify accepted an oversized candidate password")
 	}
 }
 
@@ -63,7 +69,7 @@ func TestDummyCredentialUsesProductionArgon2Parameters(t *testing.T) {
 	}
 }
 
-func TestVerifyDummyBoundsUntrustedInput(t *testing.T) {
-	VerifyDummy(strings.Repeat("x", maxPasswordBytes+1))
+func TestVerifyDummyHandlesBodyBoundedInput(t *testing.T) {
+	VerifyDummy(strings.Repeat("x", 2048))
 	VerifyDummy("")
 }

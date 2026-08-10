@@ -257,10 +257,13 @@ go run ./cmd/aginex dev
 
 Open <http://localhost:3000>. The administration app redirects to Setup while
 the API is unconfigured. Choose SQLite for the smallest local installation,
-use `data/aginex.db` as its DSN, and enter the initial administrator email and
-password. Setup tests the connection, applies all pending Goose migrations,
+enter `data` as the database directory and `aginex.db` as the file name, then
+enter the initial administrator email and password. The backend assembles the
+database path, tests the connection, applies all pending Goose migrations,
 synchronizes built-in access records, creates the administrator, and publishes
-`AGINEX_CONFIG_FILE` only after the initialized application is ready.
+`AGINEX_CONFIG_FILE` only after the initialized application is ready. SQLite
+directories are paths on the backend host or container, not on the browser's
+computer.
 
 On later starts, the API applies pending migrations and synchronizes built-in
 access records before `/health/ready` succeeds. There are no separate migrate
@@ -307,8 +310,11 @@ pnpm build:web
 The browser gate uses PostgreSQL jobs so it can verify that a file deletion
 creates a durable cleanup task. CI provisions that database automatically.
 For a local run, select an initially absent `AGINEX_CONFIG_FILE`, enable
-PostgreSQL jobs, and provide the Setup form inputs as
-`AGINEX_E2E_DATABASE_DSN`, `AGINEX_E2E_ADMIN_EMAIL`, and
+PostgreSQL jobs, and provide the structured Setup form inputs as
+`AGINEX_E2E_DATABASE_DRIVER`, `AGINEX_E2E_DATABASE_HOST`,
+`AGINEX_E2E_DATABASE_PORT`, `AGINEX_E2E_DATABASE_NAME`,
+`AGINEX_E2E_DATABASE_USERNAME`, `AGINEX_E2E_DATABASE_PASSWORD`, and
+`AGINEX_E2E_DATABASE_SSL_MODE`, together with `AGINEX_E2E_ADMIN_EMAIL` and
 `AGINEX_E2E_ADMIN_PASSWORD`. Do not set the runtime `AGINEX_DATABASE_*` or
 `AGINEX_BOOTSTRAP_ADMIN_*` variables for this gate: the serial browser workflow
 must begin in Setup mode. Install Chromium with
@@ -318,10 +324,12 @@ must begin in Setup mode. Install Chromium with
 
 Aginex reads runtime configuration from environment variables. The CLI does
 not load `.env` automatically, so export it before starting a process. Durable
-installation state lives in `AGINEX_CONFIG_FILE`: browser Setup stores its
-managed database DSN and session secret there (generating the secret when it is
-not supplied), while preconfigured database environments persist only a driver
-marker and keep the DSN in the environment. Protect and back up this file.
+installation state lives in `AGINEX_CONFIG_FILE`: browser Setup accepts
+driver-specific fields, then the backend assembles and stores the managed
+database DSN and session secret there (generating the secret when it is not
+supplied). Preconfigured database environments persist only a driver marker
+and keep `AGINEX_DATABASE_DSN` in the environment. Protect and back up this
+file.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -370,8 +378,9 @@ docker compose --profile mysql up -d
 docker compose --profile storage up -d
 ```
 
-After starting a database, either enter its connection in browser Setup or set
-both database variables plus the one-time administrator values for a
+After starting a database, either enter its host, port, database name,
+credentials, and transport mode in browser Setup, or set both database
+environment variables plus the one-time administrator values for a
 preconfigured start. Storage remains environment-configured. The Compose
 credentials are for local development only.
 

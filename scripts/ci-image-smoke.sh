@@ -212,7 +212,7 @@ case "$target" in
     fi
     csrf_token="${BASH_REMATCH[1]}"
 
-    database_request='{"database":{"driver":"sqlite","dsn":"/data/aginex.db"}}'
+    database_request='{"database":{"driver":"sqlite","sqlite":{"directory":"/data","filename":"aginex.db"}}}'
     database_response="$(
       curl --fail --silent --show-error \
         --cookie "$csrf_cookie_jar" \
@@ -228,7 +228,7 @@ case "$target" in
       exit 1
     fi
 
-    complete_request='{"database":{"driver":"sqlite","dsn":"/data/aginex.db"},"administrator":{"email":"ci-admin@example.com","password":"correct-ci-runtime-smoke-password"}}'
+    complete_request='{"database":{"driver":"sqlite","sqlite":{"directory":"/data","filename":"aginex.db"}},"administrator":{"email":"ci-admin@example.com","password":"correct-ci-runtime-smoke-password"}}'
     complete_response="$(
       curl --silent --show-error \
         --cookie "$csrf_cookie_jar" \

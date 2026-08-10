@@ -99,9 +99,9 @@ AGINEX_STORAGE_LOCAL_ROOT=/data/uploads
 It deliberately does not set a database DSN. Mount a durable volume at
 `/data` even when object data lives in S3 or OSS. Browser Setup persists a
 versioned installation document there with mode `0600`; it includes the
-managed database DSN and session secret (generated when it was not supplied).
-Treat the file as a secret, back it up, and make the volume writable only by
-UID/GID `65532`.
+backend-assembled managed database DSN and session secret (generated when it
+was not supplied). Treat the file as a secret, back it up, and make the volume
+writable only by UID/GID `65532`.
 
 An environment-configured installation persists only its database driver and
 session secret in the file; the DSN remains environment-owned. A configured
@@ -124,11 +124,13 @@ identity. Until Setup completes, expose the API and web application only on a
 trusted provisioning network or through an operator-controlled tunnel. Do not
 put an unconfigured instance on a public ingress.
 
-Run only one API container during Setup. Enter a production PostgreSQL DSN with
-schema-owner/migration authority plus the initial administrator email and a
-strong password. The completion flow:
+Run only one API container during Setup. Enter the production PostgreSQL host,
+port, database name, schema-owner username and password, and SSL mode, plus the
+initial administrator email and a strong password. Browser Setup does not
+accept a raw PostgreSQL connection string; the backend validates these fields
+and assembles the managed DSN. The completion flow:
 
-1. validates and pings the database;
+1. assembles the DSN, then validates and pings the database;
 2. applies pending core and enabled-module migrations;
 3. synchronizes built-in access and creates or verifies an active administrator;
 4. starts the application and verifies readiness;
@@ -136,12 +138,12 @@ strong password. The completion flow:
 6. switches the same HTTP server from Setup routes to application routes.
 
 The status endpoint exposes only bounded stages and safe error codes; it never
-returns the DSN or provider error text. A failure before the configuration
-commit leaves Setup active and does not publish a partial file. Database work
-may already have completed, so correct the reported dependency or permission
-problem and retry the repeat-safe initialization. If a reviewed migration is
-incompatible, restore the database backup rather than attempting an automatic
-down migration.
+returns submitted credentials, the assembled DSN, or provider error text. A
+failure before the configuration commit leaves Setup active and does not
+publish a partial file. Database work may already have completed, so correct
+the reported dependency or permission problem and retry the repeat-safe
+initialization. If a reviewed migration is incompatible, restore the database
+backup rather than attempting an automatic down migration.
 
 After activation, `/api/v1/setup/*` returns `404`; it cannot be used to replace
 the database configuration. Rotate a stored DSN by an offline, backed-up

@@ -132,7 +132,7 @@
       "heading": {
         "caption": "连接验证",
         "title": "定位系统记录库。",
-        "description": "提交管理员凭据前，Aginex 会测试这个确切的数据库连接。"
+        "description": "提交管理员凭据前，Aginex 会测试这组确切的数据库设置。"
       },
       "engineLabel": "数据库引擎",
       "drivers": {
@@ -141,16 +141,35 @@
         "mysql": "MySQL"
       },
       "productionHint": "当前生产发行版要求使用 PostgreSQL。SQLite 和 MySQL 仍可用于开发、测试和派生应用。",
-      "pathLabel": "数据库路径",
-      "connectionStringLabel": "连接字符串",
+      "directoryLabel": "数据库目录",
+      "directoryHint": "请选择后端进程可写入的目录。相对目录以该进程的工作目录为基准。",
+      "filenameLabel": "数据库文件名",
+      "filenameHint": "请输入不含目录分隔符的单个文件名，例如 aginex.db。",
+      "hostLabel": "主机",
+      "portLabel": "端口",
+      "databaseNameLabel": "数据库名称",
+      "usernameLabel": "用户名",
+      "databasePasswordLabel": "数据库密码",
+      "sslModeLabel": "SSL 模式",
+      "tlsModeLabel": "TLS 模式",
+      "sslModes": {
+        "disable": "禁用",
+        "require": "必须启用",
+        "verify-ca": "验证证书颁发机构",
+        "verify-full": "验证证书和主机"
+      },
+      "tlsModes": {
+        "disabled": "禁用",
+        "required": "必须启用",
+        "skip-verify": "启用但跳过验证"
+      },
       "required": "必填",
-      "showConnectionString": "显示连接字符串",
-      "hideConnectionString": "隐藏连接字符串",
-      "sqliteHint": "请使用后端进程可写入的路径。",
-      "serverHint": "请在连接字符串中配置 TLS 和身份验证选项。",
+      "showDatabasePassword": "显示数据库密码",
+      "hideDatabasePassword": "隐藏数据库密码",
+      "serverHint": "Aginex 会验证这些字段，并在后端构建数据库配置。",
       "verificationFallback": "Aginex 无法验证此数据库。",
       "connectionVerified": "连接已验证",
-      "connectionVerifiedDescription": "这个确切的驱动和 DSN 可以继续使用。",
+      "connectionVerifiedDescription": "可以继续使用这组确切的数据库设置。",
       "testing": "正在测试连接…",
       "testAgain": "再次测试",
       "testConnection": "测试连接",
@@ -166,7 +185,7 @@
       "identifierHint": "管理员 ID",
       "emailPlaceholder": "admin@example.com",
       "passwordLabel": "密码",
-      "passwordLengthHint": "至少 12 个字符",
+      "required": "必填",
       "showPassword": "显示密码",
       "hidePassword": "隐藏密码",
       "confirmPasswordLabel": "确认密码",

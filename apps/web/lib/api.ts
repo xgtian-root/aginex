@@ -23,7 +23,7 @@ export type SetupDatabaseTest =
   components["schemas"]["SetupDatabaseTestRequest"];
 export type SetupDatabaseTestResult =
   components["schemas"]["SetupDatabaseTestResponse"];
-export type SetupComplete = components["schemas"]["SetupCompleteRequest"];
+export type SetupComplete = components["schemas"]["SetupCompleteInput"];
 export type SetupAccepted = components["schemas"]["SetupAcceptedResponse"];
 
 type ClientResult<T> = {

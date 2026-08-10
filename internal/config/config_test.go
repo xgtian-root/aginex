@@ -197,6 +197,77 @@ func TestProductionRejectsExampleCredentials(t *testing.T) {
 	})
 }
 
+func TestProductionAcceptsBootstrapAdministratorPasswordsWithoutLengthBounds(
+	t *testing.T,
+) {
+	for _, test := range []struct {
+		name     string
+		password string
+	}{
+		{name: "single character", password: "x"},
+		{name: "six characters", password: "123456"},
+		{
+			name:     "longer than former limit",
+			password: "123456" + strings.Repeat("z", 2048),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("AGINEX_ENV", "production")
+			t.Setenv("AGINEX_DATABASE_DRIVER", "postgres")
+			t.Setenv(
+				"AGINEX_DATABASE_DSN",
+				"postgres://aginex@example.com/aginex",
+			)
+			t.Setenv("AGINEX_JOBS_DRIVER", "disabled")
+			t.Setenv(
+				"AGINEX_SESSION_SECRET",
+				"9Yz!mQ7#vL2@pR8$kT4^wN6&cD1*xF5!",
+			)
+			t.Setenv("AGINEX_SESSION_SECURE", "true")
+			t.Setenv("AGINEX_API_PUBLIC_URL", "https://api.example.com")
+			t.Setenv("AGINEX_WEB_ORIGINS", "https://admin.example.com")
+			t.Setenv("AGINEX_BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
+			t.Setenv("AGINEX_BOOTSTRAP_ADMIN_PASSWORD", test.password)
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf(
+					"production rejected administrator password length %d: %v",
+					len(test.password),
+					err,
+				)
+			}
+			if cfg.Bootstrap.AdminPassword != test.password {
+				t.Fatalf(
+					"bootstrap administrator password length = %d, want %d",
+					len(cfg.Bootstrap.AdminPassword),
+					len(test.password),
+				)
+			}
+		})
+	}
+}
+
+func TestBootstrapAdministratorPasswordMustFitConfiguredLoginBodyLimit(
+	t *testing.T,
+) {
+	t.Setenv("AGINEX_ENV", "development")
+	t.Setenv("AGINEX_DATABASE_DRIVER", "sqlite")
+	t.Setenv("AGINEX_DATABASE_DSN", "test.db")
+	t.Setenv("AGINEX_HTTP_MAX_BODY_BYTES", "64")
+	t.Setenv("AGINEX_BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
+	password := "123456" + strings.Repeat("z", 64)
+	t.Setenv("AGINEX_BOOTSTRAP_ADMIN_PASSWORD", password)
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "AGINEX_HTTP_MAX_BODY_BYTES") {
+		t.Fatalf("bootstrap login body limit error = %v", err)
+	}
+	if strings.Contains(err.Error(), password) {
+		t.Fatal("bootstrap login body limit error exposed the password")
+	}
+}
+
 func TestLoadRejectsInvalidSameSiteAndLimits(t *testing.T) {
 	t.Setenv("AGINEX_SESSION_SAME_SITE", "automatic")
 	if _, err := Load(); err == nil {

@@ -151,6 +151,75 @@ func TestLoginAndProductLifecycle(t *testing.T) {
 	}
 }
 
+func TestAdministratorCanLoginWithPasswordsWithoutLengthBounds(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+	}{
+		{name: "single character", password: "x"},
+		{name: "six characters", password: "123456"},
+		{
+			name:     "longer than former limit",
+			password: "123456" + strings.Repeat("z", 2048),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := config.Config{
+				Environment: "test",
+				Database: config.Database{
+					Driver: "sqlite",
+					DSN:    filepath.Join(t.TempDir(), "aginex.db"),
+				},
+				Session: config.Session{
+					CookieName: "aginex_session",
+					TTL:        time.Hour,
+				},
+				Bootstrap: config.Bootstrap{
+					AdminEmail:    "admin@example.com",
+					AdminPassword: test.password,
+				},
+				Storage: config.Storage{
+					Driver:    "local",
+					LocalRoot: filepath.Join(t.TempDir(), "uploads"),
+				},
+				WebOrigin: "http://localhost:3000",
+			}
+			db := openMigratedDatabase(t, cfg.Database)
+			bootstrapTestData(t, db, cfg.Bootstrap)
+			server, err := New(cfg, db)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			body, err := json.Marshal(LoginRequest{
+				Email:    cfg.Bootstrap.AdminEmail,
+				Password: test.password,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/api/v1/auth/login",
+				bytes.NewReader(body),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			addTestCSRF(request)
+			recorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf(
+					"login with password length %d status = %d, body = %s",
+					len(test.password),
+					recorder.Code,
+					recorder.Body.String(),
+				)
+			}
+		})
+	}
+}
+
 func TestProductWriteRollsBackWhenAuditInsertFails(t *testing.T) {
 	cfg := config.Config{
 		Environment: "test",

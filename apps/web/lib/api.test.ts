@@ -85,7 +85,10 @@ describe("runtime API safety", () => {
 
     await expect(
       testSetupDatabase({
-        database: { driver: "sqlite", dsn: "data/aginex.db" },
+        database: {
+          driver: "sqlite",
+          sqlite: { directory: "data", filename: "aginex.db" },
+        },
       }),
     ).resolves.toEqual({ status: "ok" });
     expect(fetcher).toHaveBeenCalledTimes(4);

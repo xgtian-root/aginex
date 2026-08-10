@@ -1,5 +1,96 @@
 # Aginex v1 Implementation Plan
 
+## Current Goal: Remove Administrator Password Length Limits (2026-08-10)
+
+Remove administrator password minimum/maximum length constraints across Setup
+and environment bootstrap creation, Argon2 hashing/verification, login,
+OpenAPI, generated clients, UI validation/copy, and tests. Retain non-length
+safety boundaries such as non-empty input, bounded HTTP requests, secret
+handling, hashing parameters, rate limits, and generic error responses.
+
+### Administrator Password Limit Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| AP1. Constraint inventory | complete | Every backend, contract, UI, copy, automation, and test length assumption is mapped |
+| AP2. Runtime and public contract | complete | Creation, hashing, verification, and login accept non-empty administrator passwords without explicit min/max checks |
+| AP3. UI and regression coverage | complete | Browser validation/copy match the new contract and boundary regressions cover short and long values |
+| AP4. Generation and full verification | complete | Generated artifacts are deterministic and complete Go/Web/build gates pass |
+
+### Administrator Password Guardrails
+
+- Remove length policy only for administrator credentials; database
+  credentials, session secrets, tokens, and unrelated field limits stay
+  unchanged.
+- Do not expose password values in validation errors, logs, responses, test
+  failure output, planning files, or generated documentation.
+- Keep the global request-size ceiling as the physical upper bound and preserve
+  the exact password bytes through hashing and bootstrap.
+
+## Current Goal: Local PostgreSQL and MariaDB Verification (2026-08-10)
+
+Provision the operator-requested local PostgreSQL role/database and MariaDB
+database, then prove the new structured Setup contract against both live
+servers. Retain the created database objects and do not reset unrelated data.
+
+### Local Database Verification Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| L1. Service and object preparation | complete | Local listeners are identified and requested role/database objects exist |
+| L2. Direct credential verification | complete | Each requested credential can select its retained `aginex` database |
+| L3. Structured Setup verification | complete | Both driver-specific `/setup/database/test` requests return 200 against live servers |
+| L4. Full initialization and retention audit | complete | Both dialects reach application readiness and final objects remain present after temporary processes stop |
+
+### Local Verification Guardrails
+
+- Never log or commit the supplied database passwords or assembled DSNs.
+- Create or update only the explicitly requested local role/database objects;
+  do not delete databases, roles, or unrelated data.
+- Distinguish direct CLI connectivity, structured Setup connectivity, and full
+  application initialization in the final evidence.
+
+## Current Goal: Structured Setup Database Configuration (2026-08-10)
+
+Update the existing first-run Setup database step so SQLite accepts a storage
+directory and database name separately, while PostgreSQL and MySQL accept
+explicit connection fields and rely on the backend to construct the runtime
+DSN. Preserve verification, initialization, fail-closed behavior, localization,
+and generated-contract determinism.
+
+### Structured Database Configuration Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| DB1. Existing contract and flow audit | complete | Setup request types, DSN parsing/validation, UI state, tests, and delivery constraints are mapped |
+| DB2. Backend contract and DSN assembly | complete | Typed per-driver inputs are validated and safely assembled into the existing runtime configuration |
+| DB3. Setup UI and localization | complete | Driver-specific labeled fields, SQLite directory/name inputs, and responsive states use the new contract |
+| DB4. Regression and contract verification | complete | Focused Go/Web tests, generated artifacts, full checks, and build pass without unrelated drift |
+
+### Structured Database Configuration Guardrails
+
+- Keep the high-authority assembled DSN backend-owned; never accept a raw DSN
+  from the browser for PostgreSQL or MySQL.
+- Treat SQLite directory and database name as separate untrusted inputs; prevent
+  traversal or ambiguous filenames while retaining the existing path-safety
+  boundary.
+- Keep secrets out of API responses, logs, audit metadata, and user-facing
+  errors.
+- Preserve all unrelated worktree changes and update OpenAPI/generated clients
+  through the repository-owned generation path.
+
+### Locked Structured Input Contract
+
+- `database.driver` remains `sqlite`, `postgres`, or `mysql`, and exactly one
+  matching nested object is accepted.
+- SQLite: `sqlite.directory`, `sqlite.filename`.
+- PostgreSQL: `postgres.host`, `port`, `database`, `username`, `password`, and
+  `sslMode` (`disable`, `require`, `verify-ca`, `verify-full`).
+- MySQL: `mysql.host`, `port`, `database`, `username`, `password`, and `tlsMode`
+  (`disabled`, `required`, `skip-verify`).
+- Legacy browser `dsn` payloads are rejected by strict decoding. Environment
+  `AGINEX_DATABASE_DSN` and managed installation v1 remain supported unchanged.
+
 ## Current Goal: Cool-Tech Setup Refinement (2026-08-09)
 
 Shift the completed Setup redesign from a warm editorial commissioning desk to
@@ -237,6 +328,22 @@ PostgreSQL dependencies.
 
 | Error | Attempt | Resolution |
 |---|---|---|
+| Combined race orchestration returned a background session after four packages without preserving the final `internal/app` exit in its summarized output | First full focused race pass | Re-run `internal/app` race alone, retain its session ID, and poll to the explicit successful completion at 69.719s |
+| Final audit found an environment-bootstrap password could exceed the configured login request-body ceiling | Post-focused P3 review | Encode the exact login JSON during config validation and require operators to raise `AGINEX_HTTP_MAX_BODY_BYTES`; this preserves unbounded password policy while preventing an unusable credential |
+| Sandboxed CLI probes could see the local database listeners but TCP connects to ports 5432/3306 returned `Operation not permitted` | First direct credential probes | Repeat only the scoped localhost database commands with network approval; both credentials then connected successfully |
+| The isolated Setup API reached its listen log and immediately stopped with a redacted bind error in the sandbox | First live structured-Setup attempt | Re-run the same isolated loopback server with scoped bind approval, then exercise both database-test requests and stop the process |
+| Interrupted OpenAPI-union work had already saved a `DatabaseInput.TransformSchema` while the integration pass added a second copy | First focused compile after union hardening | Keep the documentation-only implementation in `internal/setup/openapi.go`, remove the duplicate contract-layer method/types, format, and rerun the Setup package |
+| Strict generated union removed direct `DatabaseInput["postgres"]` / `["mysql"]` indexing | First post-union Web typecheck | Derive transport mode types with `Extract<DatabaseInput, {driver: ...}>`; the Wizard now consumes the discriminant explicitly |
+| Initial negative TypeScript contract assertions placed `@ts-expect-error` above the call while errors were attached to nested properties | First generated-client type assertion check | Move each directive immediately above the invalid property; `pnpm check:web` then proves the expected errors remain active |
+| Isolated production Web preview used the already-built client bundle, so the runtime-only `NEXT_PUBLIC_API_URL` did not replace its same-origin probe target | 1 | Stop that preview and try a dev compile with the isolated API URL; production build correctness remains covered by the successful build gate |
+| The isolated Next dev preview initially reported ready but then detected the user's existing workspace dev lock on port 3000 and exited | 1 | Preserve the user's running process and do not kill or alter it; rely on isolated API plus automated Web gates rather than disturb active work |
+| In-app browser local-page refresh was blocked by the browser URL safety policy after preview recovery | 1 | End browser control and close the QA tab without switching to another browser surface; report actual visual QA as unavailable rather than circumventing the policy |
+| In-app browser backend did not support the documented `networkidle` wait state | 1 | Attempt a supported DOM-content wait once; the subsequent local URL policy block ended browser QA before the fallback could run |
+| First combined focused gate found `cmd/server/runtime_test.go` still POSTed the old internal raw-DSN request and received the intended 400 | 1 | Update the process-level HTTP regression to marshal public `SetupCompleteInput` with SQLite directory/filename, then rerun focused server tests |
+| First post-generation Web typecheck referenced the removed `SetupCompleteRequest` schema alias | 1 | Point the public Web alias at generated `SetupCompleteInput`; all driver-specific generated request types were already correct |
+| First contract generation used the sandbox-disallowed user Go build cache | 1 | Re-run the same repository generator with task-scoped `GOCACHE=/private/tmp/aginex-go-cache`; no generated file was written before the failure |
+| A generation-command inventory ended with zsh `no matches found` for optional `Makefile*` | 1 | Avoid optional unquoted globs in zsh; inspect explicit files or use `rg --files` first. The preceding read-only file output was unaffected |
+| A combined dependency/source search ended with zsh `no matches found` for an optional `docker-compose*.yml` glob | 1 | Quote or avoid optional shell globs and run repository searches with explicit existing paths; earlier read-only output remained valid |
 | First mobile Chinese QA script reached the administrator step but referenced `document.fonts` from the Node context before screenshot capture | 1 | Wait for fonts inside `page.evaluate`, then repeat the same isolated browser path; the Setup installation was not submitted or sealed |
 | Initial cool-tech CSS check reported seven descending-specificity warnings for the route-scoped Chinese heading override | 1 | Move the higher-specificity locale override after all base and accessibility selectors, then rerun the focused check |
 | Initial Setup redesign Biome check reported formatter-only differences in the new stylesheet and two section opening tags | 1 | Run Biome format only on the five touched Setup files, then rerun the read-only check |

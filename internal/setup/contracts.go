@@ -63,6 +63,43 @@ type SetupStatusResponse struct {
 	Code   string `json:"code,omitempty"`
 }
 
+// DatabaseInput is the browser-facing Setup database configuration. Exactly
+// one driver-specific object must be present and it must match Driver. The
+// backend resolves this untrusted value into an opaque DatabaseConfig before
+// database verification, initialization, or persistence.
+type DatabaseInput struct {
+	Driver   string                 `json:"driver" enum:"sqlite,postgres,mysql"`
+	SQLite   *SQLiteDatabaseInput   `json:"sqlite,omitempty"`
+	Postgres *PostgresDatabaseInput `json:"postgres,omitempty"`
+	MySQL    *MySQLDatabaseInput    `json:"mysql,omitempty"`
+}
+
+type SQLiteDatabaseInput struct {
+	Directory string `json:"directory" minLength:"1" maxLength:"4096"`
+	Filename  string `json:"filename" minLength:"1" maxLength:"255"`
+}
+
+type PostgresDatabaseInput struct {
+	Host     string `json:"host" minLength:"1" maxLength:"255"`
+	Port     int    `json:"port" minimum:"1" maximum:"65535"`
+	Database string `json:"database" minLength:"1" maxLength:"128"`
+	Username string `json:"username" minLength:"1" maxLength:"128"`
+	Password string `json:"password" minLength:"1" maxLength:"1024" writeOnly:"true"`
+	SSLMode  string `json:"sslMode" enum:"disable,require,verify-ca,verify-full"`
+}
+
+type MySQLDatabaseInput struct {
+	Host     string `json:"host" minLength:"1" maxLength:"255"`
+	Port     int    `json:"port" minimum:"1" maximum:"65535"`
+	Database string `json:"database" minLength:"1" maxLength:"128"`
+	Username string `json:"username" minLength:"1" maxLength:"128"`
+	Password string `json:"password" minLength:"1" maxLength:"1024" writeOnly:"true"`
+	TLSMode  string `json:"tlsMode" enum:"disabled,required,skip-verify"`
+}
+
+// DatabaseConfig is the trusted internal representation passed beyond the
+// HTTP boundary. Its DSN is assembled by Setup and remains the persisted
+// installation/runtime format for backward compatibility.
 type DatabaseConfig struct {
 	Driver string `json:"driver" enum:"sqlite,postgres,mysql"`
 	DSN    string `json:"dsn" minLength:"1" maxLength:"8192" writeOnly:"true"`
@@ -70,20 +107,29 @@ type DatabaseConfig struct {
 
 type AdministratorConfig struct {
 	Email    string `json:"email" format:"email" maxLength:"320"`
-	Password string `json:"password" minLength:"12" maxLength:"1024" writeOnly:"true"`
+	Password string `json:"password" writeOnly:"true"`
 }
 
 type SetupDatabaseTestRequest struct {
-	Database DatabaseConfig `json:"database"`
+	Database DatabaseInput `json:"database"`
 }
 
 type SetupDatabaseTestResponse struct {
 	Status string `json:"status" enum:"ok"`
 }
 
-type SetupCompleteRequest struct {
-	Database      DatabaseConfig      `json:"database"`
+// SetupCompleteInput is the public request body accepted by the Setup HTTP
+// endpoint. SetupCompleteRequest below is its resolved internal counterpart.
+type SetupCompleteInput struct {
+	Database      DatabaseInput       `json:"database"`
 	Administrator AdministratorConfig `json:"administrator"`
+}
+
+// SetupCompleteRequest is a trusted request containing a backend-assembled
+// database DSN. It must never be decoded directly from an HTTP request.
+type SetupCompleteRequest struct {
+	Database      DatabaseConfig
+	Administrator AdministratorConfig
 }
 
 type SetupAcceptedResponse struct {

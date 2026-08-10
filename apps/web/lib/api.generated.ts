@@ -525,10 +525,33 @@ export interface components {
       /** Format: int64 */
       users: number;
     };
-    DatabaseConfig: {
-      /** @enum {string} */
-      driver: "sqlite" | "postgres" | "mysql";
-      dsn: string;
+    DatabaseInput:
+      | components["schemas"]["DatabaseInputSQLite"]
+      | components["schemas"]["DatabaseInputPostgres"]
+      | components["schemas"]["DatabaseInputMySQL"];
+    DatabaseInputMySQL: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      driver: "mysql";
+      mysql: components["schemas"]["MySQLDatabaseInput"];
+    };
+    DatabaseInputPostgres: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      driver: "postgres";
+      postgres: components["schemas"]["PostgresDatabaseInput"];
+    };
+    DatabaseInputSQLite: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      driver: "sqlite";
+      sqlite: components["schemas"]["SQLiteDatabaseInput"];
     };
     FileResponse: {
       /**
@@ -632,6 +655,16 @@ export interface components {
       /** Format: email */
       email: string;
       password: string;
+    };
+    MySQLDatabaseInput: {
+      database: string;
+      host: string;
+      password: string;
+      /** Format: int64 */
+      port: number;
+      /** @enum {string} */
+      tlsMode: "disabled" | "required" | "skip-verify";
+      username: string;
     };
     PageAuditLogResponse: {
       /**
@@ -746,6 +779,16 @@ export interface components {
       /** Format: uuid */
       id: string;
     };
+    PostgresDatabaseInput: {
+      database: string;
+      host: string;
+      password: string;
+      /** Format: int64 */
+      port: number;
+      /** @enum {string} */
+      sslMode: "disable" | "require" | "verify-ca" | "verify-full";
+      username: string;
+    };
     Problem: {
       /**
        * Format: uri
@@ -812,6 +855,10 @@ export interface components {
       /** Format: date-time */
       updatedAt: string;
     };
+    SQLiteDatabaseInput: {
+      directory: string;
+      filename: string;
+    };
     SetupAcceptedResponse: {
       /**
        * Format: uri
@@ -822,15 +869,15 @@ export interface components {
       /** @enum {string} */
       status: "initializing";
     };
-    SetupCompleteRequest: {
+    SetupCompleteInput: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
-       * @example https://example.com/schemas/SetupCompleteRequest.json
+       * @example https://example.com/schemas/SetupCompleteInput.json
        */
       readonly $schema?: string;
       administrator: components["schemas"]["AdministratorConfig"];
-      database: components["schemas"]["DatabaseConfig"];
+      database: components["schemas"]["DatabaseInput"];
     };
     SetupDatabaseTestRequest: {
       /**
@@ -839,7 +886,7 @@ export interface components {
        * @example https://example.com/schemas/SetupDatabaseTestRequest.json
        */
       readonly $schema?: string;
-      database: components["schemas"]["DatabaseConfig"];
+      database: components["schemas"]["DatabaseInput"];
     };
     SetupDatabaseTestResponse: {
       /**
@@ -2989,7 +3036,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": components["schemas"]["SetupCompleteRequest"];
+        "application/json": components["schemas"]["SetupCompleteInput"];
       };
     };
     responses: {

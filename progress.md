@@ -1,5 +1,137 @@
 # Progress
 
+## 2026-08-10 — Administrator Password Length Limits
+
+- Loaded `test-and-debug` and the persistent planning workflow, recovered the
+  converged structured-Setup worktree, and started a cross-layer constraint
+  inventory before changing validation.
+- Mapped the constraint into Setup, Argon2 hashing/verification, production
+  environment bootstrap, login contracts/UI, OpenAPI, generated types, and
+  localized Wizard copy. AP1 is continuing with regression inventory while
+  backend and frontend implementation proceed on disjoint files.
+- Completed AP1. Confirmed that Setup's 64 KiB and the application's configured
+  request-body ceiling can remain as transport protections while all
+  password-specific length checks are removed. AP2 backend/contract work and
+  AP3 frontend/test work are in progress.
+- Completed AP2 and AP3. Backend regressions cover one character, `123456`, and
+  a value beyond the old maximum across Setup, production bootstrap, hashing,
+  and real login; frontend Setup/Login regressions cover one character and
+  1,025 characters. Focused Go packages and 9 focused Web tests pass.
+- Regenerated OpenAPI and the TypeScript client. Both administrator creation
+  and login password schemas are write-only strings with no length metadata.
+  AP4 full verification and generation-determinism checks are in progress.
+- Closed the final P3 bootstrap/login consistency gap by validating that the
+  configured global request-body limit can carry the exact administrator login
+  JSON. A focused config regression confirms the error names only the body
+  setting and never includes the password.
+- Completed AP4. `go test ./... -count=1`, `go vet ./...`, relevant five-package
+  race tests, `go mod verify`, `pnpm check:web`, all 102 Web tests,
+  `pnpm build:web`, Playwright discovery, `aginex doctor`, and
+  `aginex check --skip-build` pass. Contract regeneration is byte-deterministic
+  at the recorded final hashes, formatting and `git diff --check` are clean.
+
+## 2026-08-10 — Local PostgreSQL and MariaDB Verification
+
+- Loaded the Aginex `test-and-debug` workflow and the persistent planning
+  workflow because this task mutates two retained local database providers.
+- Confirmed PostgreSQL on loopback port 5432 and MariaDB on port 3306, then
+  prepared the requested `aginex` database objects without deleting or
+  resetting unrelated data.
+- Direct credential probes pass. PostgreSQL reports version 14.20 with login
+  role/database/owner all `aginex`; MariaDB reports version 12.0.2 with selected
+  database `aginex`, `utf8mb4`, and `utf8mb4_unicode_ci`.
+- Started an isolated Setup-mode API and submitted the new structured
+  PostgreSQL and MySQL database-test bodies. Both returned HTTP 200 and
+  `{"status":"ok"}`. The temporary API was stopped and its managed config file
+  was never created.
+- Provider-specific full Setup runs also reached application mode and readiness
+  200. Final read-only queries confirm 17 base tables, Goose version 8, and the
+  expected active integration administrator in each retained database.
+- PostgreSQL role/database and MariaDB database, tables, migrations, and test
+  data are deliberately retained as requested. No repository source file was
+  changed by the provider setup/testing commands.
+
+## 2026-08-10 — Structured Setup Database Configuration
+
+- Loaded the file-backed planning workflow and Aginex admin-page contract,
+  accessibility, responsive, and verification guidance.
+- Confirmed the repository starts clean on `main` and added a four-phase plan
+  without replacing the prior Setup implementation history.
+- Started DB1 audit of backend request/validation/configuration seams, frontend
+  driver-specific form state, generated OpenAPI types, and regressions.
+- Located the current raw-DSN contract and confirmed it is also reused as the
+  internal installation/runtime value. Began designing a separate structured
+  wire DTO with a single conversion boundary rather than weakening persisted
+  configuration semantics.
+- Confirmed existing SQLite directory creation and managed-installation DSN
+  persistence can remain unchanged; only the public Setup DTO and conversion
+  path need to become structured.
+- Audited the wizard's raw-DSN state, normalization, verification fingerprint,
+  retry path, localization, and direct API-test/E2E dependencies. The existing
+  exact-tested-configuration invariant can be retained with structured state.
+- Confirmed `github.com/go-sql-driver/mysql` is already a direct dependency and
+  provides the canonical DSN formatter. Logged and corrected an optional-glob
+  inspection error without changing source files.
+- Mapped Supervisor detachment, credential clearing, candidate readiness,
+  installation commit, and fail-closed activation. Chose the HTTP handlers as
+  the single structured-input-to-runtime-DSN conversion boundary.
+- Identified the reusable form CSS and generation/check commands, plus the E2E
+  compatibility seam where environment DSNs must be decoded only by the test
+  harness into browser-visible structured fields.
+- Completed DB1 with independent backend, frontend, contract, test, deployment,
+  and documentation audits. Locked the nested per-driver wire contract and
+  started backend and frontend implementation in parallel.
+- Confirmed Web Setup request aliases currently depend on generated schema
+  names and will need a small post-generation update for the renamed completion
+  payload. Logged a second optional-glob inspection error and switched to
+  explicit-path searches.
+- Structured PostgreSQL E2E variables, SQLite image-smoke requests, API safety
+  fixtures, and browser-versus-environment DSN documentation are implemented;
+  focused formatting/syntax verification is still pending the agent handoff.
+- Completed the first cross-layer code review. Requested required database
+  password enforcement and an explicit trailing-directory normalization test;
+  verified MySQL round-trip safety, structured frontend submission, exact-test
+  invalidation, and responsive form-grid integration.
+- Backend and frontend owners completed their focused suites. The first
+  repository contract generation was blocked before writing output by the
+  sandbox-disallowed user Go build cache; retrying with the established
+  task-scoped `/private/tmp` Go cache.
+- Completed DB2 and DB3. Contract regeneration succeeded with the task-scoped
+  cache; its one expected Web alias error was fixed from the removed internal
+  schema name to `SetupCompleteInput`. DB4 full verification is in progress.
+- First combined gate passed Web check and all 98 Web tests. The focused Go
+  server suite correctly rejected one stale process-level test fixture still
+  posting a raw DSN; that fixture now uses the structured public SQLite body.
+- Full `go test ./...`, `go vet ./...`, and the production Web build pass.
+  OpenAPI/client regeneration is byte-deterministic at hashes
+  `e435c0b203b8bd7a723f46f436725fc5c244a066ddbf6d3de5e2c83e1094a787`
+  and `c8fef6c231639dcfaa15546c18a7588beffaa47736d2ae5f721c4f20f36d4723`.
+- Attempted real responsive browser QA with an isolated fresh Setup API. The
+  existing workspace dev lock was preserved, and the in-app browser's local URL
+  safety policy blocked the recovered preview refresh; browser QA ended without
+  switching surfaces. Automated component, E2E discovery, type, lint, and
+  production-build coverage remain green.
+- Focused Setup/server race tests, module verification, E2E discovery (4 tests),
+  Bash syntax, CI YAML parsing, and diff whitespace checks pass.
+- Independent final review found one non-blocking but real OpenAPI typing gap:
+  driver branches were runtime-exclusive but type-optional. Added a final DB4
+  contract-hardening pass to emit a discriminated `oneOf` union before handoff.
+- Closed the typing gap with a Huma `SchemaTransformer`: `DatabaseInput` is now
+  a pure discriminator plus three closed named variants, each requiring only
+  its matching nested object. Runtime decoding remains the same strict wire DTO.
+- Regenerated OpenAPI and the Web client. Generated `DatabaseInput` is a true
+  TypeScript union, and a compile-only regression now proves missing, mismatched,
+  and multiple driver objects are rejected by the generated type.
+- Final post-union gates pass: `go test ./... -count=1`, focused Setup/server race
+  tests, `go vet ./...`, `go mod verify`, `pnpm check:web`, all 98 Web tests,
+  production Web build, Playwright discovery (4 tests), Bash syntax, CI YAML
+  parsing, and `git diff --check`.
+- Contract regeneration is byte-deterministic at final hashes
+  `26c7a0fe8c8c0a34045ada493c811a1d2a50d87ff480bfff8eb91890186f200c`
+  (OpenAPI) and
+  `cbdf230f168e7a6b6b8220c1c4a1ea2721dfaacc5fce3342812c9759ef742478`
+  (generated TypeScript). DB4 is complete.
+
 ## 2026-08-09 — Cool-Tech Setup Refinement
 
 - Loaded `frontend-design`, its color/typography references, the Aginex

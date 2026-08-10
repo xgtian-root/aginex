@@ -12,31 +12,27 @@ import (
 )
 
 const (
-	memory           = 64 * 1024
-	iterations       = 3
-	parallelism      = 2
-	saltLength       = 16
-	keyLength        = 32
-	maxPasswordBytes = 1024
-	maxEncodedBytes  = 1024
-	minMemory        = 8 * 1024
-	maxMemory        = 256 * 1024
-	maxIterations    = 10
-	maxParallelism   = 8
-	minSaltLength    = 8
-	maxSaltLength    = 64
-	minKeyLength     = 16
-	maxKeyLength     = 64
+	memory          = 64 * 1024
+	iterations      = 3
+	parallelism     = 2
+	saltLength      = 16
+	keyLength       = 32
+	maxEncodedBytes = 1024
+	minMemory       = 8 * 1024
+	maxMemory       = 256 * 1024
+	maxIterations   = 10
+	maxParallelism  = 8
+	minSaltLength   = 8
+	maxSaltLength   = 64
+	minKeyLength    = 16
+	maxKeyLength    = 64
 
 	dummyCredentialHash = "$argon2id$v=19$m=65536,t=3,p=2$9zUJyMaBuKB6ZV90HRubfg$ITduve02Uwz2SYciVLQio+Kvr2XSQkxJi4/lxqulFts"
 )
 
 func Hash(value string) (string, error) {
-	if len(value) < 12 {
-		return "", errors.New("password must contain at least 12 characters")
-	}
-	if len(value) > maxPasswordBytes {
-		return "", errors.New("password is too long")
+	if value == "" {
+		return "", errors.New("password must not be empty")
 	}
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -54,9 +50,6 @@ func Hash(value string) (string, error) {
 }
 
 func Verify(encoded, value string) bool {
-	if len(value) > maxPasswordBytes {
-		return false
-	}
 	parsed, ok := parseCredentialHash(encoded)
 	if !ok {
 		return false
@@ -134,8 +127,5 @@ func parseCredentialHash(encoded string) (parsedCredentialHash, bool) {
 // it before rejecting unknown or inactive subjects to reduce account
 // enumeration through obvious response-time differences.
 func VerifyDummy(value string) {
-	if len(value) > maxPasswordBytes {
-		value = value[:maxPasswordBytes]
-	}
 	_ = Verify(dummyCredentialHash, value)
 }

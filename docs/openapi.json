@@ -10,8 +10,6 @@
             "type": "string"
           },
           "password": {
-            "maxLength": 1024,
-            "minLength": 12,
             "type": "string",
             "writeOnly": true
           }
@@ -161,27 +159,81 @@
         ],
         "type": "object"
       },
-      "DatabaseConfig": {
+      "DatabaseInput": {
+        "discriminator": {
+          "mapping": {
+            "mysql": "#/components/schemas/DatabaseInputMySQL",
+            "postgres": "#/components/schemas/DatabaseInputPostgres",
+            "sqlite": "#/components/schemas/DatabaseInputSQLite"
+          },
+          "propertyName": "driver"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DatabaseInputSQLite"
+          },
+          {
+            "$ref": "#/components/schemas/DatabaseInputPostgres"
+          },
+          {
+            "$ref": "#/components/schemas/DatabaseInputMySQL"
+          }
+        ]
+      },
+      "DatabaseInputMySQL": {
         "additionalProperties": false,
         "properties": {
           "driver": {
             "enum": [
-              "sqlite",
-              "postgres",
               "mysql"
             ],
             "type": "string"
           },
-          "dsn": {
-            "maxLength": 8192,
-            "minLength": 1,
-            "type": "string",
-            "writeOnly": true
+          "mysql": {
+            "$ref": "#/components/schemas/MySQLDatabaseInput"
           }
         },
         "required": [
           "driver",
-          "dsn"
+          "mysql"
+        ],
+        "type": "object"
+      },
+      "DatabaseInputPostgres": {
+        "additionalProperties": false,
+        "properties": {
+          "driver": {
+            "enum": [
+              "postgres"
+            ],
+            "type": "string"
+          },
+          "postgres": {
+            "$ref": "#/components/schemas/PostgresDatabaseInput"
+          }
+        },
+        "required": [
+          "driver",
+          "postgres"
+        ],
+        "type": "object"
+      },
+      "DatabaseInputSQLite": {
+        "additionalProperties": false,
+        "properties": {
+          "driver": {
+            "enum": [
+              "sqlite"
+            ],
+            "type": "string"
+          },
+          "sqlite": {
+            "$ref": "#/components/schemas/SQLiteDatabaseInput"
+          }
+        },
+        "required": [
+          "driver",
+          "sqlite"
         ],
         "type": "object"
       },
@@ -460,14 +512,62 @@
             "type": "string"
           },
           "password": {
-            "maxLength": 1024,
-            "minLength": 12,
-            "type": "string"
+            "type": "string",
+            "writeOnly": true
           }
         },
         "required": [
           "email",
           "password"
+        ],
+        "type": "object"
+      },
+      "MySQLDatabaseInput": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "host": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "tlsMode": {
+            "enum": [
+              "disabled",
+              "required",
+              "skip-verify"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "port",
+          "database",
+          "username",
+          "password",
+          "tlsMode"
         ],
         "type": "object"
       },
@@ -799,6 +899,56 @@
         ],
         "type": "object"
       },
+      "PostgresDatabaseInput": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "host": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          },
+          "port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sslMode": {
+            "enum": [
+              "disable",
+              "require",
+              "verify-ca",
+              "verify-full"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "port",
+          "database",
+          "username",
+          "password",
+          "sslMode"
+        ],
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": false,
         "properties": {
@@ -987,6 +1137,26 @@
         ],
         "type": "object"
       },
+      "SQLiteDatabaseInput": {
+        "additionalProperties": false,
+        "properties": {
+          "directory": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "directory",
+          "filename"
+        ],
+        "type": "object"
+      },
       "SetupAcceptedResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1011,13 +1181,13 @@
         ],
         "type": "object"
       },
-      "SetupCompleteRequest": {
+      "SetupCompleteInput": {
         "additionalProperties": false,
         "properties": {
           "$schema": {
             "description": "A URL to the JSON Schema for this object.",
             "examples": [
-              "https://example.com/schemas/SetupCompleteRequest.json"
+              "https://example.com/schemas/SetupCompleteInput.json"
             ],
             "format": "uri",
             "readOnly": true,
@@ -1027,7 +1197,7 @@
             "$ref": "#/components/schemas/AdministratorConfig"
           },
           "database": {
-            "$ref": "#/components/schemas/DatabaseConfig"
+            "$ref": "#/components/schemas/DatabaseInput"
           }
         },
         "required": [
@@ -1049,7 +1219,7 @@
             "type": "string"
           },
           "database": {
-            "$ref": "#/components/schemas/DatabaseConfig"
+            "$ref": "#/components/schemas/DatabaseInput"
           }
         },
         "required": [
@@ -4042,7 +4212,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetupCompleteRequest"
+                "$ref": "#/components/schemas/SetupCompleteInput"
               }
             }
           },

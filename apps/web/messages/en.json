@@ -132,7 +132,7 @@
       "heading": {
         "caption": "Connection proof",
         "title": "Locate the system of record.",
-        "description": "Aginex tests this exact connection before administrator credentials can be submitted."
+        "description": "Aginex tests these exact database settings before administrator credentials can be submitted."
       },
       "engineLabel": "Database engine",
       "drivers": {
@@ -141,16 +141,35 @@
         "mysql": "MySQL"
       },
       "productionHint": "The current production distribution requires PostgreSQL. SQLite and MySQL remain available for development, tests, and derived applications.",
-      "pathLabel": "Database path",
-      "connectionStringLabel": "Connection string",
+      "directoryLabel": "Database directory",
+      "directoryHint": "Use a directory writable by the backend process. Relative directories resolve from that process's working directory.",
+      "filenameLabel": "Database file name",
+      "filenameHint": "Enter one file name without directory separators, for example aginex.db.",
+      "hostLabel": "Host",
+      "portLabel": "Port",
+      "databaseNameLabel": "Database name",
+      "usernameLabel": "Username",
+      "databasePasswordLabel": "Database password",
+      "sslModeLabel": "SSL mode",
+      "tlsModeLabel": "TLS mode",
+      "sslModes": {
+        "disable": "Disabled",
+        "require": "Required",
+        "verify-ca": "Verify certificate authority",
+        "verify-full": "Verify certificate and host"
+      },
+      "tlsModes": {
+        "disabled": "Disabled",
+        "required": "Required",
+        "skip-verify": "Required, skip verification"
+      },
       "required": "Required",
-      "showConnectionString": "Show connection string",
-      "hideConnectionString": "Hide connection string",
-      "sqliteHint": "Use a path writable by the backend process.",
-      "serverHint": "TLS and authentication settings belong in the connection string.",
+      "showDatabasePassword": "Show database password",
+      "hideDatabasePassword": "Hide database password",
+      "serverHint": "Aginex validates these fields and builds the database configuration on the server.",
       "verificationFallback": "Aginex could not verify this database.",
       "connectionVerified": "Connection verified",
-      "connectionVerifiedDescription": "This exact driver and DSN can continue.",
+      "connectionVerifiedDescription": "These exact database settings can continue.",
       "testing": "Testing connection…",
       "testAgain": "Test again",
       "testConnection": "Test connection",
@@ -166,7 +185,7 @@
       "identifierHint": "Administrator ID",
       "emailPlaceholder": "admin@example.com",
       "passwordLabel": "Password",
-      "passwordLengthHint": "12+ characters",
+      "required": "Required",
       "showPassword": "Show password",
       "hidePassword": "Hide password",
       "confirmPasswordLabel": "Confirm password",

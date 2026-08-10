@@ -24,11 +24,11 @@ var insecureCredentialMarkers = []string{
 	"todo-secret",
 }
 
-// CredentialLooksInsecure recognizes values that should never be accepted as
-// production credentials. It intentionally catches checked-in placeholders,
-// surrounding whitespace, repeated templates, and trivially low diversity
-// without imposing a particular password alphabet.
-func CredentialLooksInsecure(value string) bool {
+// UserPasswordLooksInsecure recognizes values that should never be accepted
+// as user-chosen passwords. Request-size limits bound the value separately, so
+// this check intentionally imposes no password length or character-diversity
+// policy.
+func UserPasswordLooksInsecure(value string) bool {
 	if value == "" || value != strings.TrimSpace(value) {
 		return true
 	}
@@ -45,6 +45,17 @@ func CredentialLooksInsecure(value string) bool {
 	if repeatedCredentialTemplate(value) {
 		return true
 	}
+	return false
+}
+
+// CredentialLooksInsecure recognizes values that should never be accepted as
+// production infrastructure credentials. In addition to placeholder and
+// template checks, it requires enough diversity for secrets such as the
+// server-side session key.
+func CredentialLooksInsecure(value string) bool {
+	if UserPasswordLooksInsecure(value) {
+		return true
+	}
 	distinct := make(map[rune]struct{})
 	for _, character := range value {
 		distinct[character] = struct{}{}
@@ -53,13 +64,20 @@ func CredentialLooksInsecure(value string) bool {
 }
 
 func repeatedCredentialTemplate(value string) bool {
-	for width := 1; width <= len(value)/2; width++ {
-		if len(value)%width != 0 {
-			continue
-		}
-		if strings.Repeat(value[:width], len(value)/width) == value {
-			return true
-		}
+	if len(value) < 2 {
+		return false
 	}
-	return false
+	prefix := make([]int, len(value))
+	for index := 1; index < len(value); index++ {
+		matched := prefix[index-1]
+		for matched > 0 && value[index] != value[matched] {
+			matched = prefix[matched-1]
+		}
+		if value[index] == value[matched] {
+			matched++
+		}
+		prefix[index] = matched
+	}
+	period := len(value) - prefix[len(value)-1]
+	return period < len(value) && len(value)%period == 0
 }
