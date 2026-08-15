@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
       -o /out/aginex ./cmd/aginex \
     && mkdir -p /out/runtime-data/uploads
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS go-runtime
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:1b7b9f0f0e0a1d2155f531db587cc48ec26aaf97ab64364225f5bf18a054e66a AS go-runtime
 WORKDIR /app
 ARG VERSION=0.1.0-dev
 ARG COMMIT=unknown
@@ -62,7 +62,7 @@ COPY --from=go-build --chown=65532:65532 /out/aginex /app/aginex
 ENTRYPOINT ["/app/aginex"]
 CMD ["migrate", "status"]
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web-build
+FROM docker.io/library/node:26.7.0-alpine3.24@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS web-build
 WORKDIR /src
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
@@ -78,7 +78,7 @@ RUN pnpm --filter @aginex/web build \
     && test -f /src/apps/web/.next/standalone/apps/web/server.js \
     && mkdir -p /runtime/next-cache
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web
+FROM docker.io/library/node:26.7.0-alpine3.24@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS web
 WORKDIR /app
 ARG VERSION=0.1.0-dev
 ARG COMMIT=unknown
