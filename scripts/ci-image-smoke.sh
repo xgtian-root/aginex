@@ -334,7 +334,7 @@ case "$target" in
     docker run --detach \
       --name="$runtime_container" \
       "${common_runtime_options[@]}" \
-      --tmpfs=/app/apps/web/.next/cache:rw,nosuid,nodev,size=128m \
+      --tmpfs=/app/admin/.next/cache:rw,nosuid,nodev,size=128m \
       --publish=127.0.0.1::3000 \
       "$image_ref" >/dev/null
     web_address="$(docker port "$runtime_container" 3000/tcp)"

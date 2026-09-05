@@ -45,7 +45,7 @@ removed instead of being preserved as a compatibility mode.
    contexts. Run every business mutation through `Runtime.Writes.Run`, return a
    valid sanitized audit event, and use the transaction-bound job queue when
    enqueue must commit with the write.
-8. Use the public `framework/storage.ObjectStore` contract. Object keys remain
+8. Use the public `backend/framework/storage.ObjectStore` contract. Object keys remain
    private metadata; signed URLs must not be logged, audited, or placed in an
    idempotency replay record. Resolve multipart and controlled-read behavior as
    optional provider capabilities instead of importing cloud SDK types.

@@ -75,7 +75,7 @@ Start every task from the repository root and follow this sequence:
    the repository completion gate:
 
    ```bash
-   go run ./cmd/aginex check
+   go run ./cli/cmd/aginex check
    ```
 
 6. Report the changed behavior, migrations or generated artifacts, verification
@@ -239,7 +239,7 @@ Aginex provides the boundaries those rules build on.
 After an Aginex version containing this command is published, install it with Go:
 
 ```bash
-go install github.com/xgtian-root/aginex/cmd/aginex@latest
+go install github.com/xgtian-root/aginex/cli/cmd/aginex@latest
 aginex --version
 ```
 
@@ -249,12 +249,12 @@ Go installs the executable into `GOBIN`, or into `$(go env GOPATH)/bin` when
 explicitly link generated projects back to that checkout:
 
 ```bash
-go install ./cmd/aginex
+go install ./cli/cmd/aginex
 aginex new testproject --aginex-path /absolute/path/to/aginex
 ```
 
 `--aginex-path` is a development-only escape hatch. It writes an explicit local
-`replace` directive to the generated `go.mod`; remove that directive and pin a
+`replace` directive to the generated `backend/go.mod`; remove that directive and pin a
 published Aginex version before sharing or releasing the application. A
 source-built development CLI fails closed without this flag instead of creating
 a project whose framework version cannot be downloaded.
@@ -312,7 +312,7 @@ pnpm install
 set -a
 source .env
 set +a
-go run ./cmd/aginex dev
+go run ./cli/cmd/aginex dev
 ```
 
 ### 4. Complete first-run Setup
@@ -350,25 +350,25 @@ Sign in with the administrator credentials entered in Setup.
 | Command | Purpose |
 |---|---|
 | `aginex new [name] [--module path] [--aginex-path path]` | Initialize the empty current directory, or create and initialize a named child directory; `--aginex-path` is only for an unreleased local checkout |
-| `go run ./cmd/aginex dev` | Run the API and web development servers together |
-| `go run ./cmd/aginex dev reinitialize` | Dry-run a recoverable reset of stale local pre-release configuration/database state; execute only with the exact printed `--confirm` target |
-| `go run ./cmd/aginex doctor` | Check the local toolchain and project structure |
-| `go run ./cmd/aginex check` | Run backend tests, Skill validation, frontend checks, tests, and build |
-| `go run ./cmd/aginex check --skip-build` | Run the verification gate without the production web build |
-| `go run ./cmd/aginex generate client` | Regenerate OpenAPI and the TypeScript API client |
-| `go run ./cmd/aginex skills validate` | Validate all canonical Agent Skills |
-| `go run ./cmd/worker` | Run the durable PostgreSQL worker |
-| `pnpm dev:web` | Run only the Next.js development server |
+| `go run ./cli/cmd/aginex dev` | Run the API and web development servers together |
+| `go run ./cli/cmd/aginex dev reinitialize` | Dry-run a recoverable reset of stale local pre-release configuration/database state; execute only with the exact printed `--confirm` target |
+| `go run ./cli/cmd/aginex doctor` | Check the local toolchain and project structure |
+| `go run ./cli/cmd/aginex check` | Run backend tests, Skill validation, frontend checks, tests, and build |
+| `go run ./cli/cmd/aginex check --skip-build` | Run the verification gate without the production web build |
+| `go run ./cli/cmd/aginex generate client` | Regenerate OpenAPI and the TypeScript API client |
+| `go run ./cli/cmd/aginex skills validate` | Validate all canonical Agent Skills |
+| `go run ./backend/cmd/worker` | Run the durable PostgreSQL worker |
+| `pnpm dev:admin` | Run only the Next.js development server |
 | `pnpm e2e` | Run Chromium workflows against automatically initialized API/web processes |
 
 Run individual checks when narrowing down a failure:
 
 ```bash
-go test ./...
-go vet ./...
-pnpm check:web
-pnpm test:web
-pnpm build:web
+go test ./cli/... ./backend/...
+go vet ./cli/... ./backend/...
+pnpm check:admin
+pnpm test:admin
+pnpm build:admin
 ```
 
 The browser gate uses PostgreSQL jobs so it can verify that a file deletion
@@ -484,25 +484,44 @@ described in the [operations guide](docs/operations.md#file-upload-policy-and-pr
 - Every successful mutation writes an audit record.
 - OpenAPI is generated to [`docs/openapi.json`](docs/openapi.json), and the web
   client is generated to
-  [`apps/web/lib/api.generated.ts`](apps/web/lib/api.generated.ts).
+  [`admin/lib/api.generated.ts`](admin/lib/api.generated.ts).
 
 ## Repository layout
 
 ```text
-.agents/skills/                     Canonical development workflows
-.github/workflows/                  CI verification
-apps/web/                           Next.js admin application
-cmd/aginex/                         Developer CLI
-cmd/openapi/                        OpenAPI generator
-cmd/server/                         Go API executable
-cmd/worker/                         Durable background worker
-docs/                               Product, dependency, and API documentation
-framework/                          Reusable module, authorization, job, and HTTP contracts
-internal/app/                       HTTP application and business endpoints
-internal/auth/                      Authentication and authorization services
-internal/platform/migrate/          Goose migrations for all SQL dialects
-internal/platform/storage/          Local, S3-compatible, and OSS providers
+cli/                               Independent Go CLI module
+  cmd/aginex/                      Developer CLI entrypoint
+  internal/                        CLI orchestration and scaffolding
+  templates/                       Embedded scaffold and source manifest
+backend/                           Independent Go backend module
+  cmd/server/                      API executable
+  cmd/worker/                      Durable background worker
+  cmd/openapi/                     OpenAPI generator
+  cmd/aginex-tool/                  Local development maintenance
+  framework/                       Public backend contracts and runtime
+  internal/                        Business logic, platforms and migrations
+admin/                             Next.js administration application
+  app/                             App Router pages and layouts
+.agents/skills/                    Canonical development workflows
+.github/workflows/                 CI verification
+docs/                              Product, dependency and API documentation
+go.work                            Local CLI/backend workspace
 ```
+
+The CLI and backend have separate `go.mod`/`go.sum` files and no Go package
+imports between them. The CLI builds backend entrypoints as subprocesses and
+runs them from the discovered project root, preserving configuration and data
+paths when invoked from a nested directory. The admin keeps its own package
+manifest; the root pnpm workspace and lockfile coordinate frontend tooling.
+
+Scaffold assets are listed explicitly in `cli/templates/sources.json`. After
+changing a canonical asset, run `go run ./cli/cmd/sync-templates`; use `-check`
+for read-only verification. The synchronizer rejects locally edited snapshots.
+`aginex new` creates `backend/`, `admin/`, and a workspace containing only the
+application backend. `--aginex-path` accepts this repository root and references
+its `backend/` module. Backend template version metadata lives in
+`cli/templates/assets.go` independently of CLI build metadata. Nested module
+release tags use `cli/vX.Y.Z` and `backend/vX.Y.Z` respectively.
 
 ## Project status and roadmap
 
@@ -537,7 +556,7 @@ Before handing a change back to the requester or opening a pull request:
 2. Confirm that database, permission, audit, and API contracts remain intact.
 3. Regenerate OpenAPI and the TypeScript client when API types change.
 4. Include tests for changed behavior.
-5. Run `go run ./cmd/aginex check` and disclose any check you could not run.
+5. Run `go run ./cli/cmd/aginex check` and disclose any check you could not run.
 
 ## License
 

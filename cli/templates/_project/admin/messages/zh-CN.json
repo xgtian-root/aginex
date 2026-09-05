@@ -1,0 +1,870 @@
+{
+  "Metadata": {
+    "defaultTitle": "Aginex",
+    "titleTemplate": "%s · Aginex",
+    "description": "面向 Coding Agent 的管理工作区。",
+    "setup": {
+      "title": "设置工作区",
+      "description": "将 Aginex 连接到数据库，并创建首位管理员。"
+    }
+  },
+  "Common": {
+    "brandName": "Aginex",
+    "wordmark": "aginex",
+    "actions": "操作",
+    "status": "状态",
+    "emailAddress": "电子邮箱",
+    "password": "密码",
+    "required": "必填",
+    "tryAgain": "重试",
+    "checkAgain": "重新检查",
+    "workspace": "工作区",
+    "development": "开发环境",
+    "loading": "正在加载…",
+    "notAvailable": "—"
+  },
+  "LocaleSwitcher": {
+    "label": "语言",
+    "ariaLabel": "选择界面语言",
+    "english": "English",
+    "simplifiedChinese": "简体中文",
+    "changing": "正在切换语言…"
+  },
+  "RuntimeUnavailable": {
+    "statusCode": "503",
+    "defaultTitle": "服务器尚未准备好响应请求。",
+    "mark": "安全等待",
+    "eyebrow": "运行状态未知",
+    "description": "Aginex 无法确认此安装是否已准备就绪。在后端返回明确的运行模式前，设置入口将保持关闭。",
+    "action": "重新检查",
+    "footnote": "不会根据此响应推断任何设置状态。"
+  },
+  "Shell": {
+    "navigation": {
+      "overview": "概览",
+      "products": "产品",
+      "people": "人员",
+      "access": "权限",
+      "auditTrail": "审计记录",
+      "files": "文件",
+      "systemSettings": "系统设置"
+    },
+    "skipLink": "跳到主要内容",
+    "homeAriaLabel": "Aginex 首页",
+    "brandTagline": "控制台",
+    "primaryNavigationAriaLabel": "主导航",
+    "signOutAriaLabel": "退出登录",
+    "workspaceFallback": "工作区",
+    "environment": "开发环境",
+    "openingWorkspace": "正在打开工作区…",
+    "error": {
+      "eyebrow": "工作区不可用",
+      "title": "无法打开此控制台。",
+      "description": "服务器未能完成身份检查。你的会话没有发生变化。",
+      "action": "重试"
+    }
+  },
+  "Login": {
+    "successToast": "登录成功，工作区已准备就绪。",
+    "credentialsError": "电子邮箱或密码不正确。",
+    "networkError": "无法连接到 API。请检查服务器是否正在运行。",
+    "story": {
+      "eyebrow": "面向 Coding Agent 的管理系统",
+      "title": "为严肃工作打造的清晰控制台。",
+      "description": "每个界面都对应一份 API 契约、一项权限和一套可重复的 Coding Agent 工作流。",
+      "permissionPoint": "明确的 resource:action 权限",
+      "contractPoint": "由 OpenAPI 支撑的前端契约"
+    },
+    "form": {
+      "eyebrow": "欢迎回来",
+      "title": "登录 Aginex",
+      "description": "使用设置期间创建的管理员账户。",
+      "emailLabel": "电子邮箱",
+      "emailPlaceholder": "admin@example.com",
+      "passwordLabel": "密码",
+      "pending": "正在打开工作区…",
+      "submit": "登录",
+      "note": "不开放公开注册。首位管理员会在一次性设置期间创建。"
+    },
+    "loading": "正在准备登录…"
+  },
+  "Setup": {
+    "route": {
+      "loading": {
+        "eyebrow": "安装检查",
+        "title": "正在验证运行模式…",
+        "description": "在后端响应前，设置入口保持关闭。"
+      },
+      "error": {
+        "eyebrow": "设置入口已关闭",
+        "title": "此安装界面意外停止。",
+        "description": "浏览器无法确认初始化是否仍在继续。请重新加载受保护的路由，再次验证后端模式和进度。",
+        "action": "重新加载设置"
+      }
+    },
+    "skipLink": "跳到设置表单",
+    "header": {
+      "wordmark": "aginex / 安装启用",
+      "serial": "安装实例 001"
+    },
+    "ledger": {
+      "progressAriaLabel": "设置进度",
+      "eyebrow": "一次性设置",
+      "title": "启用你的控制台。",
+      "description": "通过三项经过验证的操作，将空白运行环境转变为可审计的工作区。",
+      "currentStep": "当前步骤",
+      "note": "配置封存后，设置入口将永久消失。",
+      "steps": {
+        "database": {
+          "title": "数据库",
+          "caption": "验证连接"
+        },
+        "administrator": {
+          "title": "管理员",
+          "caption": "建立所有权"
+        },
+        "initialize": {
+          "title": "初始化",
+          "caption": "封存此安装"
+        }
+      }
+    },
+    "database": {
+      "heading": {
+        "caption": "连接验证",
+        "title": "定位系统记录库。",
+        "description": "提交管理员凭据前，Aginex 会测试这组确切的数据库设置。"
+      },
+      "engineLabel": "数据库引擎",
+      "drivers": {
+        "sqlite": "SQLite",
+        "postgres": "PostgreSQL",
+        "mysql": "MySQL"
+      },
+      "productionHint": "当前生产发行版要求使用 PostgreSQL。SQLite 和 MySQL 仍可用于开发、测试和派生应用。",
+      "directoryLabel": "数据库目录",
+      "directoryHint": "请选择后端进程可写入的目录。相对目录以该进程的工作目录为基准。",
+      "filenameLabel": "数据库文件名",
+      "filenameHint": "请输入不含目录分隔符的单个文件名，例如 aginex.db。",
+      "hostLabel": "主机",
+      "portLabel": "端口",
+      "databaseNameLabel": "数据库名称",
+      "usernameLabel": "用户名",
+      "databasePasswordLabel": "数据库密码",
+      "sslModeLabel": "SSL 模式",
+      "tlsModeLabel": "TLS 模式",
+      "sslModes": {
+        "disable": "禁用",
+        "require": "必须启用",
+        "verify-ca": "验证证书颁发机构",
+        "verify-full": "验证证书和主机"
+      },
+      "tlsModes": {
+        "disabled": "禁用",
+        "required": "必须启用",
+        "skip-verify": "启用但跳过验证"
+      },
+      "required": "必填",
+      "showDatabasePassword": "显示数据库密码",
+      "hideDatabasePassword": "隐藏数据库密码",
+      "serverHint": "Aginex 会验证这些字段，并在后端构建数据库配置。",
+      "verificationFallback": "Aginex 无法验证此数据库。",
+      "connectionVerified": "连接已验证",
+      "connectionVerifiedDescription": "可以继续使用这组确切的数据库设置。",
+      "testing": "正在测试连接…",
+      "testAgain": "再次测试",
+      "testConnection": "测试连接",
+      "continue": "继续"
+    },
+    "administrator": {
+      "heading": {
+        "caption": "初始权限",
+        "title": "创建首位操作员。",
+        "description": "此账户将获得 Administrator 角色。设置完成后不提供公开注册入口。"
+      },
+      "emailLabel": "电子邮箱",
+      "identifierHint": "管理员 ID",
+      "emailPlaceholder": "admin@example.com",
+      "passwordLabel": "密码",
+      "required": "必填",
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码",
+      "confirmPasswordLabel": "确认密码",
+      "exactMatchHint": "必须完全一致",
+      "credentialNote": "凭据只会发送到后端一次，绝不会存入浏览器存储。",
+      "passwordMismatch": "两次输入的密码不一致。",
+      "backToDatabase": "数据库",
+      "initializeWorkspace": "初始化工作区"
+    },
+    "initialization": {
+      "pausedCaption": "初始化已暂停",
+      "runningCaption": "正在启用系统",
+      "pausedTitle": "工作区尚未封存。",
+      "runningTitle": "启动全部服务。",
+      "pausedDescription": "请检查报告的状况，或使用同一份已验证配置重试。",
+      "runningDescription": "服务器正在执行迁移、建立访问权限并准备应用运行环境。",
+      "progressAriaLabel": "初始化进度",
+      "actionRequired": "需要处理",
+      "automaticHandoff": "自动切换",
+      "errorDescription": "配置尚未封存，因此设置入口仍然可用。",
+      "runningStatusDescription": "应用模式启用后，此页面会自动关闭。",
+      "reviewConfiguration": "检查配置",
+      "retryInitialization": "重试初始化",
+      "requestFallback": "初始化请求未能完成。",
+      "failure": "配置封存前，初始化已停止。",
+      "failureWithReference": "配置封存前，初始化已停止。参考代码：{code}。",
+      "stages": {
+        "waiting": "等待初始化",
+        "validating_database": "验证数据库",
+        "migrating": "应用数据库结构",
+        "bootstrapping": "创建管理员访问权限",
+        "starting_application": "启动应用服务",
+        "persisting_configuration": "封存配置",
+        "activating_application": "激活工作区"
+      }
+    },
+    "probe": {
+      "eyebrow": "安装检查",
+      "title": "正在读取运行状态。",
+      "description": "在监督程序确认此安装前，设置入口保持关闭。",
+      "unavailableEyebrow": "设置入口已关闭",
+      "unavailableTitle": "后端状态未知。",
+      "defaultUnavailableDetail": "Aginex 无法确认当前运行模式。",
+      "supervisorStateFallback": "设置监督程序未返回当前状态。",
+      "action": "重新检查"
+    }
+  },
+  "Dashboard": {
+    "header": {
+      "eyebrow": "本周五简报",
+      "title": "清晰信号是良好运营的起点。",
+      "description": "快速了解此实例中的资源、人员和已审计工作的最新动态。"
+    },
+    "summaryAriaLabel": "工作区摘要",
+    "metrics": {
+      "products": {
+        "label": "产品",
+        "detail": "目录记录"
+      },
+      "people": {
+        "label": "人员",
+        "detail": "活跃操作员"
+      },
+      "eventsToday": {
+        "label": "今日事件",
+        "detail": "已审计操作"
+      }
+    },
+    "contract": {
+      "eyebrow": "框架契约",
+      "title": "一个资源，贯通全链路。",
+      "description": "产品是迁移、类型化 HTTP 操作、权限、审计记录和响应式管理界面的参考实现。",
+      "action": "打开产品"
+    }
+  },
+  "Products": {
+    "createdToast": "产品已创建。",
+    "createError": "无法创建产品。",
+    "deletedToast": "产品已删除。",
+    "deleteError": "无法删除产品。",
+    "header": {
+      "eyebrow": "目录操作",
+      "title": "产品",
+      "description": "Aginex 的标准资源：支持搜索、感知权限、记录审计，并兼容所有受支持的数据库。",
+      "createAction": "创建产品"
+    },
+    "editor": {
+      "eyebrow": "新记录",
+      "title": "创建产品",
+      "closeAriaLabel": "关闭产品编辑器",
+      "nameLabel": "产品名称",
+      "skuLabel": "SKU",
+      "priceLabel": "价格",
+      "statusLabel": "状态",
+      "keepBrowsing": "继续浏览",
+      "pending": "正在创建产品…",
+      "submit": "创建产品"
+    },
+    "statuses": {
+      "draft": "草稿",
+      "active": "启用",
+      "archived": "已归档"
+    },
+    "list": {
+      "ariaLabel": "产品列表",
+      "searchAriaLabel": "搜索产品",
+      "searchPlaceholder": "搜索名称或 SKU",
+      "recordCount": "{count, plural, other {# 条记录}}",
+      "unavailableTitle": "产品不可用",
+      "unavailableDescription": "请检查 API 连接后重试。",
+      "emptyTitle": "暂无产品",
+      "emptyDescription": "创建首个产品，以验证完整的资源工作流。",
+      "columns": {
+        "name": "名称",
+        "sku": "SKU",
+        "price": "价格",
+        "status": "状态",
+        "updated": "更新时间",
+        "actions": "操作"
+      },
+      "deleteAriaLabel": "删除{name}"
+    }
+  },
+  "Files": {
+    "deletedToast": "文件已删除。",
+    "deleteError": "无法删除文件。",
+    "objectUploadError": "对象上传返回状态 {status}。",
+    "uploadError": "无法完成文件上传和验证。",
+    "temporaryUrlError": "无法创建临时文件 URL。",
+    "header": {
+      "eyebrow": "对象存储",
+      "title": "文件",
+      "description": "通过统一的存储工作流暂存、传输、验证并获取任意类型文件。"
+    },
+    "upload": {
+      "kicker": "传输工位 01",
+      "title": "私有文件传输",
+      "description": "先选择并核对批次，再明确启动传输；每个文件都会独立验证。",
+      "specAriaLabel": "传输规格",
+      "privateBadge": "默认私有",
+      "concurrent": "并发 {count}",
+      "directStrategy": "直接传输",
+      "resumableStrategy": "超过 32 MiB 可续传",
+      "policyLoading": "正在读取运行时上传策略…",
+      "policyError": "无法读取运行时上传策略。",
+      "dropTitle": "将文件拖入暂存区",
+      "requirements": "支持任意类型 · 最多 {count} 个 · 单文件 {size}",
+      "choose": "浏览文件",
+      "limitError": "单个传输批次最多包含 {count} 个文件。",
+      "emptyFile": "不能上传空文件。",
+      "tooLarge": "此文件超过当前运行时 {limit} 限制。",
+      "batchSuccess": "已上传并验证 {count} 个文件。",
+      "batchResult": "传输完成：成功 {succeeded} 个，失败 {failed} 个，暂停 {paused} 个。",
+      "batchPaused": "已完成 {succeeded} 个，另有 {paused} 个传输已安全暂停。"
+    },
+    "queue": {
+      "title": "传输清单",
+      "summary": "已暂存 {total} · 待开始 {queued} · 已完成 {succeeded} · 需处理 {failed}",
+      "ariaLabel": "已暂存的传输文件",
+      "empty": "尚未暂存文件；选择文件不会自动开始传输。",
+      "start": "开始传输 {count} 个文件",
+      "running": "正在传输…",
+      "clear": "清空清单",
+      "retryFailed": "重新加入失败项",
+      "batchProgress": "批次字节进度",
+      "fileProgress": "{name} 的上传进度",
+      "removeAriaLabel": "从传输清单移除 {name}",
+      "pauseAriaLabel": "立即暂停 {name}",
+      "continueAriaLabel": "继续上传 {name}",
+      "strategy": {
+        "single": "直接传输",
+        "resumable": "断点续传"
+      },
+      "status": {
+        "queued": "等待开始",
+        "uploading": "正在传输",
+        "pausing": "正在安全暂停",
+        "paused": "已暂停",
+        "verifying": "正在验证",
+        "success": "验证完成",
+        "error": "需要处理"
+      }
+    },
+    "recovery": {
+      "kicker": "服务端检查点",
+      "title": "未完成传输",
+      "count": "{count} 个可恢复",
+      "loadError": "无法读取未完成的上传会话。",
+      "progress": "已确认 {complete}/{total} 个分片 · {expires} 过期",
+      "choose": "重新选择源文件",
+      "matching": "正在匹配…",
+      "fileMismatch": "请选择启动此传输时使用的同名、同大小文件。",
+      "matchError": "所选文件与此上传检查点不匹配。",
+      "matchedToast": "{name} 匹配成功，仅未确认分片已加入队列。"
+    },
+    "inventory": {
+      "kicker": "已验证对象",
+      "title": "文件库存",
+      "count": "共 {count} 个"
+    },
+    "preview": {
+      "title": "预览 {name}",
+      "close": "关闭 PDF 预览"
+    },
+    "actions": {
+      "retry": "重试",
+      "cancel": "取消"
+    },
+    "states": {
+      "loading": "正在读取文件访问权限…",
+      "unavailable": "无法读取文件访问权限。",
+      "forbidden": "你没有查看文件的权限。",
+      "loadingFiles": "正在读取文件库存…",
+      "filesUnavailable": "无法读取文件库存。"
+    },
+    "emptyTitle": "暂无文件",
+    "emptyDescription": "在上方暂存文件，批次确认无误后再开始传输。",
+    "columns": {
+      "file": "文件",
+      "provider": "提供商",
+      "size": "大小",
+      "visibility": "可见性",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "providers": {
+      "local": "本地",
+      "s3": "S3",
+      "oss": "阿里云 OSS"
+    },
+    "visibility": {
+      "private": "私有",
+      "public": "公开"
+    },
+    "statuses": {
+      "pending": "待处理",
+      "ready": "就绪",
+      "invalid": "无效",
+      "deleting": "正在删除",
+      "delete_failed": "删除失败",
+      "deleted": "已删除"
+    },
+    "units": {
+      "byte": "B",
+      "kilobyte": "KB",
+      "megabyte": "MB",
+      "gigabyte": "GB"
+    },
+    "values": {
+      "unknownType": "未知内容类型"
+    },
+    "previewAriaLabel": "预览{name}",
+    "downloadAriaLabel": "下载{name}",
+    "deleteAriaLabel": "删除{name}",
+    "deleteConfirm": {
+      "title": "删除此文件？",
+      "description": "{name} 将进入永久删除队列。",
+      "action": "删除文件"
+    }
+  },
+  "ResourceList": {
+    "loading": "正在加载{resource}…",
+    "unavailableTitle": "无法加载{resource}",
+    "unavailableDescription": "请检查权限和 API 连接后重试。"
+  },
+  "Users": {
+    "header": {
+      "eyebrow": "身份",
+      "title": "人员",
+      "description": "创建操作员、控制访问权限，并让每次账户变更都清晰可追踪。",
+      "createAction": "创建人员"
+    },
+    "statuses": {
+      "active": "启用",
+      "disabled": "停用"
+    },
+    "list": {
+      "ariaLabel": "人员列表",
+      "searchLabel": "搜索人员",
+      "searchPlaceholder": "搜索姓名或邮箱",
+      "statusFilterLabel": "按状态筛选人员",
+      "allStatuses": "全部状态",
+      "roleFilterLabel": "按角色筛选人员",
+      "allRoles": "全部角色",
+      "recordCount": "{count, plural, other {# 人}}",
+      "loading": "正在加载人员…",
+      "forbiddenTitle": "此账户无法查看人员",
+      "forbiddenDescription": "查看此页面需要 all 范围的 users:read 授权。",
+      "retry": "重试",
+      "unavailableTitle": "无法加载人员",
+      "unavailableDescription": "请检查 API 连接和访问权限后重试。",
+      "noResultsTitle": "没有人员符合当前筛选条件",
+      "noResultsDescription": "清除一个或多个筛选条件以扩大结果范围。",
+      "emptyTitle": "暂无人员",
+      "emptyDescription": "创建首位可以进入此实例的操作员。",
+      "clearFilters": "清除筛选",
+      "currentAccount": "当前账户",
+      "noRoles": "未分配角色",
+      "page": "第 {page} 页，共 {totalPages} 页",
+      "previous": "上一页",
+      "next": "下一页",
+      "columns": {
+        "person": "人员",
+        "status": "状态",
+        "roles": "角色",
+        "updated": "更新时间",
+        "actions": "操作"
+      }
+    },
+    "editor": {
+      "create": {
+        "eyebrow": "新操作员",
+        "title": "创建人员",
+        "description": "创建本地登录凭据，并仅分配此人员所需的访问权限。",
+        "submit": "创建人员"
+      },
+      "edit": {
+        "eyebrow": "账户信息",
+        "title": "编辑人员",
+        "description": "可分别更新显示名称和已分配角色。",
+        "submit": "保存更改"
+      },
+      "close": "关闭人员编辑器",
+      "displayName": "显示名称",
+      "email": "电子邮箱",
+      "emailReadOnly": "邮箱是本地登录身份，无法在此处修改。",
+      "password": "密码",
+      "passwordConfirmation": "确认密码",
+      "passwordMismatch": "两次输入的密码不一致。",
+      "rolesLegend": "已分配角色",
+      "rolesDescription": "角色组合明确的权限。未分配角色的账户无法访问工作区。",
+      "rolesLoading": "正在加载可用角色…",
+      "rolesError": "无法加载可用角色。",
+      "noRoles": "暂无可分配角色。",
+      "rolesUnavailable": "你可以创建此账户，但需要由其他管理员为其分配角色。",
+      "cancel": "取消",
+      "saving": "正在保存…"
+    },
+    "passwordEditor": {
+      "eyebrow": "本地登录凭据",
+      "title": "重置{name}的密码",
+      "description": "为{email}设置新密码。现有会话将被撤销。",
+      "submit": "重置密码"
+    },
+    "actions": {
+      "edit": "编辑",
+      "resetPassword": "重置密码",
+      "disable": "停用",
+      "enable": "启用",
+      "grantAdmin": "授予 Administrator",
+      "revokeAdmin": "撤销 Administrator",
+      "delete": "删除"
+    },
+    "confirm": {
+      "cancel": "取消",
+      "enable": {
+        "title": "启用此账户？",
+        "description": "{name}（{email}）将可以使用已分配角色重新登录。",
+        "action": "启用账户"
+      },
+      "disable": {
+        "title": "停用此账户？",
+        "description": "{name}（{email}）将被退出登录，并在重新启用前无法进入。",
+        "action": "停用账户"
+      },
+      "delete": {
+        "title": "删除此账户？",
+        "description": "{name}（{email}）将失去访问权限，活动会话也会被撤销。这是软删除。",
+        "action": "删除账户"
+      },
+      "grantAdmin": {
+        "title": "授予 Administrator 权限？",
+        "description": "{name}（{email}）将获得所有已注册权限的 all 范围授权。",
+        "action": "授予 Administrator"
+      },
+      "revokeAdmin": {
+        "title": "撤销 Administrator 权限？",
+        "description": "{name}（{email}）将失去系统管理的 Administrator 角色，但保留其他已分配角色。",
+        "action": "撤销 Administrator"
+      }
+    },
+    "toasts": {
+      "created": "人员已创建。",
+      "updated": "人员已更新。",
+      "passwordReset": "密码已重置，现有会话已撤销。",
+      "enable": "账户已启用。",
+      "disable": "账户已停用。",
+      "delete": "账户已删除。",
+      "grantAdmin": "已授予 Administrator 权限。",
+      "revokeAdmin": "已撤销 Administrator 权限。"
+    },
+    "errors": {
+      "save": "无法保存人员。",
+      "password": "无法重置密码。",
+      "action": "无法完成账户操作。"
+    }
+  },
+  "Roles": {
+    "header": {
+      "eyebrow": "授权",
+      "title": "权限",
+      "description": "使用明确的权限和最小有效资源范围组合角色。",
+      "createAction": "创建角色"
+    },
+    "grantCount": "{count, plural, other {# 项授权}}",
+    "scopes": {
+      "own": "本人资源",
+      "all": "全部资源"
+    },
+    "list": {
+      "ariaLabel": "访问角色列表",
+      "searchLabel": "搜索角色",
+      "searchPlaceholder": "搜索角色名称或说明",
+      "recordCount": "{count, plural, other {# 个角色}}",
+      "loading": "正在加载角色…",
+      "forbiddenTitle": "此账户无法查看访问角色",
+      "forbiddenDescription": "查看此页面需要 all 范围的 roles:read 授权。",
+      "retry": "重试",
+      "unavailableTitle": "无法加载角色",
+      "unavailableDescription": "请检查 API 连接和访问权限后重试。",
+      "noResultsTitle": "没有角色符合搜索条件",
+      "noResultsDescription": "清除搜索以显示全部角色。",
+      "emptyTitle": "暂无角色",
+      "emptyDescription": "创建角色以组合人员所需的权限。",
+      "clearSearch": "清除搜索",
+      "systemManaged": "系统管理",
+      "inUse": "角色已分配",
+      "deleteBlocked": "请先将人员迁移到其他角色，再删除此角色。",
+      "peopleCount": "{count, plural, other {# 人}}",
+      "page": "第 {page} 页，共 {totalPages} 页",
+      "previous": "上一页",
+      "next": "下一页",
+      "columns": {
+        "role": "角色",
+        "people": "人员",
+        "grants": "授权",
+        "updated": "更新时间",
+        "actions": "操作"
+      }
+    },
+    "editor": {
+      "create": {
+        "eyebrow": "新访问配置",
+        "title": "创建角色",
+        "description": "从最小可用授权集开始，并谨慎扩展。",
+        "submit": "创建角色"
+      },
+      "edit": {
+        "eyebrow": "访问配置",
+        "title": "编辑角色",
+        "description": "角色信息和权限授权作为两个独立受保护的变更执行。",
+        "submit": "保存更改"
+      },
+      "close": "关闭角色编辑器",
+      "name": "角色名称",
+      "description": "说明",
+      "permissionsLegend": "权限授权",
+      "permissionsDescription": "选择权限后，只能选择其授权策略支持的范围。",
+      "permissionSearchLabel": "搜索权限",
+      "permissionSearchPlaceholder": "搜索权限代码或说明",
+      "permissionsLoading": "正在加载权限定义…",
+      "permissionsError": "无法加载权限定义。",
+      "noPermissionResults": "没有权限符合搜索条件。",
+      "noPermissions": "暂无已注册权限定义。",
+      "scopeLabel": "{permission}的范围",
+      "lockedGrant": "保留为{scope}；此授权超出你的可委派范围。",
+      "grantsUnavailable": "你可以创建此角色，但需要由其他管理员分配其授权。",
+      "cancel": "取消",
+      "saving": "正在保存…"
+    },
+    "actions": {
+      "edit": "编辑",
+      "delete": "删除"
+    },
+    "confirm": {
+      "cancel": "取消",
+      "delete": {
+        "title": "删除此角色？",
+        "description": "将删除未分配的角色{name}。权限定义不会被删除。",
+        "action": "删除角色"
+      }
+    },
+    "toasts": {
+      "created": "角色已创建。",
+      "updated": "角色已更新。",
+      "deleted": "角色已删除。"
+    },
+    "errors": {
+      "save": "无法保存角色。",
+      "delete": "无法删除角色。"
+    }
+  },
+  "StorageSettings": {
+    "header": {
+      "eyebrow": "系统设置",
+      "title": "对象存储",
+      "description": "维护多个对象存储 Profile。默认 Profile 的切换和配置修改将在 API 与 worker 重启后生效。",
+      "create": "新建 Profile"
+    },
+    "summary": {
+      "ariaLabel": "对象存储摘要",
+      "default": "待生效默认 Profile",
+      "profiles": "Profile 数量",
+      "unbound": "未绑定历史文件"
+    },
+    "notices": {
+      "managedTitle": "由环境变量管理",
+      "managedDescription": "已显式设置 AGINEX_STORAGE_DRIVER，控制台当前为只读。",
+      "restartTitle": "需要重启",
+      "restartDescription": "已保存的存储设置与当前运行时不同。请同时重启 API 与 worker。",
+      "unboundTitle": "存在降级的历史文件",
+      "unboundDescription": "有 {count} 个历史文件无法无歧义绑定到 Profile；系统不会猜测其存储目标。"
+    },
+    "uploadPolicy": {
+      "title": "文件上传策略",
+      "description": "设置单文件上限，以及客户端是否可以使用可续传的分片传输。",
+      "comparisonAriaLabel": "当前运行时与待生效的文件上传策略",
+      "runtimeLabel": "当前运行时",
+      "pendingLabel": "重启后生效",
+      "sizeValue": "单文件 {size} MiB",
+      "resumableOn": "已开启断点续传",
+      "resumableOff": "仅直接传输",
+      "readOnly": "只读",
+      "maxSizeLabel": "最大单文件大小",
+      "mibUnit": "MiB",
+      "maxSizeHint": "请输入 1 至 1,024 之间的整数 MiB；API 会校验每个上传意图。",
+      "resumableLabel": "开启断点续传",
+      "resumableHint": "允许兼容客户端恢复大型分片传输；直接上传仍然可用。",
+      "restartHint": "已保存值与当前值不同；请同时重启 API 与 worker 后生效。",
+      "inSyncHint": "已保存值与当前运行服务一致。",
+      "saveAction": "保存上传策略",
+      "savedToast": "上传策略已保存，重启后生效。",
+      "saveError": "无法保存上传策略。"
+    },
+    "providers": {
+      "local": "本地存储",
+      "aliyun-oss": "阿里云 OSS",
+      "aws-s3": "AWS S3",
+      "minio": "MinIO",
+      "cloudflare-r2": "Cloudflare R2"
+    },
+    "status": { "available": "可用", "archived": "已归档" },
+    "fields": {
+      "name": "Profile 名称",
+      "provider": "Provider",
+      "target": "目标",
+      "bucket": "Bucket",
+      "region": "Region",
+      "endpoint": "Endpoint",
+      "accountId": "Account ID",
+      "accessKeyId": "Access Key ID",
+      "accessKeySecret": "Access Key Secret",
+      "credentials": "凭据"
+    },
+    "values": {
+      "configured": "已配置",
+      "missing": "未配置",
+      "pendingDefault": "重启后默认",
+      "runtimeDefault": "当前默认",
+      "inUse": "已有文件使用"
+    },
+    "list": { "ariaLabel": "Storage Profile 列表" },
+    "editor": {
+      "createTitle": "新建 Storage Profile",
+      "editTitle": "编辑 Storage Profile",
+      "description": "保存时会重新执行只读 Bucket 连通性检查。",
+      "optional": "可选，由官方 Region 推导",
+      "secretHint": "密钥不会回显。保持两项为空可保留当前密钥；轮换时必须成对填写。",
+      "testPassed": "连接测试通过"
+    },
+    "actions": {
+      "retry": "重试",
+      "edit": "编辑",
+      "activate": "设为默认",
+      "archive": "归档",
+      "restore": "恢复",
+      "delete": "删除",
+      "cancel": "取消",
+      "close": "关闭编辑器",
+      "test": "测试连接",
+      "testing": "测试中…",
+      "save": "保存",
+      "saving": "保存中…"
+    },
+    "states": {
+      "loading": "正在读取对象存储设置…",
+      "unavailable": "无法读取对象存储设置。",
+      "forbidden": "你没有查看对象存储设置的权限。",
+      "empty": "尚未配置 Storage Profile。"
+    },
+    "confirm": {
+      "archive": {
+        "title": "归档此 Profile？",
+        "description": "{name} 将停止出现在可选默认项中；历史文件仍会继续使用它。",
+        "action": "归档 Profile"
+      },
+      "delete": {
+        "title": "删除此 Profile？",
+        "description": "仅当 {name} 从未被文件使用时才会永久删除。",
+        "action": "删除 Profile"
+      }
+    },
+    "toasts": {
+      "created": "Storage Profile 已创建。",
+      "updated": "Storage Profile 已更新。",
+      "tested": "连接测试通过。",
+      "activate": "默认 Profile 已保存，重启后生效。",
+      "archive": "Storage Profile 已归档。",
+      "restore": "Storage Profile 已恢复。",
+      "delete": "Storage Profile 已删除。"
+    },
+    "errors": {
+      "revision": "缺少当前配置版本，请刷新后重试。",
+      "action": "无法更新 Storage Profile。",
+      "save": "无法保存 Storage Profile。",
+      "test": "连接测试失败。"
+    }
+  },
+  "Audit": {
+    "header": {
+      "eyebrow": "可追责性",
+      "title": "审计记录",
+      "description": "按时间顺序记录涉及安全和数据变更的操作，并关联请求 ID。"
+    },
+    "resourceLabel": "审计事件",
+    "columns": {
+      "action": "操作",
+      "resource": "资源",
+      "summary": "摘要",
+      "ipAddress": "IP 地址",
+      "time": "时间"
+    }
+  },
+  "Problem": {
+    "fallback": "无法完成请求。",
+    "withRequestId": "{message} 请求 ID：{requestId}。",
+    "noResponseBody": "API 未返回响应正文。",
+    "serverStatus": "服务器返回状态 {status}。",
+    "invalidRuntimeState": "API 返回了无效的运行状态响应。",
+    "codes": {
+      "REQUEST_INVALID": "请求无效。请检查输入内容后重试。",
+      "AUTHENTICATION_REQUIRED": "请先登录再继续。",
+      "RESOURCE_FORBIDDEN": "你没有执行此操作的权限。",
+      "RESOURCE_NOT_FOUND": "请求的资源不存在。",
+      "REQUEST_CONFLICT": "请求与资源的当前状态冲突。",
+      "REQUEST_TOO_LARGE": "请求过大。请减小请求大小后重试。",
+      "UNSUPPORTED_MEDIA_TYPE": "不支持此内容类型。",
+      "RATE_LIMITED": "请求次数过多，请稍后重试。",
+      "HEADERS_TOO_LARGE": "请求头过大。",
+      "INTERNAL_ERROR": "服务器无法完成此请求。",
+      "REQUEST_FAILED": "无法完成请求。",
+      "CORS_FORBIDDEN": "不允许此请求来源。",
+      "CORS_PREFLIGHT_FORBIDDEN": "不允许请求的跨域方法或请求头。",
+      "CSRF_FORBIDDEN": "请求令牌已失效。请刷新页面后重试。",
+      "CSRF_TOKEN_UNAVAILABLE": "无法生成请求令牌。",
+      "SERVICE_UNAVAILABLE": "服务尚未准备好处理请求。",
+      "SETUP_DATABASE_UNAVAILABLE": "无法验证数据库配置。",
+      "SETUP_IN_PROGRESS": "设置正在运行。请等待当前尝试完成。",
+      "SETUP_APPLICATION_INITIALIZATION_FAILED": "无法初始化应用。",
+      "SETUP_CONFIGURATION_COMMIT_FAILED": "无法封存安装配置。",
+      "SETUP_INITIALIZATION_FAILED": "安装准备完成前，初始化已停止。",
+      "FILE_CLEANUP_UNAVAILABLE": "文件清理不可用。删除已存储对象前，请先配置持久任务提供商。",
+      "FILE_TOO_LARGE": "图片超过配置的上传大小限制。",
+      "FILE_CONTENT_INVALID": "请上传符合尺寸限制的完整 JPEG、PNG 或 WebP 图片。",
+      "UPLOAD_INTENT_NOT_PENDING": "此上传已不再等待确认。",
+      "IDEMPOTENCY_KEY_INVALID": "请求的幂等键无效。",
+      "IDEMPOTENCY_UNAVAILABLE": "目前无法安全处理此请求。",
+      "IDEMPOTENCY_ACTOR_UNAVAILABLE": "无法验证此请求的已认证操作主体。",
+      "IDEMPOTENCY_IN_PROGRESS": "此请求正在处理中。请在完成后重试。",
+      "IDEMPOTENCY_RESPONSE_TOO_LARGE": "响应过大，无法安全保留。",
+      "IDEMPOTENCY_COMPLETION_FAILED": "操作已完成，但无法安全保留其响应。",
+      "IDEMPOTENCY_KEY_REUSED": "此请求键已绑定到其他操作。",
+      "IDEMPOTENCY_RESOURCE_MISSING": "与已存储响应关联的资源已不存在。",
+      "IDEMPOTENCY_REPLAY_FAILED": "无法安全重建已存储的响应。",
+      "JOBS_UNAVAILABLE": "未配置持久任务队列，因此任务管理不可用。",
+      "RATE_LIMIT_ACTOR_UNAVAILABLE": "无法为请求保护验证已认证操作主体。",
+      "RATE_LIMIT_POLICY_INVALID": "操作策略无效，因此请求保护不可用。",
+      "RATE_LIMIT_UNAVAILABLE": "请求保护暂时不可用。"
+    }
+  }
+}

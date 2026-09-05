@@ -120,7 +120,7 @@ Stop the local API and worker, then inspect the exact target without changing
 anything:
 
 ```bash
-go run ./cmd/aginex dev reinitialize
+go run ./cli/cmd/aginex dev reinitialize
 ```
 
 The dry run prints a sanitized database target, a private backup directory, and
@@ -317,7 +317,7 @@ docker run --detach --name aginex-web \
   --read-only --cap-drop=ALL \
   --security-opt=no-new-privileges=true \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
-  --tmpfs /app/apps/web/.next/cache:rw,nosuid,nodev,size=128m \
+  --tmpfs /app/admin/.next/cache:rw,nosuid,nodev,size=128m \
   --env=AGINEX_API_INTERNAL_URL=http://aginex-api:8080 \
   --publish 127.0.0.1:3000:3000 \
   aginex/web:0.1.0-rc.1

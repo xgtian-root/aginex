@@ -35,6 +35,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            cli/go.sum
+            backend/go.sum
       - name: Set up pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
         with:
@@ -50,7 +53,7 @@ jobs:
       - name: Regenerate both contract artifacts
         run: pnpm generate:contracts
       - name: Reject contract drift
-        run: git diff --exit-code -- docs/openapi.json apps/web/lib/api.generated.ts
+        run: git diff --exit-code -- docs/openapi.json admin/lib/api.generated.ts
 
   go:
     name: Go, migrations, and storage contracts
@@ -109,6 +112,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            cli/go.sum
+            backend/go.sum
       - name: Start pinned MinIO test service
         run: >-
           docker run --detach --rm
@@ -135,16 +141,30 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -p'aginex-root' \
             -e "SET GLOBAL log_bin_trust_function_creators = 1;" || true
+      - name: Download independent module dependencies
+        run: |
+          GOWORK=off go -C backend mod download all
+          GOWORK=off go -C cli mod download all
       - name: Verify module checksums
-        run: go mod verify
+        run: |
+          GOWORK=off go -C cli mod verify
+          GOWORK=off go -C backend mod verify
       - name: Test
-        run: go test -p 1 ./...
+        run: |
+          GOWORK=off go -C cli test -p 1 ./...
+          GOWORK=off go -C backend test -p 1 ./...
       - name: Race test
-        run: go test -race -p 1 ./...
+        run: |
+          GOWORK=off go -C cli test -race -p 1 ./...
+          GOWORK=off go -C backend test -race -p 1 ./...
       - name: Vet
-        run: go vet ./...
+        run: |
+          GOWORK=off go -C cli vet ./...
+          GOWORK=off go -C backend vet ./...
+      - name: Verify scaffold snapshot
+        run: go run ./cli/cmd/sync-templates -check
       - name: Validate Agent Skills
-        run: go run ./cmd/aginex skills validate
+        run: go run ./cli/cmd/aginex skills validate
       - name: Stop MinIO test service
         if: always()
         run: docker rm --force aginex-ci-minio 2>/dev/null || true
@@ -175,15 +195,15 @@ jobs:
           NPM_CONFIG_REGISTRY: https://registry.npmjs.org
         run: pnpm audit --audit-level high
       - name: Typecheck and lint
-        run: pnpm check:web
+        run: pnpm check:admin
       - name: Test
-        run: pnpm test:web
+        run: pnpm test:admin
       - name: Build standalone web application
         env:
           NEXT_PUBLIC_API_URL: https://api.example.invalid
         run: |
-          pnpm build:web
-          test -f apps/web/.next/standalone/apps/web/server.js
+          pnpm build:admin
+          test -f admin/.next/standalone/admin/server.js
 
   e2e:
     name: Browser end-to-end workflows
@@ -237,6 +257,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            cli/go.sum
+            backend/go.sum
       - name: Set up pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
         with:
@@ -278,13 +301,18 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            cli/go.sum
+            backend/go.sum
       - name: Go vulnerability analysis
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+        run: |
+          go -C cli run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+          go -C backend run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
       - name: Go static security analysis
         run: >-
           go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           -exclude-dir=.cache -exclude-dir=node_modules
-          -quiet -severity high -confidence high ./...
+          -quiet -severity high -confidence high ./cli/... ./backend/...
       - name: Repository vulnerability, secret, and misconfiguration scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

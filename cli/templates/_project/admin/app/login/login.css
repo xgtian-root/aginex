@@ -1,0 +1,151 @@
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1.15fr) minmax(26rem, 0.85fr);
+}
+
+.login-story {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4rem;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 85% 15%,
+      var(--signal) 0 4rem,
+      transparent 4.05rem
+    ),
+    var(--ink);
+  color: var(--paper);
+  padding: clamp(2rem, 6vw, 6rem);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: Georgia, serif;
+  font-size: 1.4rem;
+}
+
+.login-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.login-story .locale-switcher {
+  color: oklch(87% 0.02 78);
+}
+
+.login-story .locale-switcher select {
+  border-color: oklch(87% 0.02 78 / 35%);
+  background: oklch(21% 0.025 260 / 65%);
+  color: var(--paper);
+}
+
+.login-story h1 {
+  max-width: 12ch;
+  margin: 1rem 0 1.5rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3rem, 6vw, 6.5rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.92;
+}
+
+.login-lead {
+  max-width: 50ch;
+  color: oklch(82% 0.02 78);
+  font-size: 1.1rem;
+  line-height: 1.65;
+}
+
+.login-points {
+  display: flex;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  color: oklch(87% 0.02 78);
+  font-size: 0.82rem;
+  list-style: none;
+}
+
+.login-points li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.login-form-wrap {
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.login-form {
+  display: grid;
+  width: min(100%, 28rem);
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.login-form h2 {
+  margin: 0.5rem 0;
+  font-family: Georgia, serif;
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.login-form p {
+  margin: 0;
+}
+
+.form-error {
+  border-inline-start: 3px solid var(--danger);
+  background: oklch(94% 0.04 25);
+  color: oklch(40% 0.16 25);
+  padding: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.login-button {
+  width: 100%;
+}
+
+.login-note {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 54rem) {
+  .login-page {
+    grid-template-columns: 1fr;
+  }
+
+  .login-story {
+    min-height: 44vh;
+    gap: 2rem;
+    padding: 1.5rem;
+  }
+
+  .login-story h1 {
+    max-width: 14ch;
+    font-size: clamp(2.75rem, 12vw, 4.5rem);
+  }
+
+  .login-points {
+    display: none;
+  }
+
+  .login-form-wrap {
+    padding: 1rem;
+  }
+}

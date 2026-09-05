@@ -20,8 +20,8 @@ refreshes Server Components. This keeps metadata, server rendering, Client
 Components, runtime guards, and safe redirects on one locale without changing
 URLs.
 
-Request configuration lives in `apps/web/i18n/request.ts`; the finite locale
-contract and negotiation logic live in `apps/web/i18n/config.ts`. Dates use UTC
+Request configuration lives in `admin/i18n/request.ts`; the finite locale
+contract and negotiation logic live in `admin/i18n/config.ts`. Dates use UTC
 until Aginex gains a persisted user timezone. Product prices remain explicitly
 USD; a locale changes formatting, not business currency.
 
@@ -29,17 +29,17 @@ USD; a locale changes formatting, not business currency.
 
 Repository-owned catalogs live at:
 
-- `apps/web/messages/en.json`
-- `apps/web/messages/zh-CN.json`
+- `admin/messages/en.json`
+- `admin/messages/zh-CN.json`
 
 The English catalog defines the TypeScript message shape through
-`apps/web/global.d.ts`. Catalog tests require exact recursive key parity,
+`admin/global.d.ts`. Catalog tests require exact recursive key parity,
 non-empty messages, matching ICU arguments, and valid ICU syntax. Use complete
 ICU messages for interpolation and plurals; do not assemble sentences from
 translated fragments.
 
 Stable API `problem.code` values map to localized presentation in
-`apps/web/lib/problem-message.ts`. Transport code keeps the raw RFC Problem
+`admin/lib/problem-message.ts`. Transport code keeps the raw RFC Problem
 envelope for diagnostics, while UI fallbacks never default to rendering an
 untranslated `problem.detail`.
 
@@ -51,14 +51,14 @@ design.
 ## Add another locale
 
 1. Add the BCP 47 tag to `locales` and its direction to `localeDirections` in
-   `apps/web/i18n/config.ts`.
+   `admin/i18n/config.ts`.
 2. Add explicit normalization rules only for language ranges Aginex intends to
    support.
-3. Copy the English catalog to `apps/web/messages/<locale>.json` and translate
+3. Copy the English catalog to `admin/messages/<locale>.json` and translate
    every value without changing keys or ICU argument names.
-4. Add the catalog loader in `apps/web/i18n/request.ts` and an option in
-   `apps/web/components/locale-switcher.tsx`.
+4. Add the catalog loader in `admin/i18n/request.ts` and an option in
+   `admin/components/locale-switcher.tsx`.
 5. If the locale is right-to-left, verify icons and all logical CSS properties
    with `dir="rtl"`.
-6. Run `pnpm check:web`, `pnpm test:web`, `pnpm build:web`, and the Playwright
+6. Run `pnpm check:admin`, `pnpm test:admin`, `pnpm build:admin`, and the Playwright
    language-persistence smoke test.
