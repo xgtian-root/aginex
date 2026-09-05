@@ -19,6 +19,7 @@ import (
 	"github.com/xgtian-root/aginex/internal/domain"
 	"github.com/xgtian-root/aginex/internal/platform/password"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -108,13 +109,19 @@ func (s *Service) LoginContext(
 	if ctx == nil {
 		return LoginResult{}, errors.New("login context is required")
 	}
-	return s.LoginTx(
-		s.db.WithContext(ctx),
-		email,
-		value,
-		ipAddress,
-		userAgent,
-	)
+	var result LoginResult
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var loginErr error
+		result, loginErr = s.LoginTx(
+			tx,
+			email,
+			value,
+			ipAddress,
+			userAgent,
+		)
+		return loginErr
+	})
+	return result, err
 }
 
 func (s *Service) LoginTx(
@@ -125,7 +132,7 @@ func (s *Service) LoginTx(
 	userAgent string,
 ) (LoginResult, error) {
 	var identity domain.UserIdentity
-	identityQuery := tx.Where(
+	identityQuery := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
 		"provider = ? AND subject = ? AND status = ?",
 		domain.IdentityProviderPassword,
 		NormalizePasswordSubject(email),
@@ -137,6 +144,9 @@ func (s *Service) LoginTx(
 	if identityQuery.RowsAffected == 0 {
 		password.VerifyDummy(value)
 		return LoginResult{}, ErrInvalidCredentials
+	}
+	if err := lockPasswordIdentityRowTx(tx, identity.ID); err != nil {
+		return LoginResult{}, err
 	}
 	var user domain.User
 	userQuery := tx.Where(
@@ -175,6 +185,44 @@ func (s *Service) LoginTx(
 		return LoginResult{}, err
 	}
 	return LoginResult{Token: token, User: user, SessionID: session.ID}, nil
+}
+
+func lockPasswordIdentityRowTx(tx *gorm.DB, identityID string) error {
+	// SQLite omits FOR UPDATE. The no-op write acquires its single-writer lock
+	// before password verification and session insertion; PostgreSQL and MySQL
+	// retain the row lock already acquired by the current read. A concurrent
+	// credential reset therefore either deletes the newly committed session or
+	// commits first and makes login verify the replacement hash.
+	return tx.Model(&domain.UserIdentity{}).
+		Where("id = ?", identityID).
+		UpdateColumn("updated_at", gorm.Expr("updated_at")).Error
+}
+
+// LockPasswordIdentitiesTx returns every local password identity for one user
+// while holding locks that serialize credential changes and session creation.
+// Callers must keep the supplied transaction open through credential mutation
+// and session revocation.
+func LockPasswordIdentitiesTx(
+	tx *gorm.DB,
+	userID string,
+) ([]domain.UserIdentity, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, ErrUserIDRequired
+	}
+	var identities []domain.UserIdentity
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("user_id = ? AND provider = ?", userID, domain.IdentityProviderPassword).
+		Order("id ASC").
+		Find(&identities).Error; err != nil {
+		return nil, err
+	}
+	for _, identity := range identities {
+		if err := lockPasswordIdentityRowTx(tx, identity.ID); err != nil {
+			return nil, err
+		}
+	}
+	return identities, nil
 }
 
 func (s *Service) Authenticate(token string) (Principal, error) {

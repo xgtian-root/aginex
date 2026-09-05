@@ -48,7 +48,10 @@ func newManagedServerRuntime(
 			setup.ModeSetup,
 			nil,
 			initializer,
-			managedInstallationStore{path: state.ConfigFile},
+			managedInstallationStore{
+				path:    state.ConfigFile,
+				storage: state.Config.Storage,
+			},
 		))
 		if err != nil {
 			return nil, fmt.Errorf("create setup runtime: %w", err)
@@ -163,7 +166,8 @@ type setupRuntimeInitializer interface {
 }
 
 type managedInstallationStore struct {
-	path string
+	path    string
+	storage config.Storage
 }
 
 func (store managedInstallationStore) CommitInstallation(
@@ -177,12 +181,13 @@ func (store managedInstallationStore) CommitInstallation(
 		installation.Source != "setup" {
 		return errors.New("unsupported setup installation payload")
 	}
-	configured, err := config.NewManagedInstallation(
+	configured, err := config.NewManagedInstallationWithStorage(
 		config.Database{
 			Driver: installation.Database.Driver,
 			DSN:    installation.Database.DSN,
 		},
 		installation.SessionSecret,
+		store.storage,
 	)
 	if err != nil {
 		return err

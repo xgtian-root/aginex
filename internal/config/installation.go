@@ -18,6 +18,8 @@ const (
 	// AGINEX_CONFIG_FILE=/data/aginex-config.json without changing this value.
 	DefaultConfigFile = "data/aginex-config.json"
 
+	// Until Aginex publishes a versioned compatibility boundary, setup reads and
+	// writes one strict pre-release installation document identified as v1.
 	CurrentInstallationVersion = 1
 )
 
@@ -82,10 +84,15 @@ func (err *sealedInstallationCommitError) Unwrap() []error {
 // environment marker records only the driver so the DSN remains environment
 // owned. Administrator credentials are deliberately not part of this schema.
 type Installation struct {
-	Version       int                  `json:"version"`
-	Database      InstallationDatabase `json:"database"`
-	SessionSecret string               `json:"sessionSecret"`
-	InstalledAt   time.Time            `json:"installedAt"`
+	Version          int                  `json:"version"`
+	Revision         uint64               `json:"revision"`
+	Database         InstallationDatabase `json:"database"`
+	SessionSecret    string               `json:"sessionSecret"`
+	InstalledAt      time.Time            `json:"installedAt"`
+	UpdatedAt        time.Time            `json:"updatedAt"`
+	ActiveProfileID  string               `json:"activeProfileId"`
+	Profiles         []StorageProfile     `json:"profiles"`
+	FileUploadPolicy FileUploadPolicy     `json:"fileUploadPolicy"`
 }
 
 type InstallationDatabase struct {
@@ -158,6 +165,11 @@ func LoadState() (State, error) {
 		if err != nil {
 			return state, err
 		}
+		profile := SynthesizeStorageProfile(cfg.Storage)
+		cfg.setStorageRuntime(state.ConfigFile, 1, StorageProfileSet{
+			ActiveProfileID: profile.ID,
+			Profiles:        []StorageProfile{profile},
+		})
 		state.Config = cfg
 		if err := validateWithoutDatabase(cfg); err != nil {
 			return state, err
@@ -193,21 +205,71 @@ func LoadState() (State, error) {
 		if strings.TrimSpace(cfg.Session.Secret) == "" {
 			cfg.Session.Secret = installation.SessionSecret
 		}
+		if !cfg.runtime.storageEnvironmentManaged {
+			set := StorageProfileSet{
+				ActiveProfileID: installation.ActiveProfileID,
+				Profiles:        cloneStorageProfiles(installation.Profiles),
+			}
+			applyEnvironmentLocalRoot(&set, cfg.Storage.LocalRoot)
+			if err := validateInstalledStorageEndpoints(cfg.Environment, cfg.Storage.EndpointAllowlist, set); err != nil {
+				return state, err
+			}
+			active, ok := ActiveStorageProfile(set)
+			if !ok {
+				return state, fmt.Errorf("active storage profile is unavailable")
+			}
+			endpointAllowlist := append([]string(nil), cfg.Storage.EndpointAllowlist...)
+			cfg.Storage = active.StorageConfig()
+			cfg.Storage.EndpointAllowlist = endpointAllowlist
+			cfg.setStorageRuntime(state.ConfigFile, installation.Revision, set)
+		} else {
+			environmentProfile := SynthesizeStorageProfile(cfg.Storage)
+			set := StorageProfileSet{
+				ActiveProfileID: environmentProfile.ID,
+				Profiles:        cloneStorageProfiles(installation.Profiles),
+			}
+			replaced := false
+			for index := range set.Profiles {
+				if set.Profiles[index].ID == environmentProfile.ID {
+					environmentProfile.Name = set.Profiles[index].Name
+					environmentProfile.CreatedAt = set.Profiles[index].CreatedAt
+					environmentProfile.Used = set.Profiles[index].Used
+					set.Profiles[index] = environmentProfile
+					replaced = true
+					break
+				}
+			}
+			if !replaced {
+				set.Profiles = append(set.Profiles, environmentProfile)
+			}
+			applyEnvironmentLocalRoot(&set, cfg.Storage.LocalRoot)
+			if err := validateInstalledStorageEndpoints(cfg.Environment, cfg.Storage.EndpointAllowlist, set); err != nil {
+				return state, err
+			}
+			cfg.setStorageRuntime(state.ConfigFile, installation.Revision, set)
+		}
+		cfg.runtime.fileUploadPolicy = installation.FileUploadPolicy
 	} else {
 		cfg.Database = environmentDatabase
 		cfg.Session.Secret, err = ensureSessionSecret(cfg.Session.Secret)
 		if err != nil {
 			return state, err
 		}
-		marker, markerErr := NewEnvironmentInstallation(
+		marker, markerErr := NewEnvironmentInstallationWithStorage(
 			environmentDatabase.Driver,
 			cfg.Session.Secret,
+			cfg.Storage,
 		)
 		if markerErr != nil {
 			return state, markerErr
 		}
 		state.Installation = &marker
 		state.NeedsEnvironmentMarker = true
+		cfg.setStorageRuntime(state.ConfigFile, marker.Revision, StorageProfileSet{
+			ActiveProfileID: marker.ActiveProfileID,
+			Profiles:        marker.Profiles,
+		})
+		cfg.runtime.fileUploadPolicy = marker.FileUploadPolicy
 	}
 
 	state.Config = cfg
@@ -216,6 +278,28 @@ func LoadState() (State, error) {
 	}
 	state.Status = StatusConfigured
 	return state, nil
+}
+
+func applyEnvironmentLocalRoot(set *StorageProfileSet, localRoot string) {
+	if set == nil || strings.TrimSpace(localRoot) == "" {
+		return
+	}
+	for index := range set.Profiles {
+		if set.Profiles[index].Provider == StorageProviderLocal {
+			set.Profiles[index].LocalRoot = localRoot
+		}
+	}
+}
+
+func validateInstalledStorageEndpoints(environment string, allowlist []string, set StorageProfileSet) error {
+	for _, profile := range set.Profiles {
+		storage := profile.StorageConfig()
+		storage.EndpointAllowlist = append([]string(nil), allowlist...)
+		if err := ValidateStorageEndpointPolicy(environment, storage); err != nil {
+			return fmt.Errorf("storage profile %s endpoint policy: %w", profile.ID, err)
+		}
+	}
+	return nil
 }
 
 func databaseFromEnvironment(database Database) (Database, bool, error) {
@@ -250,15 +334,35 @@ func ensureSessionSecret(secret string) (string, error) {
 }
 
 func NewManagedInstallation(database Database, sessionSecret string) (Installation, error) {
+	return NewManagedInstallationWithStorage(database, sessionSecret, Storage{
+		Driver:    "local",
+		LocalRoot: "data/uploads",
+	})
+}
+
+func NewManagedInstallationWithStorage(
+	database Database,
+	sessionSecret string,
+	storage Storage,
+) (Installation, error) {
+	now := time.Now().UTC()
+	profile := SynthesizeStorageProfile(storage)
+	profile.CreatedAt = now
+	profile.UpdatedAt = now
 	installation := Installation{
-		Version: CurrentInstallationVersion,
+		Version:  CurrentInstallationVersion,
+		Revision: 1,
 		Database: InstallationDatabase{
 			Source: DatabaseSourceManaged,
 			Driver: strings.ToLower(strings.TrimSpace(database.Driver)),
 			DSN:    strings.TrimSpace(database.DSN),
 		},
-		SessionSecret: sessionSecret,
-		InstalledAt:   time.Now().UTC(),
+		SessionSecret:    sessionSecret,
+		InstalledAt:      now,
+		UpdatedAt:        now,
+		ActiveProfileID:  profile.ID,
+		Profiles:         []StorageProfile{profile},
+		FileUploadPolicy: DefaultFileUploadPolicy(),
 	}
 	if err := ValidateInstallation(installation); err != nil {
 		return Installation{}, err
@@ -267,14 +371,33 @@ func NewManagedInstallation(database Database, sessionSecret string) (Installati
 }
 
 func NewEnvironmentInstallation(driver, sessionSecret string) (Installation, error) {
+	return NewEnvironmentInstallationWithStorage(driver, sessionSecret, Storage{
+		Driver:    "local",
+		LocalRoot: "data/uploads",
+	})
+}
+
+func NewEnvironmentInstallationWithStorage(
+	driver, sessionSecret string,
+	storage Storage,
+) (Installation, error) {
+	now := time.Now().UTC()
+	profile := SynthesizeStorageProfile(storage)
+	profile.CreatedAt = now
+	profile.UpdatedAt = now
 	installation := Installation{
-		Version: CurrentInstallationVersion,
+		Version:  CurrentInstallationVersion,
+		Revision: 1,
 		Database: InstallationDatabase{
 			Source: DatabaseSourceEnvironment,
 			Driver: strings.ToLower(strings.TrimSpace(driver)),
 		},
-		SessionSecret: sessionSecret,
-		InstalledAt:   time.Now().UTC(),
+		SessionSecret:    sessionSecret,
+		InstalledAt:      now,
+		UpdatedAt:        now,
+		ActiveProfileID:  profile.ID,
+		Profiles:         []StorageProfile{profile},
+		FileUploadPolicy: DefaultFileUploadPolicy(),
 	}
 	if err := ValidateInstallation(installation); err != nil {
 		return Installation{}, err
@@ -311,6 +434,18 @@ func ValidateInstallation(installation Installation) error {
 		}
 	default:
 		return fmt.Errorf("unsupported installation database source")
+	}
+	if installation.Revision == 0 || installation.UpdatedAt.IsZero() {
+		return fmt.Errorf("installation revision and update timestamp are required")
+	}
+	if err := ValidateStorageProfileSet(StorageProfileSet{
+		ActiveProfileID: installation.ActiveProfileID,
+		Profiles:        installation.Profiles,
+	}); err != nil {
+		return err
+	}
+	if err := ValidateFileUploadPolicy(installation.FileUploadPolicy); err != nil {
+		return err
 	}
 	return nil
 }
@@ -370,24 +505,38 @@ func readInstallationIfPresent(path string) (Installation, bool, error) {
 		return Installation{}, false, fmt.Errorf("installation configuration exceeds 64 KiB")
 	}
 
-	decoder := json.NewDecoder(io.LimitReader(file, 64<<10))
-	decoder.DisallowUnknownFields()
-	var installation Installation
-	if err := decoder.Decode(&installation); err != nil {
-		return Installation{}, false, fmt.Errorf("decode installation configuration: %w", err)
+	payload, err := io.ReadAll(io.LimitReader(file, (64<<10)+1))
+	if err != nil {
+		return Installation{}, false, fmt.Errorf("read installation configuration: %w", err)
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return Installation{}, false, fmt.Errorf("decode installation configuration: multiple JSON values")
-		}
-		return Installation{}, false, fmt.Errorf("decode installation configuration: %w", err)
+	if len(payload) > 64<<10 {
+		return Installation{}, false, fmt.Errorf("installation configuration exceeds 64 KiB")
+	}
+	var installation Installation
+	if err := decodeStrictJSON(payload, &installation); err != nil {
+		return Installation{}, false, err
 	}
 	if err := ValidateInstallation(installation); err != nil {
 		return Installation{}, false, err
 	}
 	installation.Database.Driver = strings.ToLower(strings.TrimSpace(installation.Database.Driver))
 	return installation, true, nil
+}
+
+func decodeStrictJSON(payload []byte, destination any) error {
+	decoder := json.NewDecoder(strings.NewReader(string(payload)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		return fmt.Errorf("decode installation configuration: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("decode installation configuration: multiple JSON values")
+		}
+		return fmt.Errorf("decode installation configuration: %w", err)
+	}
+	return nil
 }
 
 // CommitInstallation durably publishes a new installation file. The temporary
@@ -405,6 +554,14 @@ func CommitInstallation(path string, installation Installation) error {
 	})
 }
 
+func encodeInstallation(installation Installation) ([]byte, error) {
+	payload, err := json.MarshalIndent(installation, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode installation configuration: %w", err)
+	}
+	return append(payload, '\n'), nil
+}
+
 type installationCommitOps struct {
 	inspectDestination func(string) (os.FileInfo, error)
 	makeDirectory      func(string, os.FileMode) error
@@ -420,11 +577,11 @@ func commitInstallation(path string, installation Installation, ops installation
 	if err := ValidateInstallation(installation); err != nil {
 		return err
 	}
-	payload, err := json.MarshalIndent(installation, "", "  ")
+	installation.Version = CurrentInstallationVersion
+	payload, err := encodeInstallation(installation)
 	if err != nil {
-		return fmt.Errorf("encode installation configuration: %w", err)
+		return err
 	}
-	payload = append(payload, '\n')
 
 	directory := filepath.Dir(path)
 	if ops.inspectDestination == nil {

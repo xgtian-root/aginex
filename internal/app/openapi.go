@@ -173,12 +173,74 @@ func operationContracts() map[string]operationContract {
 	pageParams := func() []*huma.Param {
 		return []*huma.Param{pageParameter(), pageSizeParameter()}
 	}
+	uploadSessionParams := func() []*huma.Param {
+		return []*huma.Param{
+			pageParameter(),
+			pageSizeParameter(),
+			queryEnumParameter("state", "Upload session state filter.", "incomplete"),
+		}
+	}
 	protectedReadErrors := []int{
 		http.StatusUnauthorized,
 		http.StatusForbidden,
 		http.StatusInternalServerError,
 	}
+	ifMatch := func() []*huma.Param {
+		return []*huma.Param{{
+			Name: "If-Match", In: "header", Required: true,
+			Description: "Quoted storage configuration revision returned in ETag.",
+			Schema:      &huma.Schema{Type: "string", Pattern: `^"[1-9][0-9]*"$`},
+		}}
+	}
 	return map[string]operationContract{
+		"getStorageSettings": {
+			summary: "Get storage profile runtime and restart state", tag: "Storage", status: http.StatusOK,
+			response: reflect.TypeFor[StorageSettingsResponse](), errors: protectedReadErrors,
+		},
+		"updateFileUploadPolicy": {
+			summary: "Update the restart-applied file upload policy", tag: "Storage", status: http.StatusOK,
+			request: reflect.TypeFor[FileUploadPolicyUpdateRequest](), response: reflect.TypeFor[StorageSettingsResponse](), parameters: ifMatch(),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"listStorageProfiles": {
+			summary: "List storage profiles", tag: "Storage", status: http.StatusOK,
+			response: reflect.TypeFor[Page[StorageProfileResponse]](), parameters: pageParams(), errors: protectedReadErrors,
+		},
+		"createStorageProfile": {
+			summary: "Create a storage profile", tag: "Storage", status: http.StatusCreated,
+			request: reflect.TypeFor[StorageProfileRequest](), response: reflect.TypeFor[StorageProfileResponse](), parameters: ifMatch(),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"getStorageProfile": {
+			summary: "Get a storage profile", tag: "Storage", status: http.StatusOK,
+			response: reflect.TypeFor[StorageProfileResponse](), errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		},
+		"updateStorageProfile": {
+			summary: "Update a storage profile", tag: "Storage", status: http.StatusOK,
+			request: reflect.TypeFor[StorageProfileRequest](), response: reflect.TypeFor[StorageProfileResponse](), parameters: ifMatch(),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"deleteStorageProfile": {
+			summary: "Delete an unused storage profile", tag: "Storage", status: http.StatusNoContent, parameters: ifMatch(),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"testStorageProfile": {
+			summary: "Test a candidate storage profile", tag: "Storage", status: http.StatusOK,
+			request: reflect.TypeFor[StorageProfileRequest](), response: reflect.TypeFor[StorageProfileTestResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests, http.StatusInternalServerError},
+		},
+		"activateStorageProfile": {
+			summary: "Select the storage profile used after restart", tag: "Storage", status: http.StatusOK, parameters: ifMatch(),
+			response: reflect.TypeFor[StorageSettingsResponse](), errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"archiveStorageProfile": {
+			summary: "Archive a storage profile", tag: "Storage", status: http.StatusOK, parameters: ifMatch(),
+			response: reflect.TypeFor[StorageProfileResponse](), errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"restoreStorageProfile": {
+			summary: "Restore an archived storage profile", tag: "Storage", status: http.StatusOK, parameters: ifMatch(),
+			response: reflect.TypeFor[StorageProfileResponse](), errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
 		"live": {
 			summary: "Check whether the API process is alive", tag: "Health", status: http.StatusOK,
 			response: reflect.TypeFor[HealthResponse](),
@@ -244,16 +306,103 @@ func operationContracts() map[string]operationContract {
 			errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
 		},
 		"listUsers": {
-			summary: "List users", tag: "Access", status: http.StatusOK,
-			response: reflect.TypeFor[Page[UserListResponse]](), parameters: pageParams(), errors: protectedReadErrors,
+			summary: "List and search users", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[Page[UserListResponse]](),
+			parameters: append(pageParams(),
+				queryStringParameter("search", "Search user email or display name."),
+				queryEnumParameter("status", "Filter by user status.", "active", "disabled"),
+				queryStringParameter("roleId", "Filter by assigned role identifier."),
+			),
+			errors: protectedReadErrors,
+		},
+		"createUser": {
+			summary: "Create a local user", tag: "Access", status: http.StatusCreated,
+			request: reflect.TypeFor[CreateUserRequest](), response: reflect.TypeFor[UserResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"getUser": {
+			summary: "Get a user", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[UserResponse](),
+			errors:   []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		},
+		"updateUser": {
+			summary: "Update a user profile", tag: "Access", status: http.StatusOK,
+			request: reflect.TypeFor[UpdateUserRequest](), response: reflect.TypeFor[UserResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"deleteUser": {
+			summary: "Delete a user", tag: "Access", status: http.StatusNoContent,
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"replaceUserRoles": {
+			summary: "Replace a user's custom role assignments", tag: "Access", status: http.StatusOK,
+			request: reflect.TypeFor[ReplaceUserRolesRequest](), response: reflect.TypeFor[UserResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"enableUser": {
+			summary: "Enable a user", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[UserResponse](),
+			errors:   []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"disableUser": {
+			summary: "Disable a user and revoke their sessions", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[UserResponse](),
+			errors:   []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"resetUserPassword": {
+			summary: "Reset a user's local password and revoke their sessions", tag: "Access", status: http.StatusNoContent,
+			request: reflect.TypeFor[ResetUserPasswordRequest](),
+			errors:  []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"grantUserAdministrator": {
+			summary: "Grant Administrator access to a login-capable user", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[UserResponse](),
+			errors:   []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"revokeUserAdministrator": {
+			summary: "Revoke Administrator access from a user", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[UserResponse](),
+			errors:   []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
 		},
 		"listRoles": {
-			summary: "List roles and grants", tag: "Access", status: http.StatusOK,
-			response: reflect.TypeFor[Page[RoleResponse]](), errors: protectedReadErrors,
+			summary: "List and search roles and grants", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[Page[RoleResponse]](),
+			parameters: append(pageParams(),
+				queryStringParameter("search", "Search role name or description."),
+			),
+			errors: protectedReadErrors,
+		},
+		"createRole": {
+			summary: "Create a custom role", tag: "Access", status: http.StatusCreated,
+			request: reflect.TypeFor[CreateRoleRequest](), response: reflect.TypeFor[RoleResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"getRole": {
+			summary: "Get a role and its grants", tag: "Access", status: http.StatusOK,
+			response: reflect.TypeFor[RoleResponse](),
+			errors:   []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		},
+		"updateRole": {
+			summary: "Update custom role metadata", tag: "Access", status: http.StatusOK,
+			request: reflect.TypeFor[UpdateRoleRequest](), response: reflect.TypeFor[RoleResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
+		},
+		"deleteRole": {
+			summary: "Delete an unused custom role", tag: "Access", status: http.StatusNoContent,
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError},
+		},
+		"replaceRoleGrants": {
+			summary: "Replace a custom role's permission grants", tag: "Access", status: http.StatusOK,
+			request: reflect.TypeFor[ReplaceRoleGrantsRequest](), response: reflect.TypeFor[RoleResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
 		},
 		"listPermissions": {
 			summary: "List permission definitions", tag: "Access", status: http.StatusOK,
-			response: reflect.TypeFor[Page[PermissionResponse]](), errors: protectedReadErrors,
+			response: reflect.TypeFor[Page[PermissionResponse]](),
+			parameters: append(pageParams(),
+				queryStringParameter("search", "Search permission code or description."),
+			),
+			errors: protectedReadErrors,
 		},
 		"listAuditLogs": {
 			summary: "List audit events", tag: "Audit", status: http.StatusOK,
@@ -292,30 +441,77 @@ func operationContracts() map[string]operationContract {
 			summary: "List file metadata in the caller's authorized scope", tag: "Files", status: http.StatusOK,
 			response: reflect.TypeFor[Page[FileResponse]](), parameters: pageParams(), errors: protectedReadErrors,
 		},
+		"getFileUploadPolicy": {
+			summary: "Get the effective file upload policy", tag: "Files", status: http.StatusOK,
+			response: reflect.TypeFor[UploadPolicyResponse](), errors: protectedReadErrors,
+		},
 		"createUploadIntent": {
-			summary: "Create a direct upload intent", tag: "Files", status: http.StatusCreated,
+			summary: "Create a single or resumable upload intent", tag: "Files", status: http.StatusCreated,
 			request: reflect.TypeFor[UploadIntentRequest](), response: reflect.TypeFor[UploadIntentResponse](),
-			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusTooManyRequests, http.StatusInternalServerError},
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusServiceUnavailable},
+		},
+		"listUploadSessions": {
+			summary: "List resumable upload sessions in the caller's authorized scope", tag: "Files", status: http.StatusOK,
+			response: reflect.TypeFor[Page[UploadSessionResponse]](), parameters: uploadSessionParams(),
+			errors: appendUniqueStatuses(protectedReadErrors, http.StatusBadRequest),
+		},
+		"getUploadSession": {
+			summary: "Get resumable upload progress", tag: "Files", status: http.StatusOK,
+			response: reflect.TypeFor[UploadSessionResponse](), errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		},
+		"resumeUploadSession": {
+			summary: "Reconcile and resume an interrupted upload", tag: "Files", status: http.StatusOK,
+			request: reflect.TypeFor[ResumeUploadSessionRequest](), response: reflect.TypeFor[UploadSessionResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusGone, http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusInternalServerError},
+		},
+		"signUploadSessionParts": {
+			summary: "Create short-lived upload requests for missing parts", tag: "Files", status: http.StatusOK,
+			request: reflect.TypeFor[SignUploadPartsRequest](), response: reflect.TypeFor[SignUploadPartsResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusGone, http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusTooManyRequests, http.StatusInternalServerError},
+		},
+		"ackUploadSessionParts": {
+			summary: "Verify and acknowledge uploaded part ETags", tag: "Files", status: http.StatusOK,
+			request: reflect.TypeFor[AckUploadPartsRequest](), response: reflect.TypeFor[UploadSessionResponse](),
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusGone, http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusTooManyRequests, http.StatusInternalServerError},
+		},
+		"localUploadSessionPart": {
+			summary: "Stream one exact resumable part to Local storage", tag: "Files", status: http.StatusNoContent,
+			request: reflect.TypeFor[[]byte](), requestMedia: "application/octet-stream",
+			parameters: []*huma.Param{{
+				Name: "number", In: "path", Required: true, Description: "One-based multipart part number.",
+				Schema: &huma.Schema{Type: "integer", Format: "int32", Minimum: floatPointer(1), Maximum: floatPointer(32)},
+			}},
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusGone, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusTooManyRequests, http.StatusInternalServerError},
+		},
+		"completeUploadSession": {
+			summary: "Merge, verify, and complete a resumable upload", tag: "Files", status: http.StatusOK,
+			response: reflect.TypeFor[FileResponse](),
+			errors:   []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusNotFound, http.StatusConflict, http.StatusGone, http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusTooManyRequests, http.StatusInternalServerError},
+		},
+		"cancelUploadSession": {
+			summary: "Cancel and abort a resumable upload", tag: "Files", status: http.StatusNoContent,
+			errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusTooManyRequests, http.StatusInternalServerError},
 		},
 		"localUpload": {
 			summary: "Upload content to the development local-storage provider", tag: "Files", status: http.StatusNoContent,
-			request: reflect.TypeFor[[]byte](), requestMedia: "image/*",
-			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType},
+			request: reflect.TypeFor[[]byte](), requestMedia: "application/octet-stream",
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusGone, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusInternalServerError},
 		},
 		"localContent": {
 			summary: "Read content from the development local-storage provider", tag: "Files", status: http.StatusOK,
-			response: reflect.TypeFor[[]byte](), responseMedia: "image/*",
-			errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+			response: reflect.TypeFor[[]byte](), responseMedia: "*/*",
+			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 		},
 		"confirmUpload": {
 			summary: "Verify and confirm an uploaded object", tag: "Files", status: http.StatusOK,
 			response: reflect.TypeFor[FileResponse](),
-			errors:   []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusInternalServerError},
+			errors:   []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusInternalServerError},
 		},
 		"getFileURL": {
 			summary: "Create a temporary file access URL", tag: "Files", status: http.StatusOK,
-			response: reflect.TypeFor[SignedRequestResponse](),
-			errors:   []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+			response:   reflect.TypeFor[SignedRequestResponse](),
+			parameters: []*huma.Param{queryEnumParameter("purpose", "Present a verified preview or force a download.", "preview", "download")},
+			errors:     []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 		},
 		"deleteFile": {
 			summary: "Schedule file deletion", tag: "Files", status: http.StatusAccepted,
@@ -529,6 +725,8 @@ func queryEnumParameter(name, description string, values ...string) *huma.Param 
 		Schema: &huma.Schema{Type: "string", Enum: enum},
 	}
 }
+
+func floatPointer(value float64) *float64 { return &value }
 
 func jobStateParameter() *huma.Param {
 	parameter := queryEnumParameter(

@@ -26,8 +26,12 @@ type bundledMigrationSpec struct {
 	name         string
 	directory    string
 	historyTable string
-	table        string
-	columns      []string
+	tables       []bundledMigrationTable
+}
+
+type bundledMigrationTable struct {
+	name    string
+	columns []string
 }
 
 //go:embed migrations/*/*/*.sql
@@ -51,7 +55,6 @@ func bundledMigrationBundle(
 			dialect module.Dialect,
 		) error {
 			provider, err := newBundledMigrationProvider(
-				ctx,
 				db,
 				dialect,
 				spec,
@@ -122,25 +125,56 @@ func bundledMigrationSpecification(
 			name:         "files",
 			directory:    "files",
 			historyTable: "aginex_files_migrations",
-			table:        "file_objects",
-			columns: []string{
-				"id",
-				"provider",
-				"bucket",
-				"object_key",
-				"original_name",
-				"content_type",
-				"size",
-				"etag",
-				"sha256",
-				"width",
-				"height",
-				"owner_id",
-				"visibility",
-				"status",
-				"created_at",
-				"updated_at",
-				"deleted_at",
+			tables: []bundledMigrationTable{
+				{
+					name: "file_objects",
+					columns: []string{
+						"id",
+						"storage_profile_id",
+						"provider",
+						"bucket",
+						"object_key",
+						"original_name",
+						"content_type",
+						"size",
+						"etag",
+						"sha256",
+						"width",
+						"height",
+						"owner_id",
+						"visibility",
+						"status",
+						"upload_expires_at",
+						"created_at",
+						"updated_at",
+						"deleted_at",
+					},
+				},
+				{
+					name: "file_upload_sessions",
+					columns: []string{
+						"id",
+						"file_id",
+						"provider_upload_id",
+						"resume_fingerprint",
+						"part_size",
+						"part_count",
+						"status",
+						"expires_at",
+						"created_at",
+						"updated_at",
+					},
+				},
+				{
+					name: "file_upload_parts",
+					columns: []string{
+						"session_id",
+						"part_number",
+						"size",
+						"etag",
+						"confirmed_at",
+					},
+				},
 			},
 		}, nil
 	case bundledStarter:
@@ -148,15 +182,19 @@ func bundledMigrationSpecification(
 			name:         "starter-example",
 			directory:    "starter",
 			historyTable: "aginex_starter_migrations",
-			table:        "products",
-			columns: []string{
-				"id",
-				"name",
-				"sku",
-				"price_cents",
-				"status",
-				"created_at",
-				"updated_at",
+			tables: []bundledMigrationTable{
+				{
+					name: "products",
+					columns: []string{
+						"id",
+						"name",
+						"sku",
+						"price_cents",
+						"status",
+						"created_at",
+						"updated_at",
+					},
+				},
 			},
 		}, nil
 	default:
@@ -168,7 +206,6 @@ func bundledMigrationSpecification(
 }
 
 func newBundledMigrationProvider(
-	ctx context.Context,
 	db *sql.DB,
 	dialect module.Dialect,
 	spec bundledMigrationSpec,
@@ -177,16 +214,6 @@ func newBundledMigrationProvider(
 		return nil, errors.New("bundled migrations require a database")
 	}
 	gooseDialect, directory, err := bundledGooseDialect(dialect, spec)
-	if err != nil {
-		return nil, err
-	}
-	directory, err = bundledMigrationSourceDirectory(
-		ctx,
-		db,
-		dialect,
-		spec,
-		directory,
-	)
 	if err != nil {
 		return nil, err
 	}
@@ -293,78 +320,24 @@ func ensureBundledMigrationCurrent(
 			latest,
 		)
 	}
-	columns, err := bundledTableColumns(ctx, db, dialect, spec.table)
-	if err != nil {
-		return err
-	}
-	for _, column := range spec.columns {
-		if _, exists := columns[column]; !exists {
-			return fmt.Errorf(
-				"%w: bundle=%s table=%s missing_column=%s",
-				errBundledSchemaNotCurrent,
-				spec.name,
-				spec.table,
-				column,
-			)
+	for _, table := range spec.tables {
+		columns, err := bundledTableColumns(ctx, db, dialect, table.name)
+		if err != nil {
+			return err
+		}
+		for _, column := range table.columns {
+			if _, exists := columns[column]; !exists {
+				return fmt.Errorf(
+					"%w: bundle=%s table=%s missing_column=%s",
+					errBundledSchemaNotCurrent,
+					spec.name,
+					table.name,
+					column,
+				)
+			}
 		}
 	}
 	return nil
-}
-
-func bundledMigrationSourceDirectory(
-	ctx context.Context,
-	db *sql.DB,
-	dialect module.Dialect,
-	spec bundledMigrationSpec,
-	defaultDirectory string,
-) (string, error) {
-	if spec.directory != "files" {
-		return defaultDirectory, nil
-	}
-	exists, err := bundledTableExists(
-		ctx,
-		db,
-		dialect,
-		spec.table,
-	)
-	if err != nil {
-		return "", err
-	}
-	if !exists {
-		return defaultDirectory, nil
-	}
-	columns, err := bundledTableColumns(
-		ctx,
-		db,
-		dialect,
-		spec.table,
-	)
-	if err != nil {
-		return "", err
-	}
-	verificationColumns := []string{
-		"sha256",
-		"width",
-		"height",
-		"deleted_at",
-	}
-	missing := make([]string, 0, len(verificationColumns))
-	for _, column := range verificationColumns {
-		if _, ok := columns[column]; !ok {
-			missing = append(missing, column)
-		}
-	}
-	if len(missing) == 0 {
-		return defaultDirectory, nil
-	}
-	if len(missing) == len(verificationColumns) {
-		return "migrations/files_legacy/" + string(dialect), nil
-	}
-	return "", fmt.Errorf(
-		"cannot adopt partially upgraded %s table: missing columns %s",
-		spec.table,
-		strings.Join(missing, ", "),
-	)
 }
 
 func bundledHistoryTableExists(
@@ -435,6 +408,10 @@ func bundledTableColumns(
 		switch table {
 		case "file_objects":
 			query = "SELECT name FROM pragma_table_info('file_objects')"
+		case "file_upload_sessions":
+			query = "SELECT name FROM pragma_table_info('file_upload_sessions')"
+		case "file_upload_parts":
+			query = "SELECT name FROM pragma_table_info('file_upload_parts')"
 		case "products":
 			query = "SELECT name FROM pragma_table_info('products')"
 		default:

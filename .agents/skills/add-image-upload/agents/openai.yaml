@@ -1,3 +1,4 @@
 interface:
-  display_name: "Add Image Upload"
-  short_description: "Help with Add Image Upload tasks"
+  display_name: "Add File Upload"
+  short_description: "Build safe direct and resumable file uploads"
+  default_prompt: "Use $add-image-upload to add a safe Aginex file upload workflow."

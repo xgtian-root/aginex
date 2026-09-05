@@ -99,16 +99,51 @@ AGINEX_STORAGE_LOCAL_ROOT=/data/uploads
 It deliberately does not set a database DSN. Mount a durable volume at
 `/data` even when object data lives in S3 or OSS. Browser Setup persists a
 versioned installation document there with mode `0600`; it includes the
-backend-assembled managed database DSN and session secret (generated when it
-was not supplied). Treat the file as a secret, back it up, and make the volume
-writable only by UID/GID `65532`.
+backend-assembled managed database DSN, session secret, and console-managed
+storage profiles (including static cloud access keys) plus the file-upload
+policy. Treat the file as a
+secret, back it up, and make the volume writable only by UID/GID `65532`.
 
-An environment-configured installation persists only its database driver and
-session secret in the file; the DSN remains environment-owned. A configured
-file is fail-closed: invalid JSON, unsafe permissions, a symlink, an unsupported
-version, or a mismatch with database environment variables prevents startup.
+An environment-configured installation keeps its DSN environment-owned while
+persisting the database driver, session secret, storage/profile state, and file
+policy in the file. Before an explicit release boundary, readers and writers use
+one strict current installation document whose version is always `1`, including
+when unpublished fields change. A configured file remains fail-closed for
+invalid JSON, unknown fields, unsafe permissions, a symlink, any other version,
+or a mismatch with database environment variables.
 Do not delete or replace a committed file merely to re-run Setup. Recover it
 from backup or repair the deployment configuration deliberately.
+
+### Reinitialize stale local pre-release state
+
+Stop the local API and worker, then inspect the exact target without changing
+anything:
+
+```bash
+go run ./cmd/aginex dev reinitialize
+```
+
+The dry run prints a sanitized database target, a private backup directory, and
+the exact `--confirm` value. Re-run that printed command to execute. The command
+is disabled in production, refuses environment-managed and non-loopback server
+databases, requires a regular mode-0600 installation file, and never prints the
+DSN or credentials. It archives the installation marker and preserves database
+state before returning the application to browser Setup: SQLite moves the
+checkpointed database into the private backup directory, PostgreSQL creates a
+private timestamped backup schema and transactionally moves application-owned
+tables, views, sequences, and functions into it without changing the shared
+`public` schema owner or grants, and MySQL moves base tables to a timestamped
+backup database. PostgreSQL fails
+closed before mutation when the application role lacks database `CREATE`
+privilege or `public` contains foreign-owned/unsupported standalone objects.
+Object-storage bytes are deliberately retained and may become unreferenced. The
+private backup directory contains the original installation
+marker and a credential-free `manifest.json`; SQLite also stores the database
+file there, while the manifest identifies the PostgreSQL schema or MySQL
+database retained on the local server. There is intentionally no automatic
+restore command: stop services and have the database operator reverse the
+recorded archive before restoring the marker. Complete Setup with a new
+administrator after the reset.
 
 ## First-run browser Setup
 
@@ -224,10 +259,12 @@ gate them on application mode as well.
 
 API initialization is bounded and fail-closed. If migration, bootstrap,
 database, storage, or module readiness fails, the configured API exits before
-listening. Inspect its redacted logs, correct the dependency or deploy a binary
-compatible with the already-applied schema, and retry one instance. Prefer
-forward-compatible expand/migrate/contract changes; never automate destructive
-down migrations during rollback.
+listening. Inspect its redacted logs, correct the dependency, and retry one
+instance. Aginex has not published a stable compatibility contract: an older
+binary is not guaranteed to read the current strict v1 document or Files schema.
+Prefer a forward fix; if rollback is unavoidable, restore the matching database,
+installation file, and object-store backup as one unit. Never automate
+destructive down migrations during rollback.
 
 ## Read-only containers
 
@@ -321,6 +358,13 @@ heartbeated leases, retry backoff and jitter, and a terminal `dead` state.
 Production compositions with `FilesModule` must keep at least one worker
 running after the API becomes ready.
 
+Resumable sessions enqueue the versioned `storage.multipart.cleanup` job for
+expiry and cancellation. The API also runs a safety-net scan every 15 minutes,
+bounded to 100 sessions per pass, so SQLite/MySQL development and an interrupted
+job enqueue cannot leave abandoned sessions unbounded. Monitor cancelling and
+expiring session age as well as the general queue; repeated provider abort
+failures remain retryable and require operator investigation.
+
 Monitor queue state, oldest `scheduled_at`, attempts, and `heartbeat_at`.
 System-scoped operators can use `GET /api/v1/jobs` with `jobs:read` and
 `POST /api/v1/jobs/{uuid}/retry` with `jobs:retry`; use these protected APIs
@@ -340,6 +384,112 @@ environment, start one API against the restore, require application mode and
 readiness, then test metadata reads and object downloads. Start a worker only
 after the matching object snapshot is available because a restored database
 may contain pending cleanup jobs.
+
+The Object Storage settings page supports Local, Alibaba OSS, AWS S3, MinIO,
+and Cloudflare R2 profiles. Changing the default affects only new uploads after
+the API and worker restart; historical files keep their original profile and
+objects are never copied automatically. Profiles referenced by file metadata
+or unfinished cleanup work cannot be deleted. In production, custom MinIO
+endpoints must use HTTPS and their hosts must be listed in
+`AGINEX_STORAGE_ENDPOINT_ALLOWLIST`; userinfo, query strings, fragments,
+link-local addresses, and cloud metadata endpoints are always rejected.
+
+## File upload policy and provider requirements
+
+The installation-wide file policy is independent from the active storage
+profile. Its default maximum is 10 MiB; administrators can choose 1 MiB through
+1 GiB in whole-MiB increments and can enable resumable uploads, which are off by
+default. Policy editing remains available when the storage provider itself is
+environment-managed. The settings API exposes pending and runtime values under
+the same revision/ETag boundary as storage profiles. Saving either storage or
+file-policy changes requires restarting both API and worker; the old processes
+continue using their immutable runtime snapshot until then.
+
+Each accepted upload records its creation-time policy and storage profile.
+Later disabling resumable uploads, lowering the maximum, or switching the
+default profile does not interrupt that upload. New requests use the restarted
+runtime policy. The upload page obtains the effective limit and provider
+capability from `GET /api/v1/files/upload-policy`; do not infer them from a
+checked-in frontend constant.
+
+The transfer contract is fixed:
+
+- A selection contains at most 20 non-empty files. There is no extension or
+  content-type whitelist, but the API rejects invalid MIME syntax, size
+  mismatches, and files over the runtime maximum.
+- Files at or below 32 MiB use a single upload. With resumable uploads enabled
+  and a multipart-capable provider, files strictly larger than 32 MiB use fixed
+  32 MiB parts, no more than 32 parts, and a 24-hour session. Part signatures
+  expire after 10 minutes. Single-upload credentials expire after 10 minutes
+  for files at or below 32 MiB and after 60 minutes for larger files.
+- Refresh recovery is same-device assistance, not durable browser storage. The
+  user must reselect the original file and pass the SHA-256 fingerprint over
+  name, size, last-modified time, and the first/middle/final 1 MiB samples.
+  `File`/`Blob`, signed URLs, provider upload IDs, ETags, and credentials must
+  not be stored in browser persistence.
+
+For S3, MinIO/R2, and OSS browser transfers, configure bucket CORS for every
+deployed web origin. It must allow `PUT` and all headers present on the signed
+request, including `Content-Type`, `Content-Disposition`, and
+`Content-Length`. S3-compatible requests also bind `If-None-Match`; OSS binds
+`x-oss-forbid-overwrite`. These provider-specific headers give a single-object
+PUT create-only semantics so a stale signed request cannot overwrite a ready object. CORS must
+also expose the `ETag` response header. The browser reads that opaque value
+immediately after each multipart PUT so the API can acknowledge the part;
+without `Expose-Headers: ETag`, multipart upload cannot complete.
+Provider references: [AWS S3 multipart overview](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html),
+[Cloudflare R2 uploads](https://developers.cloudflare.com/r2/objects/upload-objects/),
+[Alibaba OSS CompleteMultipartUpload](https://www.alibabacloud.com/help/en/oss/developer-reference/completemultipartupload),
+and [OSS ETag CORS guidance](https://help.aliyun.com/en/oss/the-please-set-the-etag-of-expose-headers-in-oss-error-message-is-returned-when-you-use-multipart-upload-to-upload-files).
+Server readiness proves bucket access but does not prove browser CORS. Before a
+release, perform a signed PUT from the real web origin, confirm the browser can
+read `ETag`, then cancel the test session. Do not copy its signed URL or ETag
+into deployment logs or tickets.
+
+Configure the cloud bucket's incomplete-multipart lifecycle as a final safety
+net, aborting incomplete uploads no earlier than 48 hours after initiation. The
+application's 24-hour session cleanup remains the primary mechanism; the bucket
+rule covers database loss, prolonged API/worker outage, and provider operations
+that never reached acknowledgement. Ensure the provider credentials can create,
+list, complete, and abort multipart uploads in addition to the existing object
+read/write/delete and readiness operations.
+
+Local direct and part uploads stream to staging files under the configured
+storage root, enforce the exact byte count, fsync, and publish by atomic rename.
+Provision capacity for both the staging data and final object during completion;
+API and worker must share the same root. The API's binary upload routes can run
+for up to 60 minutes, while the global JSON request limit remains unchanged.
+The same bounded API scanner examines at most 100 canonical Local multipart
+staging directories per pass and removes an unowned directory only after it is
+older than 48 hours. It never follows symlinks or deletes staging that still has
+a database session; monitor the storage root if the scanner repeatedly reports
+filesystem errors.
+
+All providers store opaque object bytes as `application/octet-stream`; the API
+streams the completed object to calculate SHA-256, verify the exact size, detect
+its real MIME, and validate preview structure. Only valid JPEG, PNG, WebP, GIF,
+and PDF are eligible for inline preview. SVG, HTML, text, Office files, archives,
+executables, malformed preview candidates, and every other type are returned as
+`application/octet-stream` attachments. Local reads add
+`X-Content-Type-Options: nosniff`; PDF UI preview uses a sandboxed iframe, and
+download filenames use safe `filename*` encoding. File URLs accept
+`purpose=preview|download`: an omitted purpose behaves as a preview only for a
+verified safe image/PDF, while `download` always requests attachment behavior.
+
+The current baseline does not provide antivirus scanning, file versioning,
+folder upload, or automatic cross-device resume. Deployments that require
+malware policy must add a quarantine/scanning workflow before exposing uploaded
+files; changing the filename or browser MIME is not a substitute.
+
+Treat `FilesModule` Down as application data retirement, not a routine binary
+rollback. First stop new file writes, disable resumable uploads, restart API and
+worker, and drain every non-terminal session by completing it or cancelling /
+expiring it and confirming the provider multipart upload was aborted. The
+migration guard rejects Down while any non-terminal session remains. It then
+drops `file_upload_parts`, `file_upload_sessions`, and `file_objects` in that
+order. All file metadata is lost and a later Up cannot reconstruct it; object
+bytes may remain unreferenced. Proceed only with a restore-tested database,
+installation-file, and object-store backup.
 
 ## CI and release evidence
 

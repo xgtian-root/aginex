@@ -23,8 +23,8 @@ or would add an unnecessary service dependency to every application.
 | Capability | Framework responsibility | Current baseline |
 |---|---|---|
 | Module composition | Deterministic registration, duplicate detection, operations, permissions, resource metadata, migrations, jobs, readiness and lifecycle hooks, runtime handlers, and fail-closed validation | Implemented end to end; API handlers and lifecycle hooks receive provider-neutral runtime services through context |
-| Browser identity | Separate user and provider identity records, Argon2id password provider, revocable server-side sessions, secure cookies, CSRF, safe redirects, one-device and all-device logout | Implemented |
-| Authorization | `resource:action` grants plus `own`/`all` scope, system actors without an implicit bypass, object checks, and SQL-level list scopes | Implemented and exercised by two-user file tests |
+| Browser identity | Separate user and provider identity records, administrator-managed user CRUD, activation and password reset, Argon2id password provider, revocable server-side sessions, secure cookies, CSRF, safe redirects, one-device and all-device logout | Implemented; public self-registration remains disabled |
+| Authorization | `resource:action` grants plus `own`/`all` scope, user-role assignment, role CRUD and grant replacement, system actors without an implicit bypass, object checks, and SQL-level list scopes | Access-management implementation is present; complete authorization and live-dialect release gates remain listed below |
 | API contract | `/api/v1`, explicit DTOs, typed success and problem responses, security schemes, deterministic OpenAPI, and a generated web client | Implemented for built-in and compiled-in application module operations, including runtime request/response validation |
 | Transaction safety | Business mutation, successful audit event, and idempotency completion share one transaction | Implemented for built-in writes; the same public unit-of-work boundary is injected into application module contexts |
 | Audit | Bounded actor/request context, redacted before/after values, append-only database enforcement, and rollback on audit failure | Implemented |
@@ -35,11 +35,31 @@ or would add an unnecessary service dependency to every application.
 | Observability contract | W3C context propagation, low-cardinality spans and metrics for HTTP, database, jobs, rate limiting and storage, connection-pool gauges, and bounded readiness checks | Implemented as a vendor-neutral recorder/sink contract; exporter selection and operation belong to each deployment |
 | Delivery contract | Independent API, worker, and web artifacts; one-time browser Setup; non-root/read-only-compatible images; health endpoints; release metadata | Implemented in source and CI; local Docker daemon verification may still be unavailable |
 
+### Built-in access administration
+
+User and role administration belongs to the framework security boundary rather
+than the starter example. Authorized operators can create, read, update, delete,
+enable, and disable users, reset local passwords, assign roles, manage roles, and
+replace permission grants. Public self-registration is intentionally excluded.
+
+Permission definitions are owned by compiled module code and synchronized
+idempotently at startup. The administration surface assigns those registered
+definitions; it does not turn permissions into user-authored database content.
+The system-managed `Administrator` role receives every registered permission at
+`all` scope and cannot be renamed, deleted, or weakened.
+
+Access mutations preserve at least one usable administrator, reject operations
+that would lock out the acting administrator, and enforce a delegation ceiling:
+an operator cannot grant a permission or scope they do not hold. These invariants
+must remain transactionally coupled to session revocation and audit recording.
+Their full 401/403/success, concurrency, and live-dialect matrices remain part of
+release qualification rather than being inferred from UI availability.
+
 ## Official opt-in framework modules
 
 | Module | Why it is optional | Framework responsibility |
 |---|---|---|
-| File objects (`application.FilesModule`) | Some applications use external media services or have no user uploads; a storage provider alone must not create a file business model | Owner-scoped metadata and HTTP operations, private-by-default access, upload verification, state transitions, durable orphan/deletion cleanup, and an isolated three-dialect Goose schema |
+| File objects (`application.FilesModule`) | Some applications use external media services or have no user uploads; a storage provider alone must not create a file business model | Owner-scoped metadata and HTTP operations, private-by-default arbitrary-type direct/resumable transfer, streamed verification, safe preview/download, multipart/orphan/deletion cleanup, and one isolated current Goose baseline for each supported dialect |
 | Starter example (`application.StarterExampleModule`) | Products and a product-backed dashboard demonstrate a vertical slice but are not reusable framework concepts | Example-only product CRUD, dashboard summary, permissions, audit behavior, typed contracts, and an isolated three-dialect Goose schema |
 | PostgreSQL jobs | A durable PostgreSQL queue cannot be a mandatory dependency of SQLite or MySQL applications | Versioned payloads, transactional enqueue, leases, heartbeat, at-least-once delivery, retry/backoff/dead state, actor/trace propagation, and protected dead-letter operations |
 | API token authentication | Not every administration application exposes a public client API | Short-lived access tokens, opaque rotating refresh tokens, keyed hashes at rest, replay-family revocation, device/family/user revocation, provider/subject-to-local-user mapping, active-subject lookup, and strict Bearer middleware; concrete login/refresh/revoke HTTP operations remain application modules so their audit and rate-limit policy is explicit |
@@ -86,7 +106,7 @@ features, but it must not embed POSTA concepts or choose product policy.
 The following are useful framework work, but are not prerequisites for safely
 starting POSTA on the current compiled-in modular monolith:
 
-- `aginex new` and module/resource generators;
+- module/resource generators beyond the implemented project initializer;
 - automatic thumbnails, EXIF cleanup, and antivirus adapters;
 - a formal API deprecation calendar and compatibility-report UI;
 - multi-tenancy, hot-loaded plugins, a microservice split, or mandatory Redis.

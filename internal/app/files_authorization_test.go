@@ -80,9 +80,12 @@ func TestFileAuthorizationScopesOwnersAndAllowsAllGrant(t *testing.T) {
 	if err := json.Unmarshal(intentRecorder.Body.Bytes(), &prepared); err != nil {
 		t.Fatal(err)
 	}
+	if prepared.Upload.URL == "" {
+		t.Fatal("single upload intent omitted upload URL")
+	}
 	uploadPath := strings.TrimPrefix(prepared.Upload.URL, cfg.HTTP.PublicURL)
 
-	aUpload := serveRequest(server, userACookie, http.MethodPut, uploadPath, image, "image/png")
+	aUpload := serveRequest(server, userACookie, http.MethodPut, uploadPath, image, "application/octet-stream")
 	if aUpload.Code != http.StatusNotFound {
 		t.Errorf("A upload B intent status = %d, want 404; body = %s", aUpload.Code, aUpload.Body.String())
 	}
@@ -98,7 +101,7 @@ func TestFileAuthorizationScopesOwnersAndAllowsAllGrant(t *testing.T) {
 		t.Errorf("A confirm B file status = %d, want 404; body = %s", aConfirm.Code, aConfirm.Body.String())
 	}
 
-	bUpload := serveRequest(server, userBCookie, http.MethodPut, uploadPath, image, "image/png")
+	bUpload := serveRequest(server, userBCookie, http.MethodPut, uploadPath, image, "application/octet-stream")
 	if bUpload.Code != http.StatusNoContent {
 		t.Fatalf("B upload status = %d, body = %s", bUpload.Code, bUpload.Body.String())
 	}

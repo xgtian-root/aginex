@@ -26,21 +26,27 @@ type HealthResponse struct {
 }
 
 type UserResponse struct {
-	ID          string    `json:"id" format:"uuid"`
-	Email       string    `json:"email" format:"email"`
-	DisplayName string    `json:"displayName"`
-	Status      string    `json:"status" enum:"active,disabled"`
-	Permissions []string  `json:"permissions" nullable:"false"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID            string                `json:"id" format:"uuid"`
+	Email         string                `json:"email" format:"email"`
+	DisplayName   string                `json:"displayName"`
+	Status        string                `json:"status" enum:"active,disabled"`
+	Roles         []RoleSummaryResponse `json:"roles" nullable:"false"`
+	Administrator bool                  `json:"administrator"`
+	Permissions   []string              `json:"permissions" nullable:"false"`
+	Grants        []UserGrantResponse   `json:"grants" nullable:"false"`
+	CreatedAt     time.Time             `json:"createdAt"`
+	UpdatedAt     time.Time             `json:"updatedAt"`
 }
 
 type UserListResponse struct {
-	ID          string    `json:"id" format:"uuid"`
-	Email       string    `json:"email" format:"email"`
-	DisplayName string    `json:"displayName"`
-	Status      string    `json:"status" enum:"active,disabled"`
-	Roles       []string  `json:"roles" nullable:"false"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID            string                `json:"id" format:"uuid"`
+	Email         string                `json:"email" format:"email"`
+	DisplayName   string                `json:"displayName"`
+	Status        string                `json:"status" enum:"active,disabled"`
+	Roles         []RoleSummaryResponse `json:"roles" nullable:"false"`
+	Administrator bool                  `json:"administrator"`
+	CreatedAt     time.Time             `json:"createdAt"`
+	UpdatedAt     time.Time             `json:"updatedAt"`
 }
 
 type ProductRequest struct {
@@ -61,19 +67,22 @@ type ProductResponse struct {
 }
 
 type PermissionResponse struct {
-	ID          string    `json:"id" format:"uuid"`
-	Code        string    `json:"code" pattern:"^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID            string    `json:"id" format:"uuid"`
+	Code          string    `json:"code" pattern:"^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$"`
+	Description   string    `json:"description"`
+	AllowedScopes []string  `json:"allowedScopes" nullable:"false" enum:"own,all"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 type RoleResponse struct {
-	ID          string               `json:"id" format:"uuid"`
-	Name        string               `json:"name"`
-	Description string               `json:"description"`
-	Permissions []PermissionResponse `json:"permissions" nullable:"false"`
-	CreatedAt   time.Time            `json:"createdAt"`
-	UpdatedAt   time.Time            `json:"updatedAt"`
+	ID            string              `json:"id" format:"uuid"`
+	Name          string              `json:"name"`
+	Description   string              `json:"description"`
+	SystemManaged bool                `json:"systemManaged"`
+	UserCount     int64               `json:"userCount" minimum:"0"`
+	Grants        []RoleGrantResponse `json:"grants" nullable:"false"`
+	CreatedAt     time.Time           `json:"createdAt"`
+	UpdatedAt     time.Time           `json:"updatedAt"`
 }
 
 type AuditLogResponse struct {
@@ -98,40 +107,6 @@ type DashboardSummaryResponse struct {
 	Users             int64     `json:"users"`
 	EventsLast24Hours int64     `json:"eventsLast24Hours"`
 	GeneratedAt       time.Time `json:"generatedAt"`
-}
-
-type UploadIntentRequest struct {
-	Filename    string `json:"filename" minLength:"1" maxLength:"500" binding:"required,min=1,max=500"`
-	ContentType string `json:"contentType" enum:"image/jpeg,image/png,image/webp" binding:"required,oneof=image/jpeg image/png image/webp"`
-	Size        int64  `json:"size" minimum:"1" maximum:"10485760" binding:"required,min=1,max=10485760"`
-	Visibility  string `json:"visibility" enum:"private,public" binding:"required,oneof=private public"`
-}
-
-type FileResponse struct {
-	ID           string    `json:"id" format:"uuid"`
-	Provider     string    `json:"provider" enum:"local,s3,oss"`
-	OriginalName string    `json:"originalName"`
-	ContentType  string    `json:"contentType"`
-	Size         int64     `json:"size"`
-	SHA256       string    `json:"sha256" pattern:"^(|[a-f0-9]{64})$"`
-	Width        int       `json:"width" minimum:"0"`
-	Height       int       `json:"height" minimum:"0"`
-	Visibility   string    `json:"visibility" enum:"private,public"`
-	Status       string    `json:"status" enum:"pending,ready,invalid,deleting,delete_failed,deleted"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
-}
-
-type SignedRequestResponse struct {
-	URL       string            `json:"url" format:"uri"`
-	Method    string            `json:"method"`
-	Headers   map[string]string `json:"headers"`
-	ExpiresAt time.Time         `json:"expiresAt"`
-}
-
-type UploadIntentResponse struct {
-	File   FileResponse          `json:"file"`
-	Upload SignedRequestResponse `json:"upload"`
 }
 
 // JobResponse intentionally omits payloads, hashes, idempotency keys,

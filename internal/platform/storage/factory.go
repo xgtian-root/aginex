@@ -13,8 +13,22 @@ import (
 	"github.com/xgtian-root/aginex/internal/config"
 )
 
-func FromConfig(ctx context.Context, cfg config.Storage, publicURL string) (Storage, error) {
-	policy := DefaultImagePolicy()
+func FromConfig(
+	ctx context.Context,
+	cfg config.Storage,
+	publicURL string,
+	policies ...FilePolicy,
+) (Storage, error) {
+	policy := DefaultFilePolicy()
+	if len(policies) > 1 {
+		return nil, errors.New("storage accepts at most one file policy")
+	}
+	if len(policies) == 1 {
+		policy = policies[0]
+	}
+	if err := policy.Validate(); err != nil {
+		return nil, err
+	}
 	switch cfg.Driver {
 	case "local":
 		return NewLocal(
@@ -40,8 +54,8 @@ func FromConfig(ctx context.Context, cfg config.Storage, publicURL string) (Stor
 		client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
 			if cfg.Endpoint != "" {
 				options.BaseEndpoint = aws.String(cfg.Endpoint)
-				options.UsePathStyle = true
 			}
+			options.UsePathStyle = cfg.ForcePathStyle
 		})
 		return NewS3(client, cfg.Bucket, policy), nil
 	case "oss":

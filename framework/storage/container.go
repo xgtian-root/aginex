@@ -17,9 +17,95 @@ func validateImageContainer(mimeType string, data []byte) error {
 		return validateJPEGContainer(data)
 	case MIMEWebP:
 		return validateWebPContainer(data)
+	case MIMEGIF:
+		return validateGIFContainer(data)
 	default:
 		return fmt.Errorf("unsupported image MIME type %q", mimeType)
 	}
+}
+
+func validateGIFContainer(data []byte) error {
+	if len(data) < 14 ||
+		(!bytes.HasPrefix(data, []byte("GIF87a")) && !bytes.HasPrefix(data, []byte("GIF89a"))) {
+		return fmt.Errorf("invalid GIF header")
+	}
+
+	offset := 6
+	packed := data[offset+4]
+	offset += 7
+	if packed&0x80 != 0 {
+		colorTableBytes := 3 * (1 << ((packed & 0x07) + 1))
+		if colorTableBytes > len(data)-offset {
+			return fmt.Errorf("truncated GIF global color table")
+		}
+		offset += colorTableBytes
+	}
+
+	sawImage := false
+	for offset < len(data) {
+		switch data[offset] {
+		case 0x3b:
+			offset++
+			if !sawImage {
+				return fmt.Errorf("GIF has no image")
+			}
+			if offset != len(data) {
+				return fmt.Errorf("trailing data after GIF trailer")
+			}
+			return nil
+		case 0x21:
+			if len(data)-offset < 2 {
+				return fmt.Errorf("truncated GIF extension")
+			}
+			offset += 2
+			next, err := skipGIFSubBlocks(data, offset)
+			if err != nil {
+				return err
+			}
+			offset = next
+		case 0x2c:
+			if len(data)-offset < 10 {
+				return fmt.Errorf("truncated GIF image descriptor")
+			}
+			packed = data[offset+9]
+			offset += 10
+			if packed&0x80 != 0 {
+				colorTableBytes := 3 * (1 << ((packed & 0x07) + 1))
+				if colorTableBytes > len(data)-offset {
+					return fmt.Errorf("truncated GIF local color table")
+				}
+				offset += colorTableBytes
+			}
+			if offset >= len(data) || data[offset] < 2 || data[offset] > 12 {
+				return fmt.Errorf("invalid GIF LZW code size")
+			}
+			offset++
+			next, err := skipGIFSubBlocks(data, offset)
+			if err != nil {
+				return err
+			}
+			offset = next
+			sawImage = true
+		default:
+			return fmt.Errorf("invalid GIF block marker")
+		}
+	}
+	return fmt.Errorf("GIF is missing trailer")
+}
+
+func skipGIFSubBlocks(data []byte, offset int) (int, error) {
+	for offset < len(data) {
+		length := int(data[offset])
+		offset++
+		if length == 0 {
+			return offset, nil
+		}
+		if length > len(data)-offset {
+			return 0, fmt.Errorf("truncated GIF data sub-block")
+		}
+		offset += length
+	}
+	return 0, fmt.Errorf("GIF sub-blocks are not terminated")
 }
 
 func validatePNGContainer(data []byte) error {

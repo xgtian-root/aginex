@@ -401,15 +401,9 @@ func TestUploadIntentRuntimeValidationMatchesDeclaredDTOConstraints(
 			"visibility":  "private",
 		},
 		{
-			"filename":    "invalid.svg",
-			"contentType": "image/svg+xml",
-			"size":        1,
-			"visibility":  "private",
-		},
-		{
-			"filename":    "too-large.png",
-			"contentType": "image/png",
-			"size":        int64(10485761),
+			"filename":    "empty.bin",
+			"contentType": "application/octet-stream",
+			"size":        0,
 			"visibility":  "private",
 		},
 	}

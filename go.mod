@@ -18,6 +18,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.54.0
 	golang.org/x/image v0.44.0
+	golang.org/x/mod v0.37.0
 	golang.org/x/sys v0.47.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0

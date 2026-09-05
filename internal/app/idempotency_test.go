@@ -425,7 +425,7 @@ func TestUploadIntentReplayDoesNotPersistSignedRequest(t *testing.T) {
 	if err := json.Unmarshal(first.Body.Bytes(), &firstPayload); err != nil {
 		t.Fatal(err)
 	}
-	if firstPayload.Upload.URL == "" {
+	if firstPayload.Upload == nil || firstPayload.Upload.URL == "" {
 		t.Fatal("first upload intent has an empty URL")
 	}
 
@@ -460,8 +460,11 @@ func TestUploadIntentReplayDoesNotPersistSignedRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if replayedPayload.File.ID != firstPayload.File.ID ||
-		replayedPayload.Upload.URL == "" {
+		replayedPayload.Upload == nil || replayedPayload.Upload.URL == "" {
 		t.Fatalf("replayed upload intent = %#v", replayedPayload)
+	}
+	if replayedPayload.Upload.ExpiresAt.After(firstPayload.Upload.ExpiresAt) {
+		t.Fatalf("replayed upload expiry = %s, exceeds original %s", replayedPayload.Upload.ExpiresAt, firstPayload.Upload.ExpiresAt)
 	}
 	var fileCount int64
 	if err := db.Model(&domain.FileObject{}).Count(&fileCount).Error; err != nil {
@@ -470,6 +473,21 @@ func TestUploadIntentReplayDoesNotPersistSignedRequest(t *testing.T) {
 	if fileCount != 1 {
 		t.Fatalf("file count = %d, want 1", fileCount)
 	}
+	expired := time.Now().UTC().Add(-time.Second)
+	if err := db.Model(&domain.FileObject{}).
+		Where("id = ?", firstPayload.File.ID).
+		Update("upload_expires_at", expired).Error; err != nil {
+		t.Fatal(err)
+	}
+	expiredReplay := serveIdempotentRequest(
+		server,
+		cookie,
+		http.MethodPost,
+		"/api/v1/files/upload-intents",
+		body,
+		"safe-upload-intent",
+	)
+	assertProblemCode(t, expiredReplay, http.StatusConflict, "UPLOAD_INTENT_EXPIRED")
 }
 
 func TestFileConfirmationAndDeletionReplayWithoutDuplicateSideEffects(t *testing.T) {

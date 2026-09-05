@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"image"
 	"image/color"
@@ -74,18 +75,23 @@ func cloudTestConfig(t *testing.T, provider string) (config.Storage, bool) {
 		Region:          values["region"],
 		AccessKeyID:     values["access_key"],
 		AccessKeySecret: values["secret_key"],
+		ForcePathStyle:  values["endpoint"] != "" && provider == "S3",
 	}, true
 }
 
 func runCloudStorageContract(t *testing.T, cfg config.Storage) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	store, err := FromConfig(ctx, cfg, "")
+	policy, err := NewFilePolicy(65 << 20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := "aginex-contract/" + uuid.NewString() + ".png"
+	store, err := FromConfig(ctx, cfg, "", policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "aginex-contract/" + uuid.NewString()
 	content := contractPNG(t)
 	defer func() {
 		_ = store.Delete(context.Background(), key)
@@ -93,7 +99,7 @@ func runCloudStorageContract(t *testing.T, cfg config.Storage) {
 
 	upload, err := store.CreateUpload(ctx, UploadRequest{
 		Key:         key,
-		ContentType: "image/png",
+		ContentType: StoredContentType,
 		Size:        int64(len(content)),
 		Expires:     5 * time.Minute,
 	})
@@ -138,7 +144,7 @@ func runCloudStorageContract(t *testing.T, cfg config.Storage) {
 	}
 	if info.Key != key ||
 		info.Size != int64(len(content)) ||
-		!strings.HasPrefix(strings.ToLower(info.ContentType), "image/png") {
+		!strings.HasPrefix(strings.ToLower(info.ContentType), StoredContentType) {
 		t.Fatalf("object info = %#v", info)
 	}
 
@@ -197,6 +203,146 @@ func runCloudStorageContract(t *testing.T, cfg config.Storage) {
 	if _, err := store.Stat(ctx, key); err == nil {
 		t.Fatal("deleted object is still visible")
 	}
+
+	runCloudMultipartContract(t, ctx, store)
+}
+
+func runCloudMultipartContract(
+	t *testing.T,
+	ctx context.Context,
+	store Storage,
+) {
+	t.Helper()
+	multipart, ok := AsMultipart(store)
+	if !ok {
+		t.Fatal("configured cloud store does not expose multipart capability")
+	}
+	key := "aginex-contract/multipart-" + uuid.NewString()
+	first := bytes.Repeat([]byte{0x5a}, 32<<20)
+	last := bytes.Repeat([]byte{0xa5}, 1<<20)
+	total := int64(len(first) + len(last))
+	defer func() { _ = store.Delete(context.Background(), key) }()
+
+	upload, err := multipart.InitiateMultipart(ctx, UploadRequest{
+		Key: key, ContentType: StoredContentType, Size: total, Expires: 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := false
+	defer func() {
+		if !completed {
+			_ = multipart.AbortMultipart(context.Background(), upload)
+		}
+	}()
+
+	parts := []UploadedPart{
+		uploadCloudContractPart(t, ctx, multipart, upload, 1, first),
+		uploadCloudContractPart(t, ctx, multipart, upload, 2, last),
+	}
+	inventory, err := multipart.ListUploadedParts(ctx, upload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !uploadedPartsMatch(parts, inventory) {
+		t.Fatalf("provider multipart inventory = %#v, want %#v", inventory, parts)
+	}
+
+	info, err := multipart.CompleteMultipart(ctx, MultipartCompleteRequest{
+		Upload: upload,
+		Parts:  parts,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed = true
+	if info.Key != key || info.Size != total {
+		t.Fatalf("completed multipart object = %#v", info)
+	}
+	// A retry after a lost completion response must recover through final-object
+	// Stat instead of treating the provider's missing upload session as failure.
+	replayed, err := multipart.CompleteMultipart(ctx, MultipartCompleteRequest{
+		Upload: upload,
+		Parts:  parts,
+	})
+	if err != nil || replayed.Size != total {
+		t.Fatalf("replayed multipart completion = %#v, %v", replayed, err)
+	}
+
+	reader, err := store.Open(ctx, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualDigest := sha256.New()
+	read, readErr := io.Copy(actualDigest, io.LimitReader(reader, total+1))
+	closeErr := reader.Close()
+	if readErr != nil || closeErr != nil || read != total {
+		t.Fatalf("read completed multipart bytes = %d, %v, %v", read, readErr, closeErr)
+	}
+	expectedDigest := sha256.New()
+	_, _ = expectedDigest.Write(first)
+	_, _ = expectedDigest.Write(last)
+	if !bytes.Equal(actualDigest.Sum(nil), expectedDigest.Sum(nil)) {
+		t.Fatal("completed multipart content digest differs")
+	}
+
+	abortUpload, err := multipart.InitiateMultipart(ctx, UploadRequest{
+		Key: key + "-abort", ContentType: StoredContentType, Size: total, Expires: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := multipart.AbortMultipart(ctx, abortUpload); err != nil {
+		t.Fatal(err)
+	}
+	if err := multipart.AbortMultipart(ctx, abortUpload); err != nil {
+		t.Fatalf("repeated multipart abort must be idempotent: %v", err)
+	}
+}
+
+func uploadCloudContractPart(
+	t *testing.T,
+	ctx context.Context,
+	store MultipartObjectStore,
+	upload MultipartUpload,
+	partNumber int32,
+	content []byte,
+) UploadedPart {
+	t.Helper()
+	signed, err := store.SignUploadPart(ctx, MultipartPartRequest{
+		Upload: upload, PartNumber: partNumber, Size: int64(len(content)), Expires: 10 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := headerValue(signed.Headers, "Content-Length"); got != strconv.Itoa(len(content)) {
+		t.Fatalf("part %d signed Content-Length = %q", partNumber, got)
+	}
+	request, err := http.NewRequestWithContext(ctx, signed.Method, signed.URL, bytes.NewReader(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.ContentLength = int64(len(content))
+	for name, value := range signed.Headers {
+		request.Header.Set(name, value)
+	}
+	response, err := cloudContractHTTPClient().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+	closeErr := response.Body.Close()
+	if closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		t.Fatalf("part %d upload status = %d", partNumber, response.StatusCode)
+	}
+	etag := response.Header.Get("ETag")
+	if strings.TrimSpace(etag) == "" {
+		t.Fatalf("part %d upload response omitted ETag", partNumber)
+	}
+	return UploadedPart{PartNumber: partNumber, Size: int64(len(content)), ETag: etag}
 }
 
 func cloudContractHTTPClient() *http.Client {

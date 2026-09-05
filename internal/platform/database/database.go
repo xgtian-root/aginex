@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -14,6 +16,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+const sqliteBusyTimeoutMilliseconds = 10_000
 
 func Open(cfg config.Database) (*gorm.DB, error) {
 	return OpenContext(context.Background(), cfg)
@@ -35,7 +39,11 @@ func OpenContext(ctx context.Context, cfg config.Database) (*gorm.DB, error) {
 		if err := os.MkdirAll(filepath.Dir(cfg.DSN), 0o750); err != nil && filepath.Dir(cfg.DSN) != "." {
 			return nil, fmt.Errorf("create sqlite directory: %w", err)
 		}
-		dialector = sqlite.Open(cfg.DSN)
+		dsn, err := sqliteDSN(cfg.DSN)
+		if err != nil {
+			return nil, fmt.Errorf("configure sqlite connection: %w", err)
+		}
+		dialector = sqlite.Open(dsn)
 	case "postgres":
 		dialector = postgres.Open(cfg.DSN)
 	case "mysql":
@@ -70,4 +78,40 @@ func OpenContext(ctx context.Context, cfg config.Database) (*gorm.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+// sqliteDSN applies the write-concurrency policy to every connection opened by
+// database/sql. WAL permits readers while a writer is active, busy_timeout
+// waits for the current writer, and immediate transactions acquire the write
+// reservation at Begin instead of failing later while upgrading a read lock.
+func sqliteDSN(dsn string) (string, error) {
+	path, rawQuery, _ := strings.Cut(dsn, "?")
+	query, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return "", err
+	}
+
+	pragmas := query["_pragma"][:0]
+	for _, pragma := range query["_pragma"] {
+		switch sqlitePragmaName(pragma) {
+		case "busy_timeout", "journal_mode":
+			continue
+		default:
+			pragmas = append(pragmas, pragma)
+		}
+	}
+	query["_pragma"] = pragmas
+	query.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", sqliteBusyTimeoutMilliseconds))
+	query.Add("_pragma", "journal_mode(WAL)")
+	query.Set("_txlock", "immediate")
+
+	return path + "?" + query.Encode(), nil
+}
+
+func sqlitePragmaName(pragma string) string {
+	pragma = strings.TrimSpace(pragma)
+	if end := strings.IndexAny(pragma, "(= \t\r\n"); end >= 0 {
+		pragma = pragma[:end]
+	}
+	return strings.ToLower(pragma)
 }

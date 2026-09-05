@@ -1,6 +1,7 @@
 package filecleanup
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -333,6 +334,7 @@ func applyFileObjectModuleFixture(db *gorm.DB) error {
 	return db.Exec(`
 		CREATE TABLE file_objects (
 			id TEXT PRIMARY KEY,
+			storage_profile_id TEXT,
 			provider TEXT NOT NULL,
 			bucket TEXT NOT NULL DEFAULT '',
 			object_key TEXT NOT NULL UNIQUE,
@@ -346,11 +348,13 @@ func applyFileObjectModuleFixture(db *gorm.DB) error {
 			owner_id TEXT NOT NULL REFERENCES users(id),
 			visibility TEXT NOT NULL DEFAULT 'private',
 			status TEXT NOT NULL DEFAULT 'pending',
+			upload_expires_at DATETIME,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
 			deleted_at DATETIME
 		);
 		CREATE INDEX idx_file_objects_owner_id ON file_objects(owner_id);
+		CREATE INDEX idx_file_objects_storage_profile_id ON file_objects(storage_profile_id);
 		CREATE INDEX idx_file_objects_status ON file_objects(status);
 		CREATE INDEX idx_file_objects_deleted_at ON file_objects(deleted_at);
 	`).Error
@@ -409,7 +413,7 @@ func seedCleanupFile(
 	}
 	body := []byte("\x89PNG\r\n\x1a\nfixture")
 	file.Size = int64(len(body))
-	if err := store.Put(file.ObjectKey, body, file.ContentType); err != nil {
+	if _, err := store.Put(context.Background(), file.ObjectKey, bytes.NewReader(body), int64(len(body))); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&file).Error; err != nil {

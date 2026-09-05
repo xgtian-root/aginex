@@ -38,10 +38,64 @@ type Config struct {
 type Handler struct {
 	db            *gorm.DB
 	store         storage.Storage
+	registry      *storage.Registry
 	writes        *uow.UnitOfWork
 	provider      string
 	systemActorID string
 	clock         func() time.Time
+}
+
+func NewWithRegistry(db *gorm.DB, registry *storage.Registry, config Config) (*Handler, error) {
+	if db == nil || registry == nil {
+		return nil, errors.New("file cleanup database and storage registry are required")
+	}
+	active, ok := registry.ActiveProfile()
+	if !ok {
+		return nil, errors.New("file cleanup active storage profile is required")
+	}
+	store, err := registry.Active()
+	if err != nil {
+		return nil, err
+	}
+	config.Provider = active.StorageConfig().Driver
+	handler, err := New(db, store, config)
+	if err != nil {
+		return nil, err
+	}
+	handler.registry = registry
+	return handler, nil
+}
+
+func (handler *Handler) storageForFile(file *domain.FileObject, profileID, provider, bucket string) (storage.Storage, error) {
+	if handler.registry == nil {
+		if provider != handler.provider {
+			return nil, fmt.Errorf("%w: provider %q", ErrObjectChanged, provider)
+		}
+		return handler.store, nil
+	}
+	if file != nil && file.StorageProfileID != nil && strings.TrimSpace(*file.StorageProfileID) != "" {
+		if profileID != "" && profileID != *file.StorageProfileID {
+			return nil, ErrObjectChanged
+		}
+		return handler.registry.Resolve(*file.StorageProfileID)
+	}
+	if profileID != "" {
+		profile, ok := handler.registry.Profile(profileID)
+		if !ok || profile.StorageConfig().Driver != provider || profile.StorageConfig().Bucket != bucket {
+			return nil, ErrObjectChanged
+		}
+		return handler.registry.Resolve(profileID)
+	}
+	if file != nil {
+		_, result, err := handler.registry.ResolveLegacy(file.Provider, file.Bucket)
+		return result, err
+	}
+	if bucket != "" {
+		_, result, err := handler.registry.ResolveLegacy(provider, bucket)
+		return result, err
+	}
+	_, result, err := handler.registry.ResolveProviderUnique(provider)
+	return result, err
 }
 
 type payload struct {
@@ -87,7 +141,7 @@ func (handler *Handler) Handle(ctx context.Context, raw json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	if job.Provider != handler.provider {
+	if handler.registry == nil && job.Provider != handler.provider {
 		return fmt.Errorf("%w: provider %q", ErrObjectChanged, job.Provider)
 	}
 	if err := storage.ValidateKey(job.ObjectKey); err != nil {
@@ -97,7 +151,11 @@ func (handler *Handler) Handle(ctx context.Context, raw json.RawMessage) error {
 	var file domain.FileObject
 	err = handler.db.WithContext(ctx).First(&file, "id = ?", job.FileID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return handler.store.Delete(ctx, job.ObjectKey)
+		jobStore, resolveErr := handler.storageForFile(nil, "", job.Provider, "")
+		if resolveErr != nil {
+			return resolveErr
+		}
+		return jobStore.Delete(ctx, job.ObjectKey)
 	}
 	if err != nil {
 		return err
@@ -105,13 +163,17 @@ func (handler *Handler) Handle(ctx context.Context, raw json.RawMessage) error {
 	if file.Provider != job.Provider || file.ObjectKey != job.ObjectKey {
 		return ErrObjectChanged
 	}
+	jobStore, err := handler.storageForFile(&file, "", job.Provider, file.Bucket)
+	if err != nil {
+		return err
+	}
 	if file.Status == "deleted" {
 		return nil
 	}
 	if file.Status != "deleting" && file.Status != "invalid" && file.Status != "delete_failed" {
 		return fmt.Errorf("%w: status %q", ErrUnsafeState, file.Status)
 	}
-	if err := handler.store.Delete(ctx, job.ObjectKey); err != nil {
+	if err := jobStore.Delete(ctx, job.ObjectKey); err != nil {
 		return fmt.Errorf("delete stored object: %w", err)
 	}
 

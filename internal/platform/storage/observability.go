@@ -29,6 +29,16 @@ type observedReadyStorage struct {
 	checker ReadinessChecker
 }
 
+type observedMultipartStorage struct {
+	observer *observedStorage
+	next     MultipartObjectStore
+}
+
+type observedControlledReadStorage struct {
+	observer *observedStorage
+	next     ControlledRead
+}
+
 type storageObservation struct {
 	operation string
 	provider  string
@@ -82,6 +92,67 @@ func AsLocal(store Storage) (*Local, bool) {
 		}
 		if local, ok := store.(*Local); ok {
 			return local, local != nil
+		}
+		unwrapper, ok := store.(storageUnwrapper)
+		if !ok {
+			return nil, false
+		}
+		store = unwrapper.Unwrap()
+	}
+	return nil, false
+}
+
+// AsMultipart resolves an optional multipart capability without allowing a
+// transparent observability decorator to hide it. Calls through the returned
+// capability remain instrumented and never record keys, upload IDs, or ETags.
+func AsMultipart(store Storage) (MultipartObjectStore, bool) {
+	for range maxStorageUnwrapDepth {
+		if nilStorage(store) {
+			return nil, false
+		}
+		switch observed := store.(type) {
+		case *observedReadyStorage:
+			if next, ok := observed.next.(MultipartObjectStore); ok {
+				return &observedMultipartStorage{observer: observed.observedStorage, next: next}, true
+			}
+		case *observedStorage:
+			if next, ok := observed.next.(MultipartObjectStore); ok {
+				return &observedMultipartStorage{observer: observed, next: next}, true
+			}
+		default:
+			if multipart, ok := store.(MultipartObjectStore); ok {
+				return multipart, true
+			}
+		}
+		unwrapper, ok := store.(storageUnwrapper)
+		if !ok {
+			return nil, false
+		}
+		store = unwrapper.Unwrap()
+	}
+	return nil, false
+}
+
+// AsControlledRead resolves the safe response-header override capability while
+// preserving storage telemetry across transparent decorators.
+func AsControlledRead(store Storage) (ControlledRead, bool) {
+	for range maxStorageUnwrapDepth {
+		if nilStorage(store) {
+			return nil, false
+		}
+		switch observed := store.(type) {
+		case *observedReadyStorage:
+			if next, ok := observed.next.(ControlledRead); ok {
+				return &observedControlledReadStorage{observer: observed.observedStorage, next: next}, true
+			}
+		case *observedStorage:
+			if next, ok := observed.next.(ControlledRead); ok {
+				return &observedControlledReadStorage{observer: observed, next: next}, true
+			}
+		default:
+			if controlled, ok := store.(ControlledRead); ok {
+				return controlled, true
+			}
 		}
 		unwrapper, ok := store.(storageUnwrapper)
 		if !ok {
@@ -160,6 +231,78 @@ func (storage *observedStorage) Delete(
 ) error {
 	ctx, observation := storage.begin(ctx, "delete")
 	err := storage.next.Delete(ctx, key)
+	observation.finish(err, -1)
+	return err
+}
+
+func (storage *observedControlledReadStorage) SignControlledRead(
+	ctx context.Context,
+	request ControlledReadRequest,
+) (SignedRequest, error) {
+	ctx, observation := storage.observer.begin(ctx, "sign_controlled_read")
+	result, err := storage.next.SignControlledRead(ctx, request)
+	observation.finish(err, -1)
+	return result, err
+}
+
+func (storage *observedMultipartStorage) InitiateMultipart(
+	ctx context.Context,
+	request UploadRequest,
+) (MultipartUpload, error) {
+	ctx, observation := storage.observer.begin(ctx, "initiate_multipart")
+	result, err := storage.next.InitiateMultipart(ctx, request)
+	bytes := int64(-1)
+	if err == nil {
+		bytes = request.Size
+	}
+	observation.finish(err, bytes)
+	return result, err
+}
+
+func (storage *observedMultipartStorage) SignUploadPart(
+	ctx context.Context,
+	request MultipartPartRequest,
+) (SignedRequest, error) {
+	ctx, observation := storage.observer.begin(ctx, "sign_upload_part")
+	result, err := storage.next.SignUploadPart(ctx, request)
+	bytes := int64(-1)
+	if err == nil {
+		bytes = request.Size
+	}
+	observation.finish(err, bytes)
+	return result, err
+}
+
+func (storage *observedMultipartStorage) ListUploadedParts(
+	ctx context.Context,
+	upload MultipartUpload,
+) ([]UploadedPart, error) {
+	ctx, observation := storage.observer.begin(ctx, "list_uploaded_parts")
+	result, err := storage.next.ListUploadedParts(ctx, upload)
+	observation.finish(err, -1)
+	return result, err
+}
+
+func (storage *observedMultipartStorage) CompleteMultipart(
+	ctx context.Context,
+	request MultipartCompleteRequest,
+) (ObjectInfo, error) {
+	ctx, observation := storage.observer.begin(ctx, "complete_multipart")
+	result, err := storage.next.CompleteMultipart(ctx, request)
+	bytes := int64(-1)
+	if err == nil {
+		bytes = result.Size
+	}
+	observation.finish(err, bytes)
+	return result, err
+}
+
+func (storage *observedMultipartStorage) AbortMultipart(
+	ctx context.Context,
+	upload MultipartUpload,
+) error {
+	ctx, observation := storage.observer.begin(ctx, "abort_multipart")
+	err := storage.next.AbortMultipart(ctx, upload)
 	observation.finish(err, -1)
 	return err
 }

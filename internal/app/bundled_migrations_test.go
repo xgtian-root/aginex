@@ -10,6 +10,43 @@ import (
 	coremigrate "github.com/xgtian-root/aginex/internal/platform/migrate"
 )
 
+func TestBundledFilesUsesSingleCurrentBaselinePerDialect(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "postgres", "mysql"} {
+		entries, err := bundledMigrationFiles.ReadDir(
+			"migrations/files/" + dialect,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 1 || entries[0].IsDir() ||
+			entries[0].Name() != "00001_files.sql" {
+			t.Fatalf("%s Files migrations = %#v, want current baseline only", dialect, entries)
+		}
+		payload, err := bundledMigrationFiles.ReadFile(
+			"migrations/files/" + dialect + "/00001_files.sql",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sql := string(payload)
+		for _, fragment := range []string{
+			"storage_profile_id",
+			"CREATE TABLE IF NOT EXISTS file_upload_sessions",
+			"CREATE TABLE IF NOT EXISTS file_upload_parts",
+			"part_count BETWEEN 2 AND 32",
+			"part_number BETWEEN 1 AND 32",
+			"part_size = 33554432",
+		} {
+			if !strings.Contains(sql, fragment) {
+				t.Errorf("%s current Files baseline is missing %q", dialect, fragment)
+			}
+		}
+		if strings.Contains(sql, "10000") {
+			t.Errorf("%s current Files baseline retained the obsolete part bound", dialect)
+		}
+	}
+}
+
 func TestBundledSQLiteMigrationsCreateCompleteExplicitModuleTables(
 	t *testing.T,
 ) {
@@ -30,6 +67,7 @@ func TestBundledSQLiteMigrationsCreateCompleteExplicitModuleTables(
 	for table, columns := range map[string][]string{
 		"file_objects": {
 			"id",
+			"storage_profile_id",
 			"provider",
 			"bucket",
 			"object_key",
@@ -46,6 +84,25 @@ func TestBundledSQLiteMigrationsCreateCompleteExplicitModuleTables(
 			"created_at",
 			"updated_at",
 			"deleted_at",
+		},
+		"file_upload_sessions": {
+			"id",
+			"file_id",
+			"provider_upload_id",
+			"resume_fingerprint",
+			"part_size",
+			"part_count",
+			"status",
+			"expires_at",
+			"created_at",
+			"updated_at",
+		},
+		"file_upload_parts": {
+			"session_id",
+			"part_number",
+			"size",
+			"etag",
+			"confirmed_at",
 		},
 		"products": {
 			"id",
@@ -74,234 +131,205 @@ func TestBundledSQLiteMigrationsCreateCompleteExplicitModuleTables(
 	}
 }
 
-func TestBundledSQLiteMigrationsAdoptPreReleaseCoreTablesWithoutDataLoss(
+func TestBundledSQLiteFileUploadSessionSchemaEnforcesIdentityAndParts(
 	t *testing.T,
 ) {
 	db := openBundledMigrationSQLite(t)
 	if err := coremigrate.Up(db, "sqlite"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`
-		CREATE TABLE file_objects (
-			id TEXT PRIMARY KEY,
-			provider TEXT NOT NULL,
-			bucket TEXT NOT NULL DEFAULT '',
-			object_key TEXT NOT NULL UNIQUE,
-			original_name TEXT NOT NULL,
-			content_type TEXT NOT NULL,
-			size INTEGER NOT NULL,
-			etag TEXT NOT NULL DEFAULT '',
-			owner_id TEXT NOT NULL REFERENCES users(id),
-			visibility TEXT NOT NULL DEFAULT 'private',
-			status TEXT NOT NULL DEFAULT 'pending',
-			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL
-		);
-		CREATE TABLE products (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			sku TEXT NOT NULL UNIQUE,
-			price_cents INTEGER NOT NULL DEFAULT 0,
-			status TEXT NOT NULL DEFAULT 'draft',
-			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL
-		);
-	`); err != nil {
+	if err := MigrateModulesUp(t.Context(), db, "sqlite", FilesModule()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`
 		INSERT INTO users (
 			id, email, display_name, password_hash, status, created_at, updated_at
 		) VALUES (
-			'user-1', 'owner@example.com', 'Owner', 'hash', 'active',
-			'2026-07-31T00:00:00Z', '2026-07-31T00:00:00Z'
+			'upload-owner', 'upload@example.com', 'Upload', 'hash', 'active',
+			'2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'
 		);
 		INSERT INTO file_objects (
 			id, provider, object_key, original_name, content_type, size, owner_id,
 			status, created_at, updated_at
+		) VALUES
+			('upload-file', 'local', 'uploads/file.bin', 'file.bin',
+				 'application/octet-stream', 67108864, 'upload-owner', 'pending',
+			 '2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'),
+			('upload-file-2', 'local', 'uploads/file-2.bin', 'file-2.bin',
+				 'application/octet-stream', 67108864, 'upload-owner', 'pending',
+			 '2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z');
+		INSERT INTO file_upload_sessions (
+			id, file_id, provider_upload_id, resume_fingerprint, part_size,
+			part_count, status, expires_at, created_at, updated_at
 		) VALUES (
-			'file-1', 'local', 'legacy/file.png', 'file.png', 'image/png', 12,
-			'user-1', 'ready', '2026-07-31T00:00:00Z', '2026-07-31T00:00:00Z'
+			'upload-session', 'upload-file', 'provider-upload',
+			'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+			33554432, 2, 'active', '2026-08-12T00:00:00Z',
+			'2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'
 		);
-		INSERT INTO products (
-			id, name, sku, price_cents, status, created_at, updated_at
+		INSERT INTO file_upload_parts (
+			session_id, part_number, size, etag, confirmed_at
 		) VALUES (
-			'product-1', 'Legacy product', 'LEGACY-1', 1200, 'active',
-			'2026-07-31T00:00:00Z', '2026-07-31T00:00:00Z'
+			'upload-session', 1, 33554432, 'provider-etag',
+			'2026-08-11T00:01:00Z'
 		);
 	`); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := MigrateModulesUp(
-		t.Context(),
-		db,
-		"sqlite",
-		FilesModule(),
-		StarterExampleModule(),
-	); err != nil {
-		t.Fatal(err)
-	}
-	if err := EnsureModulesCurrent(
-		t.Context(),
-		db,
-		"sqlite",
-		FilesModule(),
-		StarterExampleModule(),
-	); err != nil {
-		t.Fatalf("ensure adopted module schema current: %v", err)
-	}
-	for _, migration := range []bundledMigration{
-		bundledFiles,
-		bundledStarter,
-	} {
-		spec, err := bundledMigrationSpecification(migration)
-		if err != nil {
-			t.Fatal(err)
-		}
-		provider, err := newBundledMigrationProvider(
-			t.Context(),
-			db,
-			"sqlite",
-			spec,
+	if _, err := db.Exec(`
+		INSERT INTO file_upload_sessions (
+			id, file_id, provider_upload_id, resume_fingerprint, part_size,
+			part_count, status, expires_at, created_at, updated_at
+		) VALUES (
+			'duplicate-session', 'upload-file', 'other-upload',
+			'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+			33554432, 2, 'active', '2026-08-12T00:00:00Z',
+			'2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'
 		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := provider.DownTo(t.Context(), 0); err != nil {
-			t.Fatal(err)
-		}
+	`); err == nil {
+		t.Fatal("file_upload_sessions accepted a second session for one file")
 	}
-	columns := bundledSQLiteColumns(t, db, "file_objects")
-	for _, column := range []string{
-		"sha256",
-		"width",
-		"height",
-		"deleted_at",
-	} {
-		if !columns[column] {
-			t.Errorf("adopted file_objects is missing column %q", column)
+	if _, err := db.Exec(`
+		INSERT INTO file_upload_sessions (
+			id, file_id, provider_upload_id, resume_fingerprint, part_size,
+			part_count, status, expires_at, created_at, updated_at
+		) VALUES (
+			'one-part-session', 'upload-file-2', 'one-part-upload',
+			'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+			33554432, 1, 'active', '2026-08-12T00:00:00Z',
+			'2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'
+		)
+	`); err == nil {
+		t.Fatal("file_upload_sessions accepted part_count below 2")
+	}
+	for _, partNumber := range []int{0, 33} {
+		if _, err := db.Exec(`
+			INSERT INTO file_upload_parts (
+				session_id, part_number, size, etag, confirmed_at
+			) VALUES (?, ?, 1, 'invalid', '2026-08-11T00:02:00Z')
+		`, "upload-session", partNumber); err == nil {
+			t.Fatalf("file_upload_parts accepted part number %d", partNumber)
 		}
 	}
 
-	var objectKey string
-	if err := db.QueryRow(
-		"SELECT object_key FROM file_objects WHERE id = ?",
-		"file-1",
-	).Scan(&objectKey); err != nil {
+	if _, err := db.Exec(
+		"DELETE FROM file_upload_sessions WHERE id = ?",
+		"upload-session",
+	); err != nil {
 		t.Fatal(err)
 	}
-	if objectKey != "legacy/file.png" {
-		t.Fatalf("adopted file object key = %q", objectKey)
-	}
-	var sku string
+	var parts int
 	if err := db.QueryRow(
-		"SELECT sku FROM products WHERE id = ?",
-		"product-1",
-	).Scan(&sku); err != nil {
+		"SELECT COUNT(*) FROM file_upload_parts WHERE session_id = ?",
+		"upload-session",
+	).Scan(&parts); err != nil {
 		t.Fatal(err)
 	}
-	if sku != "LEGACY-1" {
-		t.Fatalf("adopted product SKU = %q", sku)
+	if parts != 0 {
+		t.Fatalf("parts after session delete = %d, want 0", parts)
 	}
 }
 
-func TestBundledSQLiteMigrationsAdoptAlreadyVerifiedFileTable(
+func TestBundledSQLiteEnsureCurrentRequiresFileUploadMetadataTables(
 	t *testing.T,
 ) {
 	db := openBundledMigrationSQLite(t)
 	if err := coremigrate.Up(db, "sqlite"); err != nil {
 		t.Fatal(err)
 	}
-	if err := MigrateModulesUp(
-		t.Context(),
-		db,
-		"sqlite",
-		FilesModule(),
-	); err != nil {
+	if err := MigrateModulesUp(t.Context(), db, "sqlite", FilesModule()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("DROP TABLE file_upload_parts"); err != nil {
+		t.Fatal(err)
+	}
+	err := EnsureModulesCurrent(t.Context(), db, "sqlite", FilesModule())
+	if err == nil || !strings.Contains(err.Error(), "file_upload_parts") {
+		t.Fatalf("missing upload parts schema error = %v", err)
+	}
+}
+
+func TestBundledSQLiteFileMigrationDownDropsTablesInDependencyOrder(t *testing.T) {
+	db := openBundledMigrationSQLite(t)
+	if err := coremigrate.Up(db, "sqlite"); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateModulesUp(t.Context(), db, "sqlite", FilesModule()); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := bundledMigrationSpecification(bundledFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := newBundledMigrationProvider(db, "sqlite", spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.DownTo(t.Context(), 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{
+		"file_objects",
+		"file_upload_sessions",
+		"file_upload_parts",
+	} {
+		if bundledSQLiteTableExists(t, db, table) {
+			t.Fatalf("Files down retained %s", table)
+		}
+	}
+}
+
+func TestBundledSQLiteFileMigrationDownRejectsNonTerminalUploadSessions(t *testing.T) {
+	db := openBundledMigrationSQLite(t)
+	if err := coremigrate.Up(db, "sqlite"); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateModulesUp(t.Context(), db, "sqlite", FilesModule()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`
 		INSERT INTO users (
 			id, email, display_name, password_hash, status, created_at, updated_at
 		) VALUES (
-			'user-verified', 'verified@example.com', 'Verified', 'hash', 'active',
-			'2026-07-31T00:00:00Z', '2026-07-31T00:00:00Z'
+			'down-owner', 'down@example.com', 'Down', 'hash', 'active',
+			'2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'
 		);
 		INSERT INTO file_objects (
 			id, provider, object_key, original_name, content_type, size, owner_id,
 			status, created_at, updated_at
 		) VALUES (
-			'file-verified', 'local', 'verified/file.png', 'file.png',
-			'image/png', 12, 'user-verified', 'ready',
-			'2026-07-31T00:00:00Z', '2026-07-31T00:00:00Z'
+			'down-file', 'local', 'uploads/down-file', 'down.bin',
+			'application/octet-stream', 67108864, 'down-owner', 'pending',
+			'2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'
 		);
-		DROP TABLE aginex_files_migrations;
+		INSERT INTO file_upload_sessions (
+			id, file_id, provider_upload_id, resume_fingerprint, part_size,
+			part_count, status, expires_at, created_at, updated_at
+		) VALUES (
+			'down-session', 'down-file', 'provider-down',
+			'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+			33554432, 2, 'active', '2026-08-12T00:00:00Z',
+			'2026-08-11T00:00:00Z', '2026-08-11T00:00:00Z'
+		);
 	`); err != nil {
 		t.Fatal(err)
 	}
-
-	if err := MigrateModulesUp(
-		t.Context(),
-		db,
-		"sqlite",
-		FilesModule(),
-	); err != nil {
+	spec, err := bundledMigrationSpecification(bundledFiles)
+	if err != nil {
 		t.Fatal(err)
 	}
-	var objectKey string
-	if err := db.QueryRow(
-		"SELECT object_key FROM file_objects WHERE id = ?",
-		"file-verified",
-	).Scan(&objectKey); err != nil {
+	provider, err := newBundledMigrationProvider(db, "sqlite", spec)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if objectKey != "verified/file.png" {
-		t.Fatalf("re-adopted file object key = %q", objectKey)
+	if _, err := provider.DownTo(t.Context(), 0); err == nil {
+		t.Fatal("Files down accepted a non-terminal resumable upload")
 	}
-}
-
-func TestBundledSQLiteMigrationRejectsPartialLegacyFileSchema(
-	t *testing.T,
-) {
-	db := openBundledMigrationSQLite(t)
-	if err := coremigrate.Up(db, "sqlite"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`
-		CREATE TABLE file_objects (
-			id TEXT PRIMARY KEY,
-			provider TEXT NOT NULL,
-			bucket TEXT NOT NULL DEFAULT '',
-			object_key TEXT NOT NULL UNIQUE,
-			original_name TEXT NOT NULL,
-			content_type TEXT NOT NULL,
-			size INTEGER NOT NULL,
-			etag TEXT NOT NULL DEFAULT '',
-			sha256 TEXT NOT NULL DEFAULT '',
-			owner_id TEXT NOT NULL REFERENCES users(id),
-			visibility TEXT NOT NULL DEFAULT 'private',
-			status TEXT NOT NULL DEFAULT 'pending',
-			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL
-		)
-	`); err != nil {
-		t.Fatal(err)
-	}
-	err := MigrateModulesUp(
-		t.Context(),
-		db,
-		"sqlite",
-		FilesModule(),
-	)
-	if err == nil || !strings.Contains(
-		err.Error(),
-		"cannot adopt partially upgraded file_objects table",
-	) {
-		t.Fatalf("partial legacy migration error = %v", err)
-	}
-	if bundledSQLiteTableExists(t, db, "aginex_files_migrations") {
-		t.Fatal("failed partial adoption created migration history")
+	for _, table := range []string{"file_objects", "file_upload_sessions", "file_upload_parts"} {
+		if !bundledSQLiteTableExists(t, db, table) {
+			t.Fatalf("failed guarded Files down removed %s", table)
+		}
 	}
 }
 
@@ -322,6 +350,8 @@ func TestBundledSQLiteEnsureCurrentIsReadOnly(t *testing.T) {
 	}
 	for _, table := range []string{
 		"file_objects",
+		"file_upload_sessions",
+		"file_upload_parts",
 		"products",
 		"aginex_files_migrations",
 		"aginex_starter_migrations",
@@ -362,6 +392,10 @@ func openBundledMigrationSQLite(t *testing.T) *sql.DB {
 	}
 	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		db.Close()
 		t.Fatal(err)
 	}

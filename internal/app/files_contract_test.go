@@ -132,13 +132,16 @@ func TestUploadConfirmationRollsBackWhenAuditInsertFails(t *testing.T) {
 	}
 }
 
-func TestUploadConfirmationRejectsForgedMIMEAndQuarantinesFile(t *testing.T) {
+func TestUploadConfirmationAcceptsMalformedPreviewAsOpaqueDownload(t *testing.T) {
 	cfg, db, server, cookie := newFileHandlerTestApp(t)
-	image := validPNG(t)
+	malformedJPEG := []byte{
+		0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0x00,
+		0x01, 0x02, 0x03, 0x04, 0x05,
+	}
 	body, err := json.Marshal(map[string]any{
 		"filename":    "forged.jpg",
 		"contentType": "image/jpeg",
-		"size":        len(image),
+		"size":        len(malformedJPEG),
 		"visibility":  "private",
 	})
 	if err != nil {
@@ -159,14 +162,17 @@ func TestUploadConfirmationRejectsForgedMIMEAndQuarantinesFile(t *testing.T) {
 	if err := json.Unmarshal(intentRecorder.Body.Bytes(), &prepared); err != nil {
 		t.Fatal(err)
 	}
+	if prepared.Upload == nil {
+		t.Fatal("single upload intent omitted upload authorization")
+	}
 	uploadPath := strings.TrimPrefix(prepared.Upload.URL, cfg.HTTP.PublicURL)
 	uploadRecorder := serveRequest(
 		server,
 		cookie,
 		http.MethodPut,
 		uploadPath,
-		image,
-		"image/jpeg",
+		malformedJPEG,
+		"application/octet-stream",
 	)
 	if uploadRecorder.Code != http.StatusNoContent {
 		t.Fatalf("upload status = %d, body = %s", uploadRecorder.Code, uploadRecorder.Body.String())
@@ -180,19 +186,27 @@ func TestUploadConfirmationRejectsForgedMIMEAndQuarantinesFile(t *testing.T) {
 		nil,
 		"",
 	)
-	assertProblemCode(
-		t,
-		confirmRecorder,
-		http.StatusUnprocessableEntity,
-		"FILE_CONTENT_INVALID",
-	)
+	if confirmRecorder.Code != http.StatusOK {
+		t.Fatalf("confirm status = %d, body = %s", confirmRecorder.Code, confirmRecorder.Body.String())
+	}
+	var confirmed FileResponse
+	if err := json.Unmarshal(confirmRecorder.Body.Bytes(), &confirmed); err != nil {
+		t.Fatal(err)
+	}
+	if confirmed.Status != "ready" ||
+		confirmed.ContentType != "application/octet-stream" ||
+		confirmed.PreviewKind != "none" ||
+		len(confirmed.SHA256) != 64 {
+		t.Fatalf("confirmed malformed preview = %#v", confirmed)
+	}
 
 	var file domain.FileObject
 	if err := db.First(&file, "id = ?", prepared.File.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if file.Status != "invalid" || file.SHA256 != "" || file.Width != 0 || file.Height != 0 {
-		t.Fatalf("quarantined file = %#v", file)
+	if file.Status != "ready" || file.ContentType != "application/octet-stream" ||
+		len(file.SHA256) != 64 || file.Width != 0 || file.Height != 0 {
+		t.Fatalf("stored malformed preview = %#v", file)
 	}
 }
 
@@ -238,7 +252,7 @@ func TestFileDeletionPersistsStateAndEnqueuesCleanupWithoutDeletingInline(t *tes
 	}
 	if len(queue.requests) != 1 ||
 		queue.requests[0].Type != filecleanup.JobType ||
-		queue.requests[0].Version != filecleanup.PayloadVersion2 ||
+		queue.requests[0].Version != filecleanup.PayloadVersion3 ||
 		queue.requests[0].IdempotencyKey != "file:"+file.ID+":explicit-delete" {
 		t.Fatalf("queued cleanup = %#v", queue.requests)
 	}
@@ -379,6 +393,9 @@ func createPendingLocalUpload(
 	if err := json.Unmarshal(recorder.Body.Bytes(), &prepared); err != nil {
 		t.Fatal(err)
 	}
+	if prepared.Strategy != "single" || prepared.Upload == nil || prepared.Session != nil {
+		t.Fatalf("single upload intent = %#v", prepared)
+	}
 	return prepared, recorder
 }
 
@@ -391,8 +408,11 @@ func uploadPendingLocalObject(
 	image []byte,
 ) {
 	t.Helper()
+	if prepared.Upload == nil {
+		t.Fatal("single upload intent omitted upload authorization")
+	}
 	uploadPath := strings.TrimPrefix(prepared.Upload.URL, cfg.HTTP.PublicURL)
-	recorder := serveRequest(server, cookie, http.MethodPut, uploadPath, image, "image/png")
+	recorder := serveRequest(server, cookie, http.MethodPut, uploadPath, image, "application/octet-stream")
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("upload status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
@@ -401,18 +421,22 @@ func uploadPendingLocalObject(
 func assertPublicFileFields(t *testing.T, responseName string, file map[string]any) {
 	t.Helper()
 	allowed := map[string]struct{}{
-		"id":           {},
-		"provider":     {},
-		"originalName": {},
-		"contentType":  {},
-		"size":         {},
-		"sha256":       {},
-		"width":        {},
-		"height":       {},
-		"visibility":   {},
-		"status":       {},
-		"createdAt":    {},
-		"updatedAt":    {},
+		"id":                 {},
+		"provider":           {},
+		"storageProfileId":   {},
+		"storageProfileName": {},
+		"storageProvider":    {},
+		"originalName":       {},
+		"contentType":        {},
+		"previewKind":        {},
+		"size":               {},
+		"sha256":             {},
+		"width":              {},
+		"height":             {},
+		"visibility":         {},
+		"status":             {},
+		"createdAt":          {},
+		"updatedAt":          {},
 	}
 	for field := range file {
 		if _, ok := allowed[field]; !ok {

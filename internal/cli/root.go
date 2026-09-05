@@ -45,6 +45,7 @@ func newRootCommandWithDefinition(
 	}
 	root.Version = buildinfo.String()
 	root.AddCommand(
+		newProjectCommand(newProjectDependencies{}),
 		doctorCommand(),
 		checkCommand(),
 		devCommand(),
@@ -55,7 +56,7 @@ func newRootCommandWithDefinition(
 }
 
 func devCommand() *cobra.Command {
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "dev",
 		Short: "Run the API and web development servers together",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -88,6 +89,8 @@ func devCommand() *cobra.Command {
 			}
 		},
 	}
+	command.AddCommand(newReinitializeCommand(reinitializeDependencies{}))
+	return command
 }
 
 func generateCommand(
@@ -98,21 +101,37 @@ func generateCommand(
 		Use:   "client",
 		Short: "Regenerate OpenAPI and the TypeScript client contract",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			document, err := json.MarshalIndent(
-				definition.BuildOpenAPI(),
-				"",
-				"  ",
-			)
-			if err != nil {
-				return fmt.Errorf("marshal OpenAPI: %w", err)
-			}
-			document = append(document, '\n')
 			output := filepath.Join("docs", "openapi.json")
-			if err := os.MkdirAll(filepath.Dir(output), 0o750); err != nil {
-				return fmt.Errorf("create OpenAPI directory: %w", err)
-			}
-			if err := os.WriteFile(output, document, 0o640); err != nil {
-				return fmt.Errorf("write OpenAPI: %w", err)
+			if info, err := os.Stat(filepath.Join("cmd", "openapi")); err == nil && info.IsDir() {
+				process := exec.Command(
+					"go",
+					"run",
+					"./cmd/openapi",
+					"-output",
+					output,
+				)
+				process.Stdout = cmd.OutOrStdout()
+				process.Stderr = cmd.ErrOrStderr()
+				process.Stdin = cmd.InOrStdin()
+				if err := process.Run(); err != nil {
+					return fmt.Errorf("generate project OpenAPI: %w", err)
+				}
+			} else {
+				document, err := json.MarshalIndent(
+					definition.BuildOpenAPI(),
+					"",
+					"  ",
+				)
+				if err != nil {
+					return fmt.Errorf("marshal OpenAPI: %w", err)
+				}
+				document = append(document, '\n')
+				if err := os.MkdirAll(filepath.Dir(output), 0o750); err != nil {
+					return fmt.Errorf("create OpenAPI directory: %w", err)
+				}
+				if err := os.WriteFile(output, document, 0o640); err != nil {
+					return fmt.Errorf("write OpenAPI: %w", err)
+				}
 			}
 			process := exec.Command(
 				"pnpm",
@@ -212,14 +231,32 @@ func checkCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			steps := [][]string{
 				{"go", "test", "./..."},
-				{"go", "run", "./cmd/aginex", "skills", "validate"},
+			}
+			for _, step := range steps {
+				fmt.Fprintf(cmd.OutOrStdout(), "\n→ %s\n", strings.Join(step, " "))
+				process := exec.Command(step[0], step[1:]...)
+				process.Stdout = cmd.OutOrStdout()
+				process.Stderr = cmd.ErrOrStderr()
+				process.Stdin = cmd.InOrStdin()
+				if err := process.Run(); err != nil {
+					return fmt.Errorf("%s: %w", strings.Join(step, " "), err)
+				}
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "\n→ aginex skills validate")
+			count, err := validateSkills(filepath.Join(".agents", "skills"))
+			if err != nil {
+				return fmt.Errorf("aginex skills validate: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Validated %d canonical Agent Skills.\n", count)
+
+			webSteps := [][]string{
 				{"pnpm", "check:web"},
 				{"pnpm", "test:web"},
 			}
 			if !skipBuild {
-				steps = append(steps, []string{"pnpm", "build:web"})
+				webSteps = append(webSteps, []string{"pnpm", "build:web"})
 			}
-			for _, step := range steps {
+			for _, step := range webSteps {
 				fmt.Fprintf(cmd.OutOrStdout(), "\n→ %s\n", strings.Join(step, " "))
 				process := exec.Command(step[0], step[1:]...)
 				process.Stdout = cmd.OutOrStdout()

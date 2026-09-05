@@ -47,27 +47,44 @@ removed instead of being preserved as a compatibility mode.
    enqueue must commit with the write.
 8. Use the public `framework/storage.ObjectStore` contract. Object keys remain
    private metadata; signed URLs must not be logged, audited, or placed in an
-   idempotency replay record.
+   idempotency replay record. Resolve multipart and controlled-read behavior as
+   optional provider capabilities instead of importing cloud SDK types.
 9. If the deployment exports telemetry, create one
    `observability.Recorder`, attach it with `Definition.WithObservability`, and
    implement a concurrency-safe deployment sink. Do not install global
    telemetry providers from a reusable module.
+10. Keep the unpublished installation document at strict version `1`, including
+    `fileUploadPolicy: {maxUploadBytes,resumableUploadsEnabled}`. Do not bump the
+    version or add old-version readers until a release boundary and its upgrade
+    contract are explicitly declared.
 
-## Bundled-schema adoption
+## Current-only configuration and schema baseline
 
-The core Goose history remains continuous through version 8 so an already
-migrated pre-release database is not reported as being ahead. On a fresh
-database, the historical product/file steps are now no-ops and the core never
-creates `products` or `file_objects`.
+Aginex remains pre-release and intentionally carries no promise that an older
+binary, installation draft, generated client, or module-migration family can be
+mixed with this baseline. Until publication, the installation loader and writer
+use one strict current document whose `version` is always `1`; unpublished field
+changes replace that baseline without increasing the number. Unknown fields and
+every other version fail closed. Use `aginex dev reinitialize` to archive stale
+local state rather than adding normalization or compatibility branches.
 
-`FilesModule` and `StarterExampleModule` use isolated Goose history tables.
-Their first migration uses create-if-missing semantics: an existing pre-release
-`products` or `file_objects` table is adopted without copying, dropping, or
-rewriting its data, while a fresh installation receives the same final schema.
-The adoption migrations deliberately have no destructive automatic down step,
-because a module rollback cannot safely distinguish an adopted historical
-table from one it created. Remove those tables only through an explicit,
-backup-verified application data-retirement migration.
+The core's reserved historical product/file steps remain no-ops; business
+tables belong to opt-in modules. `FilesModule` has exactly one current migration
+family with one `00001_files.sql` baseline for each of SQLite, PostgreSQL, and
+MySQL. That baseline creates `file_objects`, `file_upload_sessions`, and
+`file_upload_parts`; there are no `files_current`, `files_legacy`, adoption, or
+upgrade families. `StarterExampleModule` likewise owns its isolated product
+history. Do not introduce compatibility migrations for unpublished schemas
+unless a user explicitly requests and defines that migration scope.
+
+The files baseline Down is intentionally destructive and guarded. Before
+running it, stop new file writes, disable resumable uploads, restart API and
+worker, then complete or cancel/expire every non-terminal session and verify
+that its provider multipart upload has been completed or aborted. Down refuses
+to proceed while a non-terminal session exists; once clear, it drops
+`file_upload_parts`, then `file_upload_sessions`, then `file_objects`. This
+permanently removes file metadata and is not reversible by running Up again.
+Take and restore-test a database/configuration/object-store backup first.
 
 Roll out one API instance before starting workers. Its automatic migration,
 runtime startup, and readiness include only the migration bundles in the
@@ -77,6 +94,11 @@ either bundled history; the checked-in starter definition requires both.
 In production, registering `FilesModule` also requires
 `AGINEX_JOBS_DRIVER=postgres` so file deletion and orphan recovery remain
 durable. A definition without the files module may keep jobs disabled.
+
+Saving a storage profile or file-upload policy changes only the pending
+installation revision. Restart both API and worker to load it. Existing upload
+sessions retain their creation-time provider, size, and multipart parameters;
+do not cancel them merely to apply a new default.
 
 ## Removed behavior
 
@@ -105,6 +127,7 @@ APIs remain under `/api/v1`.
 6. Require the release verification matrix before routing real users.
 
 Use expand/migrate/contract phases for destructive application schema changes.
-Rollback may require rolling application binaries back before a later contract
-migration; do not assume every destructive migration has a safe automatic
-down path.
+Rollback to an older unpublished Aginex binary is not guaranteed. Prefer a
+forward fix; otherwise restore the database, installation file, and object-store
+snapshot captured from one known-compatible baseline as a recovery unit. Do not
+assume any destructive migration has a safe automatic down path.

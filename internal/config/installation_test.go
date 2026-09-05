@@ -31,9 +31,51 @@ func TestLoadStateEntersSetupWithoutDatabaseConfiguration(t *testing.T) {
 	if state.Installation != nil || state.NeedsEnvironmentMarker {
 		t.Fatalf("unexpected installation state = %#v", state)
 	}
+	runtime := state.Config.StorageRuntime()
+	if runtime.InstallationPath != path || runtime.LoadedRevision != 1 ||
+		runtime.EnvironmentManaged || runtime.ActiveProfileID == "" || len(runtime.Profiles) != 1 {
+		t.Fatalf("setup storage runtime = %#v", runtime)
+	}
+	uploadRuntime := state.Config.FileUploadRuntime()
+	if uploadRuntime.InstallationPath != path ||
+		uploadRuntime.LoadedRevision != 1 ||
+		uploadRuntime.EnvironmentManaged ||
+		uploadRuntime.MaxUploadBytes != DefaultMaxUploadBytes ||
+		uploadRuntime.ResumableUploadsEnabled {
+		t.Fatalf("setup file upload runtime = %#v", uploadRuntime)
+	}
 	if _, err := Load(); !errors.Is(err, ErrSetupRequired) {
 		t.Fatalf("configured-only Load error = %v", err)
 	}
+}
+
+func TestStorageEnvironmentManagementRequiresExplicitDriver(t *testing.T) {
+	t.Run("local root remains console managed", func(t *testing.T) {
+		unsetEnvironment(t, "AGINEX_STORAGE_DRIVER")
+		root := filepath.Join(t.TempDir(), "objects")
+		isolatedInstallationEnvironment(t)
+		t.Setenv("AGINEX_STORAGE_LOCAL_ROOT", root)
+		state, err := LoadState()
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtime := state.Config.StorageRuntime()
+		if runtime.EnvironmentManaged || runtime.Profiles[0].LocalRoot != root {
+			t.Fatalf("storage runtime = %#v", runtime)
+		}
+	})
+
+	t.Run("explicit driver locks console", func(t *testing.T) {
+		isolatedInstallationEnvironment(t)
+		t.Setenv("AGINEX_STORAGE_DRIVER", "local")
+		state, err := LoadState()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !state.Config.StorageRuntime().EnvironmentManaged {
+			t.Fatal("explicit storage driver did not enable environment management")
+		}
+	})
 }
 
 func TestLoadStateCreatesEnvironmentMarkerWithoutDSN(t *testing.T) {
@@ -687,6 +729,17 @@ func TestLoadStateRejectsUnsafeInstallationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	validPayload, err := encodeInstallation(valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validJSON := strings.TrimSpace(string(validPayload))
+	unsupported := valid
+	unsupported.Version = CurrentInstallationVersion + 1
+	unsupportedPayload, err := encodeInstallation(unsupported)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name    string
@@ -696,21 +749,15 @@ func TestLoadStateRejectsUnsafeInstallationFiles(t *testing.T) {
 		{name: "malformed", content: `{`, mode: 0o600},
 		{
 			name: "unknown field",
-			content: `{"version":1,"database":{"source":"managed","driver":"sqlite","dsn":"aginex.db"},` +
-				`"sessionSecret":"` + secret + `","installedAt":"` + valid.InstalledAt.Format("2006-01-02T15:04:05.999999999Z07:00") + `","adminPassword":"secret"}`,
+			content: strings.TrimSuffix(validJSON, "}") +
+				`,"adminPassword":"secret"}`,
 			mode: 0o600,
 		},
+		{name: "unsupported future version", content: string(unsupportedPayload), mode: 0o600},
 		{
-			name: "unsupported version",
-			content: `{"version":2,"database":{"source":"managed","driver":"sqlite","dsn":"aginex.db"},` +
-				`"sessionSecret":"` + secret + `","installedAt":"` + valid.InstalledAt.Format("2006-01-02T15:04:05.999999999Z07:00") + `"}`,
-			mode: 0o600,
-		},
-		{
-			name: "permissions too broad",
-			content: `{"version":1,"database":{"source":"managed","driver":"sqlite","dsn":"aginex.db"},` +
-				`"sessionSecret":"` + secret + `","installedAt":"` + valid.InstalledAt.Format("2006-01-02T15:04:05.999999999Z07:00") + `"}`,
-			mode: 0o644,
+			name:    "permissions too broad",
+			content: validJSON,
+			mode:    0o644,
 		},
 	}
 	for _, test := range tests {
@@ -809,4 +856,19 @@ func isolatedInstallationEnvironment(t *testing.T) string {
 	t.Setenv("AGINEX_API_PUBLIC_URL", "http://localhost:8080")
 	t.Setenv("AGINEX_WEB_ORIGINS", "http://localhost:3000")
 	return path
+}
+
+func unsetEnvironment(t *testing.T, name string) {
+	t.Helper()
+	value, present := os.LookupEnv(name)
+	if err := os.Unsetenv(name); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if present {
+			_ = os.Setenv(name, value)
+		} else {
+			_ = os.Unsetenv(name)
+		}
+	})
 }

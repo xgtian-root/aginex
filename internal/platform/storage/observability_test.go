@@ -58,7 +58,7 @@ func TestObserveStorageRecordsSafeOperationsAndUnwrapsLocal(t *testing.T) {
 	}
 	secretKey := "users/TOP-SECRET-filename.png"
 	content := []byte("\x89PNG\r\n\x1a\nexample")
-	if err := local.Put(secretKey, content, "image/png"); err != nil {
+	if _, err := local.Put(context.Background(), secretKey, bytes.NewReader(content), int64(len(content))); err != nil {
 		t.Fatal(err)
 	}
 	sink := &storageObservationSink{}
@@ -217,6 +217,77 @@ func TestObserveStoragePreservesErrorsWithoutExportingThem(t *testing.T) {
 		"TOP-SECRET",
 		"https://",
 	)
+}
+
+func TestObserveStoragePreservesOptionalCapabilitiesAndSafeTelemetry(t *testing.T) {
+	local, err := NewLocal(
+		t.TempDir(), "https://private.example/upload", "https://private.example/content", DefaultFilePolicy(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink := &storageObservationSink{}
+	recorder, err := observability.NewRecorder(sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := Observe(local, "local", recorder)
+	multipart, ok := AsMultipart(store)
+	if !ok {
+		t.Fatal("observability decorator hid multipart capability")
+	}
+	controlled, ok := AsControlledRead(store)
+	if !ok {
+		t.Fatal("observability decorator hid controlled-read capability")
+	}
+	ctx := context.Background()
+	upload, err := multipart.InitiateMultipart(ctx, UploadRequest{
+		Key: "TOP-SECRET/private-name.bin", Size: 64,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := multipart.SignUploadPart(ctx, MultipartPartRequest{
+		Upload: upload, PartNumber: 1, Size: 64,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := multipart.AbortMultipart(ctx, upload); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := controlled.SignControlledRead(ctx, ControlledReadRequest{
+		Key: "TOP-SECRET/private-name.bin", ContentType: "application/pdf",
+		Disposition: ReadDispositionInline, Filename: "private-name.pdf",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	spans, metrics := sink.snapshot()
+	want := map[string]int{
+		"initiate_multipart":   1,
+		"sign_upload_part":     1,
+		"abort_multipart":      1,
+		"sign_controlled_read": 1,
+	}
+	got := make(map[string]int)
+	for _, span := range spans {
+		values := span.Attributes.Values()
+		assertStorageAttributeKeys(t, values, "local")
+		got[values["storage.operation"]]++
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("operations = %v, want %v", got, want)
+	}
+	assertStorageTelemetryExcludes(
+		t, spans, metrics, "TOP-SECRET", "private-name", upload.ProviderUploadID, "private.example",
+	)
+
+	unsupported := Observe(&failingStorage{err: errors.New("failure")}, "custom", recorder)
+	if _, ok := AsMultipart(unsupported); ok {
+		t.Fatal("decorator added multipart capability to unsupported storage")
+	}
+	if _, ok := AsControlledRead(unsupported); ok {
+		t.Fatal("decorator added controlled-read capability to unsupported storage")
+	}
 }
 
 type failingStorage struct {

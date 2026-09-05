@@ -389,6 +389,18 @@ func TestCSRFEndpointProtectsCookieWritesAndRejectsCrossOriginRequests(t *testin
 		t.Fatalf("csrf cookie = %#v, response = %#v", csrfCookie, csrf)
 	}
 
+	preflight := httptest.NewRequest(http.MethodOptions, "/api/v1/storage-profiles/test-id", nil)
+	preflight.Header.Set("Origin", cfg.WebOrigin)
+	preflight.Header.Set("Access-Control-Request-Method", http.MethodPut)
+	preflight.Header.Set("Access-Control-Request-Headers", "Content-Type, If-Match, Idempotency-Key, X-CSRF-Token")
+	preflightRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(preflightRecorder, preflight)
+	if preflightRecorder.Code != http.StatusNoContent ||
+		!strings.Contains(preflightRecorder.Header().Get("Access-Control-Allow-Headers"), "If-Match") ||
+		!strings.Contains(preflightRecorder.Header().Get("Access-Control-Expose-Headers"), "ETag") {
+		t.Fatalf("storage CORS preflight status/headers = %d %#v", preflightRecorder.Code, preflightRecorder.Header())
+	}
+
 	crossOrigin := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
 	crossOrigin.Header.Set("Content-Type", "application/json")
 	crossOrigin.Header.Set(csrf.HeaderName, csrf.Token)
@@ -611,7 +623,7 @@ func TestLocalImageUploadLifecycle(t *testing.T) {
 	}
 	uploadPath := strings.TrimPrefix(prepared.Upload.URL, cfg.HTTP.PublicURL)
 	upload := httptest.NewRequest(http.MethodPut, uploadPath, bytes.NewReader(image))
-	upload.Header.Set("Content-Type", "image/png")
+	upload.Header.Set("Content-Type", "application/octet-stream")
 	upload.AddCookie(cookie)
 	addTestCSRF(upload)
 	uploadRecorder := httptest.NewRecorder()
@@ -632,7 +644,8 @@ func TestLocalImageUploadLifecycle(t *testing.T) {
 	if err := json.Unmarshal(confirmRecorder.Body.Bytes(), &confirmed); err != nil {
 		t.Fatal(err)
 	}
-	if len(confirmed.SHA256) != 64 || confirmed.Width != 2 || confirmed.Height != 2 {
+	if len(confirmed.SHA256) != 64 || confirmed.Width != 2 || confirmed.Height != 2 ||
+		confirmed.PreviewKind != "image" {
 		t.Fatalf("verified metadata = %#v", confirmed)
 	}
 }

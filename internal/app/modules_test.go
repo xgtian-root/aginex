@@ -19,6 +19,7 @@ func TestComposeRegistryDeclaresEveryBuiltInModule(t *testing.T) {
 		"health",
 		"jobs",
 		"starter-example",
+		"storage-settings",
 	}
 	if !reflect.DeepEqual(registry.Modules(), wantModules) {
 		t.Fatalf("modules = %v, want %v", registry.Modules(), wantModules)
@@ -32,6 +33,7 @@ func TestComposeRegistryDeclaresEveryBuiltInModule(t *testing.T) {
 		"deleteFile",
 		"listJobs",
 		"retryDeadJob",
+		"listStorageProfiles",
 	} {
 		if _, ok := operations[operationID]; !ok {
 			t.Fatalf("operation %q is not registered", operationID)
@@ -69,8 +71,8 @@ func TestComposeRegistryDeclaresEveryBuiltInModule(t *testing.T) {
 		t.Fatalf("revokeAllSessions contract = %#v", revokeAll)
 	}
 	resources := registry.Resources()
-	if len(resources) != 2 {
-		t.Fatalf("resources = %#v, want file and product resource definitions", resources)
+	if len(resources) != 6 {
+		t.Fatalf("resources = %#v, want access, file, and product resource definitions", resources)
 	}
 	byName := make(map[string]module.ResourceDefinition, len(resources))
 	for _, resource := range resources {
@@ -80,7 +82,7 @@ func TestComposeRegistryDeclaresEveryBuiltInModule(t *testing.T) {
 	if file.Name != "files" ||
 		file.Ownership != module.OwnershipOwner ||
 		file.Policy != policyOwner ||
-		len(file.Operations) != 5 {
+		len(file.Operations) != 13 {
 		t.Fatalf("file resource = %#v", file)
 	}
 	product := byName["products"]
@@ -90,7 +92,34 @@ func TestComposeRegistryDeclaresEveryBuiltInModule(t *testing.T) {
 		len(product.Operations) != 5 {
 		t.Fatalf("product resource = %#v", product)
 	}
-	for _, resource := range []module.ResourceDefinition{file, product} {
+	permission := byName["permissions"]
+	if permission.Name != "permissions" ||
+		permission.Ownership != module.OwnershipSystem ||
+		permission.Policy != policySystem ||
+		len(permission.Operations) != 1 {
+		t.Fatalf("permission resource = %#v", permission)
+	}
+	role := byName["roles"]
+	if role.Name != "roles" ||
+		role.Ownership != module.OwnershipSystem ||
+		role.Policy != policySystem ||
+		len(role.Operations) != 6 {
+		t.Fatalf("role resource = %#v", role)
+	}
+	user := byName["users"]
+	if user.Name != "users" ||
+		user.Ownership != module.OwnershipSystem ||
+		user.Policy != policySystem ||
+		len(user.Operations) != 11 {
+		t.Fatalf("user resource = %#v", user)
+	}
+	for _, resource := range []module.ResourceDefinition{
+		file,
+		permission,
+		product,
+		role,
+		user,
+	} {
 		for _, operation := range resource.Operations {
 			if operation.RequestDTO == resource.Model || operation.ResponseDTO == resource.Model {
 				t.Fatalf("%s operation reuses persistence model: %#v", resource.Name, operation)

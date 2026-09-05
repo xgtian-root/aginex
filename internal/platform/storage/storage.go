@@ -10,53 +10,65 @@ import (
 )
 
 var (
-	ErrInvalidKey  = errors.New("invalid object key")
-	ErrInvalidType = errors.New("unsupported content type")
-	ErrTooLarge    = errors.New("object exceeds the configured size limit")
+	ErrInvalidKey = errors.New("invalid object key")
+	// Deprecated compatibility aliases. Arbitrary file uploads no longer use a
+	// MIME allowlist and size failures come from the shared FilePolicy.
+	ErrInvalidType      = errors.New("unsupported content type")
+	ErrTooLarge         = frameworkstorage.ErrContentTooLarge
+	ErrFileSizeMismatch = frameworkstorage.ErrFileSizeMismatch
 )
-
-var defaultImageTypes = map[string]struct{}{
-	"image/jpeg": {},
-	"image/png":  {},
-	"image/webp": {},
-}
 
 type (
-	UploadRequest    = frameworkstorage.UploadRequest
-	SignedRequest    = frameworkstorage.SignedRequest
-	ObjectInfo       = frameworkstorage.ObjectInfo
-	Storage          = frameworkstorage.ObjectStore
-	ReadinessChecker = frameworkstorage.ReadinessChecker
+	UploadRequest            = frameworkstorage.UploadRequest
+	SignedRequest            = frameworkstorage.SignedRequest
+	ObjectInfo               = frameworkstorage.ObjectInfo
+	Storage                  = frameworkstorage.ObjectStore
+	ReadinessChecker         = frameworkstorage.ReadinessChecker
+	FilePolicy               = frameworkstorage.FilePolicy
+	ControlledRead           = frameworkstorage.ControlledRead
+	ControlledReadRequest    = frameworkstorage.ControlledReadRequest
+	ReadDisposition          = frameworkstorage.ReadDisposition
+	MultipartObjectStore     = frameworkstorage.MultipartObjectStore
+	MultipartUpload          = frameworkstorage.MultipartUpload
+	MultipartPartRequest     = frameworkstorage.MultipartPartRequest
+	UploadedPart             = frameworkstorage.UploadedPart
+	MultipartCompleteRequest = frameworkstorage.MultipartCompleteRequest
 )
 
-type Policy struct {
-	MaxBytes     int64
-	AllowedTypes map[string]struct{}
+const (
+	StoredContentType         = frameworkstorage.StoredContentType
+	ReadDispositionInline     = frameworkstorage.ReadDispositionInline
+	ReadDispositionAttachment = frameworkstorage.ReadDispositionAttachment
+	DefaultMaxFileBytes       = frameworkstorage.DefaultMaxFileBytes
+	AbsoluteMaxFileBytes      = frameworkstorage.AbsoluteMaxFileBytes
+)
+
+func DefaultFilePolicy() FilePolicy {
+	return frameworkstorage.DefaultFilePolicy()
 }
 
-func DefaultImagePolicy() Policy {
-	return Policy{MaxBytes: 10 << 20, AllowedTypes: defaultImageTypes}
+func NewFilePolicy(maxBytes int64) (FilePolicy, error) {
+	return frameworkstorage.NewFilePolicy(maxBytes)
 }
 
-func (p Policy) Validate(request UploadRequest) error {
+// DefaultImagePolicy remains as a source-compatible bridge for application
+// code while the unreleased generic-file API is adopted.
+func DefaultImagePolicy() FilePolicy {
+	return DefaultFilePolicy()
+}
+
+func validateUpload(policy FilePolicy, request UploadRequest) error {
 	if err := ValidateKey(request.Key); err != nil {
 		return err
 	}
-	if request.Size < 1 || (p.MaxBytes > 0 && request.Size > p.MaxBytes) {
-		return ErrTooLarge
+	if request.Continuation {
+		return validateExistingTransferSize(request.Size)
 	}
-	allowed := p.AllowedTypes
-	if len(allowed) == 0 {
-		allowed = defaultImageTypes
-	}
-	if _, ok := allowed[strings.ToLower(request.ContentType)]; !ok {
-		return ErrInvalidType
-	}
-	return nil
+	return policy.ValidateSize(request.Size)
 }
 
 func ValidateKey(key string) error {
-	if key == "" || strings.HasPrefix(key, "/") || strings.Contains(key, "\\") {
+	if key == "" || strings.HasPrefix(key, "/") || strings.Contains(key, "\\") || containsControl(key) {
 		return ErrInvalidKey
 	}
 	clean := path.Clean(key)

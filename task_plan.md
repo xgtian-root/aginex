@@ -1,5 +1,247 @@
 # Aginex v1 Implementation Plan
 
+## Current Goal: `aginex new` Project Initialization (2026-09-04)
+
+Implement a collision-safe project initializer with two explicit target modes:
+`aginex new` initializes the current directory, while
+`aginex new <name>` creates and initializes `<name>` below the current
+directory. Generated projects must have one coherent Aginex application
+composition, must not silently overwrite existing content, and must be covered
+by CLI and generated-project verification.
+
+### New Command Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| N1. Contract and template-boundary audit | complete | CLI conventions, public consumer APIs, required starter files, collision rules, and platform-safe paths are mapped |
+| N2. Initializer implementation | complete | Both target modes render a deterministic dependency-based project without partial output or overwrites, using a public Aginex host boundary |
+| N3. CLI and scaffold regression tests | complete | Argument validation, current/new-directory behavior, collisions, names, and generated artifacts are tested |
+| N4. Documentation and Skill convergence | complete | README, CLI help, roadmap/status, and project-creation Skill describe the implemented behavior accurately |
+| N5. Completion verification | complete | Focused Go tests, generated-project checks, formatting, and the applicable repository gates pass |
+
+### Phase N1: Contract and template-boundary audit
+
+- **Status:** complete
+
+### Phase N2: Initializer implementation
+
+- **Status:** complete
+
+### Phase N3: CLI and scaffold regression tests
+
+- **Status:** complete
+
+### Phase N4: Documentation and Skill convergence
+
+- **Status:** complete
+
+### Phase N5: Completion verification
+
+- **Status:** complete
+
+### `aginex new` Guardrails
+
+- Zero positional arguments target the current working directory; one argument
+  targets a new direct child directory; more than one argument is rejected.
+- Never overwrite a pre-existing file or initialize a non-empty target.
+- Validate project names before creating the target and reject absolute paths,
+  traversal, separators, dot entries, and ambiguous platform names.
+- Render through a staging directory and publish only a complete scaffold so a
+  failed render does not leave a partially initialized project.
+- Keep generated project source dependent on public Aginex contracts; do not
+  expose or import Aginex `internal` packages.
+- Do not generate `.env`, credentials, database files, uploaded objects, or a
+  committed administrator password.
+
+### New Command Errors Encountered
+
+| Error | Attempt | Resolution |
+|---|---|---|
+| First external consumer build lacked transitive checksums and a tidy module graph | 1 | Bundle the matching framework sums and derive an application-view indirect dependency graph that passes readonly build and `go mod tidy -diff` |
+| A combined smoke command was run from the generated-project parent instead of the repository/project directory | 2 | Split repository build, generation, and consumer verification into commands with explicit working directories |
+| Source-built CLI metadata exposed a non-downloadable `+dirty` pseudo-version | 1 | Reject dirty build metadata and fall back to the declared pre-release build version; release binaries still use their exact clean module/build version |
+| Windows cross-compilation could not create a dependency-cache lock inside the sandbox | 1 | Re-run the unchanged read-only cross-build with approved Go module-cache access |
+| Root `go mod tidy -diff` also reports an unrelated pre-existing `go-sqlite` directness change | 1 | Preserve the user's unrelated dependency work; verify the generated project independently with its own zero-diff tidy gate |
+| The generated-project offline `pnpm install` lacked one cached package tarball | 1 | Re-run the same frozen-lockfile installation with approved network access, then execute all generated Web checks |
+| The first global-CLI `check` probe inherited an unwritable user Go build cache | 1 | Re-run with a task-scoped `GOCACHE`; the complete generated-project check passed |
+| A `go doc` probe attempted to resolve unrelated uncached modules through the sandboxed network | 1 | Inspect the already-cached `x/mod` source directly and keep all completion gates offline/task-cache scoped |
+| A manual generated-project tidy probe inherited the unwritable user Go cache and emitted secondary package-scan noise | 1 | Re-run unchanged with a task-scoped `GOCACHE`; `go mod tidy -diff` completed with zero output |
+
+## Current Goal: PostgreSQL Reinitialization Ownership Repair (2026-08-11)
+
+Make `dev reinitialize` work when the configured local PostgreSQL role owns the
+application objects but does not own the shared `public` schema. Preserve the
+recoverable backup boundary and prove the fix without committing a reset to the
+operator's live database.
+
+### Repair Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| PR1. Failure and rollback audit | complete | The reported ownership failure is classified and both configuration/database rollback are verified by control flow |
+| PR2. PostgreSQL regression contract | complete | Tests lock preflight ownership checks and transactional object-level archive behavior |
+| PR3. Implementation and documentation | complete | The command creates a private backup schema and moves supported owned objects without renaming `public` |
+| PR4. Non-persistent live verification | complete | The exact configured database passes an archive probe inside an explicitly rolled-back transaction |
+| PR5. Relevant verification gates | complete | Focused CLI tests, full CLI/config tests, formatting, and documentation checks pass |
+
+### Phase PR1: Failure and rollback audit
+
+- **Status:** complete
+
+### Phase PR2: PostgreSQL regression contract
+
+- **Status:** complete
+
+### Phase PR3: Implementation and documentation
+
+- **Status:** complete
+
+### Phase PR4: Non-persistent live verification
+
+- **Status:** complete
+
+### Phase PR5: Relevant verification gates
+
+- **Status:** complete
+
+### PostgreSQL Repair Guardrails
+
+- Do not require ownership of the shared `public` schema and do not change its
+  owner or privileges.
+- Preflight every supported application object before the first DDL statement;
+  reject foreign-owned or unsupported standalone objects fail-closed.
+- Move objects and create the backup schema in one transaction so any error
+  restores the original database layout automatically.
+- Never print the installation DSN, password, provider credentials, or private
+  configuration contents.
+- Verify the live target only in a transaction that is always rolled back; the
+  operator remains responsible for rerunning the confirmed real reset.
+
+## Current Goal: Pre-release v1 Configuration and Safe Local Reinitialization (2026-08-11)
+
+Withdraw installation v1/v2/v3 compatibility, keep the unpublished
+installation document version fixed at v1, retain the single current database
+migration baseline, and provide an explicit recoverable local-development
+reinitialization command for disposing of stale pre-release state.
+
+### Reinitialization Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| R1. Existing CLI/config/reset seam audit | complete | Current dev command, installation writer/reader, database targeting, backup primitives, and safety boundaries are mapped |
+| R2. Regression contract | complete | Tests lock v1-only strict configuration and require explicit, local-only, recoverable reset behavior |
+| R3. Implementation | complete | Configuration is v1-only and the reset command archives state before changing any local target |
+| R4. Documentation and startup verification | complete | Agent/operations docs describe the pre-release v1 rule and reset workflow; stale-state and fresh-start behavior are exercised |
+| R5. Full verification | complete | Go, Web, build, Skill, doctor/check, formatting, and relevant CLI integration gates pass |
+
+### Phase R1: Existing CLI/config/reset seam audit
+
+- **Status:** complete
+
+### Phase R2: Regression contract
+
+- **Status:** complete
+
+### Phase R3: Implementation
+
+- **Status:** complete
+
+### Phase R4: Documentation and startup verification
+
+- **Status:** complete
+
+### Phase R5: Full verification
+
+- **Status:** complete
+
+### Reinitialization Guardrails
+
+- Never reset automatically during `dev` startup; the operator must invoke the
+  reset subcommand and acknowledge the exact target.
+- Restrict destructive database handling to demonstrably local development
+  targets; fail closed for production, environment-managed, remote, ambiguous,
+  symlinked, or overly permissive configuration.
+- Produce a mode-0600 recoverable backup before changing installation or
+  database state, and never print secrets, DSNs, or provider credentials.
+- Keep installation JSON strict and fixed at version 1 until the user declares
+  a published compatibility boundary. Unknown fields and any other version fail.
+- Do not restore legacy database migration families; reinitialization consumes
+  stale pre-release state and starts from the sole current baseline.
+
+### Errors Encountered
+
+| Error | Attempt | Resolution |
+|---|---|---|
+| Sandbox denied the user Go build cache during the first focused config test | 1 | Re-run the same deterministic test with the already approved `go test` cache access rather than changing source or cache ownership |
+| SQLite archive refactor retained the old three-result helper assignment | 1 | Read the exact compile line and align it with the new two-result helper signature |
+| Combined documentation patch missed a wrapped Operations sentence | 1 | Verified the patch was atomic/no-op, then split documentation updates by file and exact local context |
+| Operations-only patch still combined two contexts and missed the second wrap | 2 | Stop combining contexts: apply the installation/reset section first, then inspect and patch the rollback sentence independently |
+| A double-quoted search pattern contained Markdown backticks and invoked an empty shell substitution | 1 | No data was exposed; use single-quoted patterns for all subsequent searches containing backticks |
+| CLI help probe was blocked by the sandboxed user Go build cache | 1 | Re-run the read-only help command with approved Go cache access; no source or environment changes are needed |
+| Planning completion checker found only table-based phases and reported 0/0 | 1 | Added the Skill's canonical `### Phase` plus `**Status:** complete` markers without discarding the detailed phase table |
+| Final help-copy patch assumed aligned Cobra field spacing | 1 | Apply against the exact gofmt output and keep the documentation context separate |
+| PostgreSQL archive attempted to rename `public`, but the configured application role does not own that shared schema | 1 | Replace schema rename with a preflighted transactional move of application-owned objects into a private backup schema |
+| Focused CLI regression could not read the user Go build cache inside the workspace sandbox | 1 | Re-run the unchanged focused test with the already approved `go test` cache access; do not alter cache ownership or source |
+| Rollback-only PostgreSQL probe found the application-owned audit immutability trigger function in `public` | 1 | Expand the archive inventory to supported functions with explicit owner checks and dependency-safe moves; keep unknown standalone objects fail-closed |
+| Combined planning-file patch used context from the wrong file and applied nothing | 1 | Split the task-plan error entry and findings/progress updates into exact per-file patches |
+
+## Current Goal: People and Role Management Console (2026-08-10)
+
+Complete the existing read-only access administration surface with secure
+administrator-managed local users, custom roles, user-role assignments, and
+role-permission grants. Keep registered permission definitions code-owned,
+keep the built-in Administrator role immutable and synchronized to every
+registered permission with `all` scope, and preserve atomic audit-backed writes.
+
+### Access Management Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| A1. Contract and invariant audit | complete | Existing identity, role, permission, session, audit, API, UI, and test seams are mapped and public operations are locked |
+| A2. Backend management operations | complete | Typed user/role CRUD and assignment operations enforce RBAC, lifecycle invariants, atomic audit, and RFC problem responses |
+| A3. Permission-aware console | complete | Responsive People and Access pages expose only authorized actions with complete form, empty, error, and destructive states |
+| A4. Contract generation and focused tests | complete | OpenAPI/client are regenerated and success/401/403/invariant/audit paths pass focused Go and Web tests |
+| A5. Full verification and review | complete | Go, Web, production build, drift, and independent security review pass; real browser execution is documented as environment-blocked |
+
+### Access Management Guardrails
+
+- Permission definitions remain module-declared and startup-synchronized; the
+  console edits role grants, never arbitrary permission codes.
+- `Administrator` is reserved, cannot be renamed, weakened, or deleted, and
+  always receives every registered permission with `all` scope.
+- Every successful mutation commits its business state and audit event in one
+  transaction; failed authorization or validation changes nothing.
+- Public registration remains disabled. Only authorized administrators may
+  create local users and assign roles.
+- Prevent self-lockout and loss of the last active Administrator through user
+  disable/delete or role reassignment.
+- Preserve all existing application-owned files and use the repository's
+  generated OpenAPI/TypeScript path instead of editing generated artifacts.
+
+### Locked Access Contract
+
+- Permission catalog: `permissions:read`; runtime permission definitions remain
+  immutable and expose their valid `own|all` grant scopes.
+- People permissions: `users:create|read|update|delete|assign-roles|enable|disable|reset-password|grant-administrator|revoke-administrator`.
+- Role permissions: `roles:create|read|update|delete|grant`.
+- User CRUD lives at `/api/v1/users[/{id}]`; role replacement, enable/disable,
+  password reset, and Administrator grant/revoke are explicit subresource/action
+  operations. Email is immutable after local identity creation.
+- Role CRUD lives at `/api/v1/roles[/{id}]`; grants are atomically replaced at
+  `/api/v1/roles/{id}/grants`. Permission codes, not database permission IDs,
+  are the stable request identity.
+- User and role create requests may include initial assignments only when the
+  actor also holds the corresponding assignment/grant permission; the service
+  applies the same delegation ceiling as later replacement operations.
+- Generic user-role assignment excludes Administrator. Its grant/revoke uses
+  explicit operations, requires an existing Administrator actor, and serializes
+  last-active-Administrator checks.
+- Disabling, deleting, or resetting a user revokes that user's browser sessions
+  in the same audited transaction. User deletion is soft deletion; its email
+  and identity remain reserved.
+- Custom roles with assigned non-deleted users cannot be deleted. Administrator
+  role metadata/grants/deletion remain entirely bootstrap-owned.
+
 ## Current Goal: Remove Administrator Password Length Limits (2026-08-10)
 
 Remove administrator password minimum/maximum length constraints across Setup
@@ -436,3 +678,61 @@ PostgreSQL dependencies.
 | Upload-intent integration regressions referenced the not-yet-defined expiry grace and enqueue path | First focused `go test ./internal/app` for pending-expiry scheduling | Expected red test-first baseline; schedule the v2 expiry job inside the existing audited transaction and give deletion causes disjoint idempotency keys |
 | The legacy trace regression expected the API to echo the caller's parent span ID | First app run after real server spans replaced trace-string correlation | Assert the response keeps the incoming trace ID but creates a distinct server child span ID; malformed input still starts a fresh valid trace |
 | Assigning the observed limiter back to a variable inferred as `*GORMLimiter` failed to compile | First app integration of the provider-neutral limiter decorator | Keep the concrete GORM store in a separate variable and assign the decorator result to the `ratelimit.Limiter` interface |
+| New discriminated upload response made the existing single-upload struct literals fail pointer assignment | First contract-only compile for general files | Update single responses and idempotency sanitization to use an optional signed request; resumable replay never regenerates a provider upload |
+| Focused app/config compile inherited the sandbox-blocked macOS user Go build cache | First settings-policy compile | Re-run with a task-scoped `GOCACHE=/private/tmp/aginex-file-upload-go-cache`; source formatting completed before the cache failure |
+| App compile overlapped the storage workstream between removing legacy Policy and updating adapter constructors | First upload-policy endpoint compile | Do not patch the parallel-owned storage files; retain the correctly registered route and rerun after the provider slice reaches a compiling handoff |
+# 2026-08-10 — Storage provider profiles
+
+## Goal
+
+Implement permission-aware, restart-applied storage profiles for Local, Alibaba OSS, AWS S3, MinIO, and Cloudflare R2, with safe installation-file persistence, exact file/cleanup routing, generated contracts, and a responsive `/settings` console.
+
+## Phases
+
+| Phase | Status | Deliverable |
+|---|---|---|
+| 1. Baseline and conflict inventory | complete | Preserve current access-console work and lock implementation seams |
+| 2. Installation v2 and storage registry | complete | Versioned profile persistence, atomic CAS, provider factories, immutable runtime registry |
+| 3. Files schema and cleanup routing | complete | Three-dialect migrations, audited backfill, exact API/worker routing, cleanup v3 |
+| 4. Profile API, permissions, and audit | complete | CRUD/test/activate/archive/restore, CAS, readiness, audit compensation |
+| 5. Settings UI | complete | Permission-aware responsive provider-profile console and Files labels |
+| 6. Verification and documentation | complete | Final contracts, Go/Web tests, build, migration/provider checks, docs |
+
+## Locked decisions
+
+- Profiles remain in the private installation file; file rows store stable profile IDs.
+- Explicit `AGINEX_STORAGE_DRIVER` makes profile management read-only.
+- All changes are staged for restart; no API/worker hot swap.
+- Active storage readiness is required; retained profile failures are degraded.
+- Preserve and merge all pre-existing dirty-worktree changes.
+
+# 2026-08-11 — General file uploads and resumable transfers
+
+## Goal
+
+Replace the image-only Files surface with a safe multi-file transfer workspace,
+configurable 1 MiB–1 GiB upload policy, progress/results, and optional 32 MiB
+multipart resume across Local, S3-compatible, and OSS storage.
+
+## Phases
+
+| Phase | Status | Deliverable |
+|---|---|---|
+| 1. Baseline, Agent constraint, and contract | complete | Preserve current storage-profile/access work, record the pre-release rule, and lock current-only contracts |
+| 2. Configuration and generic single upload | complete | Current installation policy, generic streaming verifier, safe read disposition, typed API |
+| 3. Multipart storage and persistence | complete | Three-dialect schema, Local/S3/OSS multipart capability, audited state machine and cleanup |
+| 4. File transfer and Settings UI | complete | Multi-file review queue, XHR progress/results/resume, responsive settings policy panel |
+| 5. Contracts, tests, documentation, and release gate | complete | Generated artifacts, focused/full tests, provider/dialect evidence, docs and final review |
+
+## Locked decisions
+
+- Aginex is unpublished: do not retain compatibility branches for unshipped
+  installation versions, APIs, generated clients, or migration layouts.
+- The final baseline uses one current installation document with a file upload
+  policy; default maximum is 10 MiB and resumable upload defaults off.
+- Resumable mode applies only to files strictly larger than 32 MiB, uses fixed
+  32 MiB parts, expires after 24 hours, and never blocks an already-created
+  session when policy or active profile later changes.
+- Arbitrary file types are accepted, but only verified JPEG/PNG/WebP/GIF/PDF
+  may preview; every other file is forced to attachment.
+- Preserve and merge every unrelated dirty-worktree change already present.

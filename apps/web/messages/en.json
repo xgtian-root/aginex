@@ -46,7 +46,8 @@
       "people": "People",
       "access": "Access",
       "auditTrail": "Audit trail",
-      "files": "Files"
+      "files": "Files",
+      "systemSettings": "System settings"
     },
     "skipLink": "Skip to main content",
     "homeAriaLabel": "Aginex home",
@@ -312,25 +313,97 @@
   "Files": {
     "deletedToast": "File deleted.",
     "deleteError": "The file could not be deleted.",
-    "chooseImageError": "Choose a JPEG, PNG, or WebP image.",
     "objectUploadError": "Object upload returned {status}.",
-    "uploadedToast": "Image uploaded and verified.",
-    "uploadError": "The image could not be uploaded. Check its type and size, then try again.",
+    "uploadError": "The file could not be uploaded and verified.",
     "temporaryUrlError": "A temporary file URL could not be created.",
     "header": {
       "eyebrow": "Object storage",
       "title": "Files",
-      "description": "Verified image objects stored locally, in S3-compatible services, or Alibaba Cloud OSS through one provider contract."
+      "description": "Stage, transmit, verify, and retrieve files through one provider-neutral storage workflow."
     },
     "upload": {
-      "title": "Upload a private image",
-      "requirements": "JPEG, PNG, or WebP · up to 10 MB",
-      "choose": "Choose image",
-      "pending": "Uploading and verifying…",
-      "submit": "Upload image"
+      "kicker": "Transfer station 01",
+      "title": "Private file transfer",
+      "description": "Select a batch, review it, then explicitly start transmission. Each file is verified independently.",
+      "specAriaLabel": "Transfer specifications",
+      "privateBadge": "Private by default",
+      "concurrent": "{count} concurrent",
+      "directStrategy": "Direct transfer",
+      "resumableStrategy": "Resumable over 32 MiB",
+      "policyLoading": "Loading the runtime upload policy…",
+      "policyError": "The runtime upload policy could not be loaded.",
+      "dropTitle": "Drop files into the staging area",
+      "requirements": "Any file type · up to {count} files · {size} each",
+      "choose": "Browse files",
+      "limitError": "A transfer batch can contain at most {count} files.",
+      "emptyFile": "Empty files cannot be uploaded.",
+      "tooLarge": "This file exceeds the current {limit} runtime limit.",
+      "batchSuccess": "{count} files uploaded and verified.",
+      "batchResult": "Transfer complete: {succeeded} succeeded, {failed} failed, {paused} paused.",
+      "batchPaused": "{succeeded} completed; {paused} transfers are paused safely."
+    },
+    "queue": {
+      "title": "Transfer ledger",
+      "summary": "{total} staged · {queued} ready · {succeeded} complete · {failed} attention",
+      "ariaLabel": "Staged transfer files",
+      "empty": "No files are staged. Selection never starts a transfer automatically.",
+      "start": "Start {count} transfers",
+      "running": "Transmitting…",
+      "clear": "Clear ledger",
+      "retryFailed": "Queue failed again",
+      "batchProgress": "Batch byte progress",
+      "fileProgress": "Upload progress for {name}",
+      "removeAriaLabel": "Remove {name} from the transfer ledger",
+      "pauseAriaLabel": "Pause {name} immediately",
+      "continueAriaLabel": "Continue uploading {name}",
+      "strategy": {
+        "single": "Direct",
+        "resumable": "Resumable"
+      },
+      "status": {
+        "queued": "Ready to start",
+        "uploading": "Transmitting",
+        "pausing": "Pausing safely",
+        "paused": "Paused",
+        "verifying": "Verifying",
+        "success": "Verified",
+        "error": "Needs attention"
+      }
+    },
+    "recovery": {
+      "kicker": "Server-side checkpoints",
+      "title": "Incomplete transfers",
+      "count": "{count} recoverable",
+      "loadError": "Incomplete upload sessions could not be loaded.",
+      "progress": "{complete} of {total} parts confirmed · expires {expires}",
+      "choose": "Select source file",
+      "matching": "Matching…",
+      "fileMismatch": "Select the same file name and size used to start this transfer.",
+      "matchError": "The selected file does not match this upload checkpoint.",
+      "matchedToast": "{name} matched. Only unconfirmed parts are queued."
+    },
+    "inventory": {
+      "kicker": "Verified objects",
+      "title": "File inventory",
+      "count": "{count} total"
+    },
+    "preview": {
+      "title": "Preview {name}",
+      "close": "Close PDF preview"
+    },
+    "actions": {
+      "retry": "Retry",
+      "cancel": "Cancel"
+    },
+    "states": {
+      "loading": "Loading file access…",
+      "unavailable": "File access could not be loaded.",
+      "forbidden": "You do not have permission to view files.",
+      "loadingFiles": "Loading file inventory…",
+      "filesUnavailable": "The file inventory could not be loaded."
     },
     "emptyTitle": "No files yet",
-    "emptyDescription": "Upload an image to exercise the provider-neutral storage workflow.",
+    "emptyDescription": "Stage a file above and start the transfer when the batch is ready.",
     "columns": {
       "file": "File",
       "provider": "Provider",
@@ -359,10 +432,20 @@
     "units": {
       "byte": "B",
       "kilobyte": "KB",
-      "megabyte": "MB"
+      "megabyte": "MB",
+      "gigabyte": "GB"
     },
-    "openAriaLabel": "Open {name}",
-    "deleteAriaLabel": "Delete {name}"
+    "values": {
+      "unknownType": "Unknown content type"
+    },
+    "previewAriaLabel": "Preview {name}",
+    "downloadAriaLabel": "Download {name}",
+    "deleteAriaLabel": "Delete {name}",
+    "deleteConfirm": {
+      "title": "Delete this file?",
+      "description": "{name} will be queued for permanent object deletion.",
+      "action": "Delete file"
+    }
   },
   "ResourceList": {
     "loading": "Loading {resource}…",
@@ -373,33 +456,354 @@
     "header": {
       "eyebrow": "Identity",
       "title": "People",
-      "description": "Operators who can enter this instance. Public registration stays disabled by design."
-    },
-    "resourceLabel": "people",
-    "columns": {
-      "name": "Name",
-      "email": "Email",
-      "status": "Status",
-      "created": "Created"
+      "description": "Create operators, control access, and keep every account change explicit.",
+      "createAction": "Create person"
     },
     "statuses": {
       "active": "Active",
       "disabled": "Disabled"
+    },
+    "list": {
+      "ariaLabel": "People list",
+      "searchLabel": "Search people",
+      "searchPlaceholder": "Search name or email",
+      "statusFilterLabel": "Filter people by status",
+      "allStatuses": "All statuses",
+      "roleFilterLabel": "Filter people by role",
+      "allRoles": "All roles",
+      "recordCount": "{count, plural, one {# person} other {# people}}",
+      "loading": "Loading people…",
+      "forbiddenTitle": "People are not available to this account",
+      "forbiddenDescription": "An all-scope users:read grant is required to view this page.",
+      "retry": "Try again",
+      "unavailableTitle": "People could not be loaded",
+      "unavailableDescription": "Check the API connection and your access, then try again.",
+      "noResultsTitle": "No people match these filters",
+      "noResultsDescription": "Clear one or more filters to widen the result set.",
+      "emptyTitle": "No people yet",
+      "emptyDescription": "Create the first operator who can enter this instance.",
+      "clearFilters": "Clear filters",
+      "currentAccount": "Current account",
+      "noRoles": "No roles",
+      "page": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next",
+      "columns": {
+        "person": "Person",
+        "status": "Status",
+        "roles": "Roles",
+        "updated": "Updated",
+        "actions": "Actions"
+      }
+    },
+    "editor": {
+      "create": {
+        "eyebrow": "New operator",
+        "title": "Create a person",
+        "description": "Create local credentials and assign only the access this person needs.",
+        "submit": "Create person"
+      },
+      "edit": {
+        "eyebrow": "Account details",
+        "title": "Edit person",
+        "description": "Update the display name and assigned roles independently.",
+        "submit": "Save changes"
+      },
+      "close": "Close person editor",
+      "displayName": "Display name",
+      "email": "Email address",
+      "emailReadOnly": "Email is the local sign-in identity and cannot be changed here.",
+      "password": "Password",
+      "passwordConfirmation": "Confirm password",
+      "passwordMismatch": "The password confirmation does not match.",
+      "rolesLegend": "Assigned roles",
+      "rolesDescription": "Roles combine explicit permissions. An account without a role has no workspace access.",
+      "rolesLoading": "Loading available roles…",
+      "rolesError": "Available roles could not be loaded.",
+      "noRoles": "No assignable roles are available.",
+      "rolesUnavailable": "You can create this account, but another administrator must assign its roles.",
+      "cancel": "Cancel",
+      "saving": "Saving…"
+    },
+    "passwordEditor": {
+      "eyebrow": "Local credentials",
+      "title": "Reset {name}'s password",
+      "description": "Set a new password for {email}. Existing sessions will be revoked.",
+      "submit": "Reset password"
+    },
+    "actions": {
+      "edit": "Edit",
+      "resetPassword": "Reset password",
+      "disable": "Disable",
+      "enable": "Enable",
+      "grantAdmin": "Grant Administrator",
+      "revokeAdmin": "Revoke Administrator",
+      "delete": "Delete"
+    },
+    "confirm": {
+      "cancel": "Cancel",
+      "enable": {
+        "title": "Enable this account?",
+        "description": "{name} ({email}) will be able to sign in again with their assigned roles.",
+        "action": "Enable account"
+      },
+      "disable": {
+        "title": "Disable this account?",
+        "description": "{name} ({email}) will be signed out and unable to enter until re-enabled.",
+        "action": "Disable account"
+      },
+      "delete": {
+        "title": "Delete this account?",
+        "description": "{name} ({email}) will lose access and their active sessions will be revoked. This is a soft deletion.",
+        "action": "Delete account"
+      },
+      "grantAdmin": {
+        "title": "Grant Administrator access?",
+        "description": "{name} ({email}) will receive every registered permission with all scope.",
+        "action": "Grant Administrator"
+      },
+      "revokeAdmin": {
+        "title": "Revoke Administrator access?",
+        "description": "{name} ({email}) will lose the system-managed Administrator role but keep any other assigned roles.",
+        "action": "Revoke Administrator"
+      }
+    },
+    "toasts": {
+      "created": "Person created.",
+      "updated": "Person updated.",
+      "passwordReset": "Password reset and existing sessions revoked.",
+      "enable": "Account enabled.",
+      "disable": "Account disabled.",
+      "delete": "Account deleted.",
+      "grantAdmin": "Administrator access granted.",
+      "revokeAdmin": "Administrator access revoked."
+    },
+    "errors": {
+      "save": "The person could not be saved.",
+      "password": "The password could not be reset.",
+      "action": "The account action could not be completed."
     }
   },
   "Roles": {
     "header": {
       "eyebrow": "Authorization",
       "title": "Access",
-      "description": "Roles group explicit resource:action grants. Navigation and API enforcement share the same permission codes."
+      "description": "Compose roles from explicit permissions and the narrowest valid resource scope.",
+      "createAction": "Create role"
     },
-    "resourceLabel": "access roles",
-    "columns": {
-      "role": "Role",
+    "grantCount": "{count, plural, one {# grant} other {# grants}}",
+    "scopes": {
+      "own": "Own resources",
+      "all": "All resources"
+    },
+    "list": {
+      "ariaLabel": "Access role list",
+      "searchLabel": "Search roles",
+      "searchPlaceholder": "Search role name or description",
+      "recordCount": "{count, plural, one {# role} other {# roles}}",
+      "loading": "Loading roles…",
+      "forbiddenTitle": "Access roles are not available to this account",
+      "forbiddenDescription": "An all-scope roles:read grant is required to view this page.",
+      "retry": "Try again",
+      "unavailableTitle": "Roles could not be loaded",
+      "unavailableDescription": "Check the API connection and your access, then try again.",
+      "noResultsTitle": "No roles match this search",
+      "noResultsDescription": "Clear the search to show every role.",
+      "emptyTitle": "No roles yet",
+      "emptyDescription": "Create a role to group the permissions people need.",
+      "clearSearch": "Clear search",
+      "systemManaged": "System managed",
+      "inUse": "Assigned role",
+      "deleteBlocked": "Move people to another role before deleting this role.",
+      "peopleCount": "{count, plural, one {# person} other {# people}}",
+      "page": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next",
+      "columns": {
+        "role": "Role",
+        "people": "People",
+        "grants": "Grants",
+        "updated": "Updated",
+        "actions": "Actions"
+      }
+    },
+    "editor": {
+      "create": {
+        "eyebrow": "New access profile",
+        "title": "Create a role",
+        "description": "Start with the smallest useful grant set and expand deliberately.",
+        "submit": "Create role"
+      },
+      "edit": {
+        "eyebrow": "Access profile",
+        "title": "Edit role",
+        "description": "Metadata and permission grants are enforced as separate protected changes.",
+        "submit": "Save changes"
+      },
+      "close": "Close role editor",
+      "name": "Role name",
       "description": "Description",
-      "permissions": "Permissions"
+      "permissionsLegend": "Permission grants",
+      "permissionsDescription": "Select a permission and then choose only one of the scopes supported by its authorization policy.",
+      "permissionSearchLabel": "Search permissions",
+      "permissionSearchPlaceholder": "Search code or description",
+      "permissionsLoading": "Loading permission definitions…",
+      "permissionsError": "Permission definitions could not be loaded.",
+      "noPermissionResults": "No permissions match this search.",
+      "noPermissions": "No permission definitions are registered.",
+      "scopeLabel": "Scope for {permission}",
+      "lockedGrant": "Kept at {scope}; this grant exceeds your delegation ceiling.",
+      "grantsUnavailable": "You can create this role, but another administrator must assign its grants.",
+      "cancel": "Cancel",
+      "saving": "Saving…"
     },
-    "grantCount": "{count, plural, one {# grant} other {# grants}}"
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "confirm": {
+      "cancel": "Cancel",
+      "delete": {
+        "title": "Delete this role?",
+        "description": "The unassigned role {name} will be removed. Permission definitions are not deleted.",
+        "action": "Delete role"
+      }
+    },
+    "toasts": {
+      "created": "Role created.",
+      "updated": "Role updated.",
+      "deleted": "Role deleted."
+    },
+    "errors": {
+      "save": "The role could not be saved.",
+      "delete": "The role could not be deleted."
+    }
+  },
+  "StorageSettings": {
+    "header": {
+      "eyebrow": "System settings",
+      "title": "Object storage",
+      "description": "Maintain multiple storage profiles. Default-profile and configuration changes apply after both API and worker restart.",
+      "create": "New profile"
+    },
+    "summary": {
+      "ariaLabel": "Object storage summary",
+      "default": "Pending default profile",
+      "profiles": "Profiles",
+      "unbound": "Unbound historical files"
+    },
+    "notices": {
+      "managedTitle": "Managed by environment",
+      "managedDescription": "AGINEX_STORAGE_DRIVER is explicitly set, so this console is read-only.",
+      "restartTitle": "Restart required",
+      "restartDescription": "Saved storage settings differ from this runtime. Restart both the API and worker.",
+      "unboundTitle": "Historical files are degraded",
+      "unboundDescription": "{count} historical files cannot be mapped to one profile without ambiguity; Aginex will not guess their target."
+    },
+    "uploadPolicy": {
+      "title": "File upload policy",
+      "description": "Set the per-file ceiling and whether clients may use resumable multipart transfer.",
+      "comparisonAriaLabel": "Runtime and pending file upload policy",
+      "runtimeLabel": "Current runtime",
+      "pendingLabel": "Saved for restart",
+      "sizeValue": "{size} MiB per file",
+      "resumableOn": "Resumable transfer enabled",
+      "resumableOff": "Direct transfer only",
+      "readOnly": "Read only",
+      "maxSizeLabel": "Maximum single-file size",
+      "mibUnit": "MiB",
+      "maxSizeHint": "Whole MiB, from 1 to 1,024. The API validates every upload intent.",
+      "resumableLabel": "Enable resumable uploads",
+      "resumableHint": "Allows compatible clients to resume large multipart transfers; direct uploads remain available.",
+      "restartHint": "Saved and current values differ. Restart both the API and worker to apply them.",
+      "inSyncHint": "Saved values match the running services.",
+      "saveAction": "Save upload policy",
+      "savedToast": "The upload policy is saved and applies after restart.",
+      "saveError": "The upload policy could not be saved."
+    },
+    "providers": {
+      "local": "Local storage",
+      "aliyun-oss": "Alibaba Cloud OSS",
+      "aws-s3": "AWS S3",
+      "minio": "MinIO",
+      "cloudflare-r2": "Cloudflare R2"
+    },
+    "status": { "available": "Available", "archived": "Archived" },
+    "fields": {
+      "name": "Profile name",
+      "provider": "Provider",
+      "target": "Target",
+      "bucket": "Bucket",
+      "region": "Region",
+      "endpoint": "Endpoint",
+      "accountId": "Account ID",
+      "accessKeyId": "Access Key ID",
+      "accessKeySecret": "Access Key Secret",
+      "credentials": "Credentials"
+    },
+    "values": {
+      "configured": "Configured",
+      "missing": "Missing",
+      "pendingDefault": "Default after restart",
+      "runtimeDefault": "Runtime default",
+      "inUse": "Used by files"
+    },
+    "list": { "ariaLabel": "Storage profile list" },
+    "editor": {
+      "createTitle": "New storage profile",
+      "editTitle": "Edit storage profile",
+      "description": "Saving always repeats a read-only bucket connectivity check.",
+      "optional": "Optional; derived from the official region",
+      "secretHint": "Secrets are never returned. Leave both fields empty to retain them, or submit both to rotate.",
+      "testPassed": "Connection test passed"
+    },
+    "actions": {
+      "retry": "Retry",
+      "edit": "Edit",
+      "activate": "Make default",
+      "archive": "Archive",
+      "restore": "Restore",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "close": "Close editor",
+      "test": "Test connection",
+      "testing": "Testing…",
+      "save": "Save",
+      "saving": "Saving…"
+    },
+    "states": {
+      "loading": "Loading object storage settings…",
+      "unavailable": "Object storage settings could not be loaded.",
+      "forbidden": "You do not have permission to view object storage settings.",
+      "empty": "No storage profiles are configured."
+    },
+    "confirm": {
+      "archive": {
+        "title": "Archive this profile?",
+        "description": "{name} will no longer be selectable as the default. Historical files continue to use it.",
+        "action": "Archive profile"
+      },
+      "delete": {
+        "title": "Delete this profile?",
+        "description": "{name} is permanently removed only if no file has ever used it.",
+        "action": "Delete profile"
+      }
+    },
+    "toasts": {
+      "created": "Storage profile created.",
+      "updated": "Storage profile updated.",
+      "tested": "Connection test passed.",
+      "activate": "The default profile is saved and applies after restart.",
+      "archive": "Storage profile archived.",
+      "restore": "Storage profile restored.",
+      "delete": "Storage profile deleted."
+    },
+    "errors": {
+      "revision": "The current configuration revision is missing. Refresh and retry.",
+      "action": "The storage profile could not be updated.",
+      "save": "The storage profile could not be saved.",
+      "test": "The connection test failed."
+    }
   },
   "Audit": {
     "header": {

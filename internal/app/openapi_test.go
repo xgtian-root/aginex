@@ -122,8 +122,8 @@ func TestOpenAPIIncludesTypedBodiesAndDoesNotExposeStorageKeys(t *testing.T) {
 
 	localUpload := operationAt(document, module.MethodPut, "/api/v1/files/local-upload/{key+}")
 	if localUpload == nil || localUpload.RequestBody == nil ||
-		localUpload.RequestBody.Content["image/*"] == nil {
-		t.Fatal("local upload must document its binary image body")
+		localUpload.RequestBody.Content["application/octet-stream"] == nil {
+		t.Fatal("local upload must document its generic binary body")
 	}
 
 	fileSchema := document.Components.Schemas.Map()["FileResponse"]
@@ -246,7 +246,7 @@ func TestOpenAPIDeclaresRequiredCSRFForBrowserWritesOnly(
 	}
 }
 
-func TestOpenAPIDocumentsRateLimitAndImageVerificationFailures(t *testing.T) {
+func TestOpenAPIDocumentsRateLimitAndFileVerificationFailures(t *testing.T) {
 	document := BuildOpenAPI()
 	for _, target := range []struct {
 		method module.HTTPMethod
@@ -264,6 +264,10 @@ func TestOpenAPIDocumentsRateLimitAndImageVerificationFailures(t *testing.T) {
 	confirm := operationAt(document, module.MethodPost, "/api/v1/files/{id}/confirm")
 	if confirm == nil || confirm.Responses["422"] == nil || confirm.Responses["413"] == nil {
 		t.Fatal("upload confirmation is missing explicit content-verification responses")
+	}
+	intent := operationAt(document, module.MethodPost, "/api/v1/files/upload-intents")
+	if intent == nil || intent.Responses["422"] == nil || intent.Responses["413"] == nil {
+		t.Fatal("upload intent is missing explicit policy and resumable-strategy responses")
 	}
 }
 

@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
+	"mime"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 
@@ -27,8 +26,12 @@ import (
 )
 
 const (
-	filesResource             = "files"
-	pendingUploadCleanupGrace = 2 * time.Minute
+	filesResource       = "files"
+	fileTransferTimeout = 60 * time.Minute
+	// A request may begin immediately before its upload authorization expires,
+	// consume the full transfer window, and then consume one full verification
+	// window. Cleanup starts only after both bounded windows plus safety margin.
+	pendingUploadCleanupGrace = 2*fileTransferTimeout + 5*time.Minute
 )
 
 var filesAuthorizer = newFilesAuthorizer()
@@ -38,6 +41,7 @@ var errUploadIntentChanged = errors.New("upload intent changed during confirmati
 var (
 	errFileCleanupScheduled = errors.New("file cleanup is already scheduled")
 	errFileAlreadyDeleted   = errors.New("file is already deleted")
+	errFileUploadInProgress = errors.New("file has a non-terminal upload session")
 )
 
 type fileCleanupCause uint8
@@ -53,31 +57,81 @@ func (a *App) createUploadIntent(c *gin.Context) {
 	if !ok {
 		return
 	}
-	extension := extensionFor(input.ContentType)
-	if extension == "" {
-		writeProblem(c, http.StatusUnsupportedMediaType, "Image type is not allowed", "Use a JPEG, PNG, or WebP image.")
+	principal := currentPrincipal(c)
+	if !authorizeFile(c, "files:create", domain.FileObject{
+		ID: "upload-intent", OwnerID: principal.User.ID,
+	}) {
 		return
 	}
+	contentType, _, err := mime.ParseMediaType(strings.TrimSpace(input.ContentType))
+	if err != nil || contentType == "" || strings.ContainsAny(contentType, "*\r\n") || strings.Count(contentType, "/") != 1 {
+		httpx.WriteProblem(
+			c,
+			http.StatusUnsupportedMediaType,
+			"INVALID_CONTENT_TYPE",
+			"Content type is invalid",
+			"Use a syntactically valid MIME type, or application/octet-stream when the browser does not provide one.",
+		)
+		return
+	}
+	input.ContentType = strings.ToLower(contentType)
+	runtimePolicy := a.cfg.FileUploadRuntime()
+	if input.Size > runtimePolicy.MaxUploadBytes {
+		httpx.WriteProblem(
+			c,
+			http.StatusRequestEntityTooLarge,
+			"FILE_TOO_LARGE",
+			"File is too large",
+			"Choose a file within the currently effective upload limit.",
+		)
+		return
+	}
+	strategy := input.Strategy
+	if strategy == "" {
+		strategy = "single"
+	}
+	if strategy == "resumable" {
+		a.createResumableUploadIntent(c, input)
+		return
+	}
+	a.createSingleUploadIntent(c, input)
+}
+
+func (a *App) createSingleUploadIntent(c *gin.Context, input UploadIntentRequest) {
 	now := time.Now().UTC()
-	key := "uploads/" + now.Format("2006/01") + "/" + uuid.NewString() + extension
+	key := "uploads/" + now.Format("2006/01") + "/" + uuid.NewString()
 	principal := currentPrincipal(c)
+	activeProfile, ok := a.storageRegistry.ActiveProfile()
+	if !ok {
+		writeProblem(c, http.StatusServiceUnavailable, "Storage unavailable", "The active storage profile is unavailable.")
+		return
+	}
+	profileID := activeProfile.ID
+	activeStorage := activeProfile.StorageConfig()
 	file := domain.FileObject{
-		ID: uuid.NewString(), Provider: a.cfg.Storage.Driver, Bucket: a.cfg.Storage.Bucket,
-		ObjectKey: key, OriginalName: path.Base(strings.ReplaceAll(input.Filename, "\\", "/")), ContentType: input.ContentType,
+		ID: uuid.NewString(), StorageProfileID: &profileID,
+		Provider: activeStorage.Driver, Bucket: activeStorage.Bucket,
+		ObjectKey: key, OriginalName: safeOriginalFilename(input.Filename), ContentType: input.ContentType,
 		Size: input.Size, OwnerID: principal.User.ID, Visibility: input.Visibility, Status: "pending",
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if !authorizeFile(c, "files:create", file) {
-		return
-	}
+	expires := singleUploadCredentialTTL(input.Size)
 	signed, err := a.store.CreateUpload(c.Request.Context(), storage.UploadRequest{
-		Key: key, ContentType: input.ContentType, Size: input.Size, Expires: 10 * time.Minute,
+		Key: key, ContentType: frameworkstorage.StoredContentType, Size: input.Size, Expires: expires,
 	})
 	if err != nil {
 		logRequestFailure(c, "storage_create_upload", err)
 		writeProblem(c, http.StatusBadRequest, "Upload could not be prepared", "The storage provider could not prepare the upload.")
 		return
 	}
+	signed, err = a.protectLocalSingleUpload(a.store, file, signed)
+	if err != nil {
+		logRequestFailure(c, "sign_local_upload", err)
+		writeProblem(c, http.StatusInternalServerError, "Upload could not be prepared", "The local upload authorization could not be created.")
+		return
+	}
+	uploadExpiresAt := signed.ExpiresAt.UTC()
+	file.UploadExpiresAt = &uploadExpiresAt
 	if err := a.writes.Run(c.Request.Context(), func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		if err := tx.Create(&file).Error; err != nil {
 			return frameworkaudit.Event{}, err
@@ -88,18 +142,20 @@ func (a *App) createUploadIntent(c *gin.Context) {
 				tx,
 				file,
 				fileCleanupPendingExpiry,
-				signed.ExpiresAt.Add(pendingUploadCleanupGrace),
+				uploadExpiresAt.Add(pendingUploadCleanupGrace),
 			); err != nil {
 				return frameworkaudit.Event{}, err
 			}
 		}
+		upload := signedRequestResponse(signed)
 		if err := a.completeIdempotentWrite(
 			c,
 			tx,
 			http.StatusCreated,
 			UploadIntentResponse{
-				File:   fileResponse(file),
-				Upload: signedRequestResponse(signed),
+				Strategy: "single",
+				File:     a.fileResponse(file),
+				Upload:   &upload,
 			},
 			nil,
 		); err != nil {
@@ -120,9 +176,11 @@ func (a *App) createUploadIntent(c *gin.Context) {
 		writeProblem(c, http.StatusInternalServerError, "Upload could not be prepared", "The upload intent could not be committed.")
 		return
 	}
+	upload := signedRequestResponse(signed)
 	c.JSON(http.StatusCreated, UploadIntentResponse{
-		File:   fileResponse(file),
-		Upload: signedRequestResponse(signed),
+		Strategy: "single",
+		File:     a.fileResponse(file),
+		Upload:   &upload,
 	})
 }
 
@@ -138,27 +196,44 @@ func (a *App) localUpload(c *gin.Context) {
 	if !found {
 		return
 	}
-	local, ok := storage.AsLocal(a.store)
+	fileStore, err := a.storeForFile(file)
+	if err != nil {
+		writeProblem(c, http.StatusServiceUnavailable, "Storage unavailable", "The file's storage profile is unavailable.")
+		return
+	}
+	local, ok := storage.AsLocal(fileStore)
 	if !ok {
 		writeProblem(c, http.StatusNotFound, "Local upload is unavailable", "The active storage provider uses direct cloud uploads.")
 		return
 	}
-	if c.GetHeader("Content-Type") != file.ContentType {
+	if !a.verifyLocalSingleUpload(c, file) {
+		return
+	}
+	contentType, _, parseErr := mime.ParseMediaType(c.GetHeader("Content-Type"))
+	if parseErr != nil || contentType != frameworkstorage.StoredContentType {
 		writeProblem(c, http.StatusUnsupportedMediaType, "Content type does not match", "Use the content type declared by the upload intent.")
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(c.Request.Body, file.Size+1))
-	if err != nil {
-		logRequestFailure(c, "local_upload_read", err)
-		writeProblem(c, http.StatusBadRequest, "Upload could not be read", "The upload body could not be read.")
+	if c.Request.ContentLength != file.Size {
+		httpx.WriteProblem(
+			c,
+			http.StatusBadRequest,
+			"FILE_SIZE_MISMATCH",
+			"File size does not match",
+			"Upload the exact byte length declared by the upload intent.",
+		)
 		return
 	}
-	if int64(len(body)) != file.Size {
-		writeProblem(c, http.StatusBadRequest, "File size does not match", "Upload the exact file declared by the upload intent.")
-		return
-	}
-	if err := local.Put(key, body, file.ContentType); err != nil {
+	cancelTransfer := setFileTransferDeadline(c)
+	defer cancelTransfer()
+	body := http.MaxBytesReader(c.Writer, c.Request.Body, file.Size+1)
+	if _, err := local.Put(c.Request.Context(), key, body, file.Size); err != nil {
 		logRequestFailure(c, "local_upload_store", err)
+		if errors.Is(err, frameworkstorage.ErrFileSizeMismatch) ||
+			errors.Is(err, frameworkstorage.ErrContentTooLarge) {
+			httpx.WriteProblem(c, http.StatusBadRequest, "FILE_SIZE_MISMATCH", "File size does not match", "Upload the exact byte length declared by the upload intent.")
+			return
+		}
 		writeProblem(c, http.StatusBadRequest, "Upload could not be stored", "The local storage provider could not persist the upload.")
 		return
 	}
@@ -166,6 +241,8 @@ func (a *App) localUpload(c *gin.Context) {
 }
 
 func (a *App) confirmUpload(c *gin.Context) {
+	cancelTransfer := setFileTransferDeadline(c)
+	defer cancelTransfer()
 	file, found := a.findAuthorizedFile(
 		c,
 		"files:create",
@@ -179,9 +256,24 @@ func (a *App) confirmUpload(c *gin.Context) {
 		writeProblem(c, http.StatusConflict, "Upload intent changed", "Create a new upload intent and upload the object again.")
 		return
 	}
+	if file.UploadExpiresAt == nil || time.Now().UTC().After(file.UploadExpiresAt.UTC().Add(fileTransferTimeout)) {
+		httpx.WriteProblem(
+			c,
+			http.StatusConflict,
+			"UPLOAD_INTENT_EXPIRED",
+			"Upload intent has expired",
+			"Create a new upload intent and upload the file again.",
+		)
+		return
+	}
 	principal := currentPrincipal(c)
 	verifiedIntent := file
-	info, err := a.store.Stat(c.Request.Context(), verifiedIntent.ObjectKey)
+	fileStore, err := a.storeForFile(verifiedIntent)
+	if err != nil {
+		writeProblem(c, http.StatusServiceUnavailable, "Storage unavailable", "The file's storage profile is unavailable.")
+		return
+	}
+	info, err := fileStore.Stat(c.Request.Context(), verifiedIntent.ObjectKey)
 	if err != nil {
 		logRequestFailure(c, "storage_stat_upload", err)
 		writeProblem(c, http.StatusConflict, "Uploaded object was not found", "Finish uploading the object, then confirm it again.")
@@ -191,16 +283,23 @@ func (a *App) confirmUpload(c *gin.Context) {
 		writeProblem(c, http.StatusConflict, "Uploaded object does not match", "The stored size differs from the upload intent.")
 		return
 	}
-	object, err := a.store.Open(c.Request.Context(), verifiedIntent.ObjectKey)
+	object, err := fileStore.Open(c.Request.Context(), verifiedIntent.ObjectKey)
 	if err != nil {
 		logRequestFailure(c, "storage_open_upload", err)
 		writeProblem(c, http.StatusConflict, "Uploaded object could not be read", "Finish uploading the object, then confirm it again.")
 		return
 	}
-	verified, verificationErr := a.imageFiles.Verify(
+	verifier, verifierErr := a.fileVerifierForIntent(verifiedIntent.Size)
+	if verifierErr != nil {
+		_ = object.Close()
+		logRequestFailure(c, "configure_file_verifier", verifierErr)
+		writeProblem(c, http.StatusInternalServerError, "Uploaded object could not be verified", "The upload policy snapshot could not be restored.")
+		return
+	}
+	verified, verificationErr := verifier.Verify(
 		c.Request.Context(),
 		object,
-		verifiedIntent.ContentType,
+		verifiedIntent.Size,
 	)
 	closeErr := object.Close()
 	if verificationErr == nil && closeErr != nil {
@@ -209,15 +308,13 @@ func (a *App) confirmUpload(c *gin.Context) {
 		return
 	}
 	if verificationErr != nil {
-		if errors.Is(verificationErr, context.Canceled) ||
-			errors.Is(verificationErr, context.DeadlineExceeded) {
-			writeProblem(c, http.StatusRequestTimeout, "Upload verification was interrupted", "Retry the confirmation request.")
+		if writeFileVerificationInterrupted(c, verificationErr) {
 			return
 		}
-		if !isUnsafeImageError(verificationErr) {
+		if !isUnsafeFileError(verificationErr) {
 			logRequestFailure(
 				c,
-				"verify_uploaded_image",
+				"verify_uploaded_file",
 				verificationErr,
 			)
 			writeProblem(c, http.StatusInternalServerError, "Uploaded object could not be verified", "The object content could not be checked.")
@@ -261,7 +358,7 @@ func (a *App) confirmUpload(c *gin.Context) {
 			c,
 			tx,
 			http.StatusOK,
-			fileResponse(file),
+			a.fileResponse(file),
 			nil,
 		); err != nil {
 			return frameworkaudit.Event{}, err
@@ -294,7 +391,7 @@ func (a *App) confirmUpload(c *gin.Context) {
 		writeProblem(c, http.StatusInternalServerError, "File could not be confirmed", "The file confirmation could not be committed.")
 		return
 	}
-	c.JSON(http.StatusOK, fileResponse(file))
+	c.JSON(http.StatusOK, a.fileResponse(file))
 }
 
 func (a *App) listFiles(c *gin.Context) {
@@ -333,7 +430,7 @@ func (a *App) listFiles(c *gin.Context) {
 	}
 	items := make([]FileResponse, 0, len(files))
 	for _, file := range files {
-		items = append(items, fileResponse(file))
+		items = append(items, a.fileResponse(file))
 	}
 	c.JSON(http.StatusOK, Page[FileResponse]{
 		Items: items, Page: page, PageSize: pageSize, Total: total,
@@ -351,7 +448,30 @@ func (a *App) fileURL(c *gin.Context) {
 	if !found {
 		return
 	}
-	signed, err := a.store.SignRead(c.Request.Context(), file.ObjectKey, 5*time.Minute)
+	fileStore, err := a.storeForFile(file)
+	if err != nil {
+		writeProblem(c, http.StatusServiceUnavailable, "Storage unavailable", "The file's storage profile is unavailable.")
+		return
+	}
+	disposition := frameworkstorage.ReadDispositionAttachment
+	if c.Query("purpose") == "" || c.Query("purpose") == "preview" {
+		if filePreviewKind(file.ContentType) != string(frameworkstorage.PreviewNone) {
+			disposition = frameworkstorage.ReadDispositionInline
+		}
+	} else if c.Query("purpose") != "download" {
+		httpx.WriteProblem(c, http.StatusBadRequest, "INVALID_FILE_PURPOSE", "File purpose is invalid", "Use preview or download.")
+		return
+	}
+	var signed storage.SignedRequest
+	if controlled, ok := storage.AsControlledRead(fileStore); ok {
+		signed, err = controlled.SignControlledRead(c.Request.Context(), frameworkstorage.ControlledReadRequest{
+			Key: file.ObjectKey, Expires: 5 * time.Minute,
+			ContentType: file.ContentType, Disposition: disposition,
+			Filename: file.OriginalName,
+		})
+	} else {
+		signed, err = fileStore.SignRead(c.Request.Context(), file.ObjectKey, 5*time.Minute)
+	}
 	if err != nil {
 		logRequestFailure(c, "storage_sign_read", err)
 		writeProblem(c, http.StatusInternalServerError, "File URL unavailable", "A temporary file URL could not be created.")
@@ -361,6 +481,8 @@ func (a *App) fileURL(c *gin.Context) {
 }
 
 func (a *App) localContent(c *gin.Context) {
+	cancelTransfer := setFileTransferDeadline(c)
+	defer cancelTransfer()
 	key := strings.TrimPrefix(c.Param("key"), "/")
 	metadata, found := a.findAuthorizedFile(
 		c,
@@ -372,7 +494,12 @@ func (a *App) localContent(c *gin.Context) {
 	if !found {
 		return
 	}
-	local, ok := storage.AsLocal(a.store)
+	fileStore, err := a.storeForFile(metadata)
+	if err != nil {
+		writeProblem(c, http.StatusServiceUnavailable, "Storage unavailable", "The file's storage profile is unavailable.")
+		return
+	}
+	local, ok := storage.AsLocal(fileStore)
 	if !ok {
 		writeProblem(c, http.StatusNotFound, "Local content is unavailable", "The active provider uses signed cloud URLs.")
 		return
@@ -384,8 +511,31 @@ func (a *App) localContent(c *gin.Context) {
 		return
 	}
 	defer file.Close()
-	c.Header("Content-Disposition", "inline; filename="+strconvQuote(metadata.OriginalName))
-	c.DataFromReader(http.StatusOK, metadata.Size, metadata.ContentType, file, nil)
+	disposition := "attachment"
+	contentType := frameworkstorage.StoredContentType
+	if (c.Query("purpose") == "" || c.Query("purpose") == "preview") &&
+		filePreviewKind(metadata.ContentType) != string(frameworkstorage.PreviewNone) {
+		disposition = "inline"
+		contentType = metadata.ContentType
+	}
+	if c.Query("purpose") != "" && c.Query("purpose") != "preview" && c.Query("purpose") != "download" {
+		httpx.WriteProblem(c, http.StatusBadRequest, "INVALID_FILE_PURPOSE", "File purpose is invalid", "Use preview or download.")
+		return
+	}
+	contentDisposition, dispositionErr := storage.FormatContentDisposition(
+		frameworkstorage.ReadDisposition(disposition),
+		metadata.OriginalName,
+	)
+	if dispositionErr != nil {
+		contentDisposition = "attachment"
+		contentType = frameworkstorage.StoredContentType
+	}
+	c.Header("Content-Disposition", contentDisposition)
+	c.Header("X-Content-Type-Options", "nosniff")
+	if contentType == frameworkstorage.MIMEPDF {
+		c.Header("Content-Security-Policy", "sandbox")
+	}
+	c.DataFromReader(http.StatusOK, metadata.Size, contentType, file, nil)
 }
 
 func (a *App) deleteFile(c *gin.Context) {
@@ -396,6 +546,18 @@ func (a *App) deleteFile(c *gin.Context) {
 		c.Param("id"),
 	)
 	if !found {
+		return
+	}
+	var incompleteSessions int64
+	if err := a.db.WithContext(c.Request.Context()).Model(&domain.FileUploadSession{}).
+		Where("file_id = ? AND status IN ?", file.ID, incompleteUploadSessionStatuses()).
+		Count(&incompleteSessions).Error; err != nil {
+		logRequestFailure(c, "check_file_upload_session_before_delete", err)
+		writeProblem(c, http.StatusInternalServerError, "File deletion could not be prepared", "The file's upload state could not be checked.")
+		return
+	}
+	if incompleteSessions > 0 {
+		writeFileUploadInProgressProblem(c)
 		return
 	}
 	if a.jobs == nil {
@@ -410,6 +572,18 @@ func (a *App) deleteFile(c *gin.Context) {
 	}
 	principal := currentPrincipal(c)
 	err := a.writes.Run(c.Request.Context(), func(tx *gorm.DB) (frameworkaudit.Event, error) {
+		// Multipart transitions lock session then file. Use the same order so
+		// deletion cannot race completion and resurrect a deleted file.
+		var uploadSession domain.FileUploadSession
+		sessionErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("file_id = ? AND status IN ?", file.ID, incompleteUploadSessionStatuses()).
+			First(&uploadSession).Error
+		if sessionErr == nil {
+			return frameworkaudit.Event{}, errFileUploadInProgress
+		}
+		if !errors.Is(sessionErr, gorm.ErrRecordNotFound) {
+			return frameworkaudit.Event{}, sessionErr
+		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			First(&file, "id = ?", file.ID).Error; err != nil {
 			return frameworkaudit.Event{}, err
@@ -423,6 +597,10 @@ func (a *App) deleteFile(c *gin.Context) {
 		case "deleting":
 			return frameworkaudit.Event{}, errFileCleanupScheduled
 		}
+		cleanupAt := time.Time{}
+		if file.Status == "pending" && file.UploadExpiresAt != nil {
+			cleanupAt = file.UploadExpiresAt.UTC().Add(pendingUploadCleanupGrace)
+		}
 		before := fileAuditFields(file)
 		file.Status = "deleting"
 		file.UpdatedAt = time.Now().UTC()
@@ -434,7 +612,7 @@ func (a *App) deleteFile(c *gin.Context) {
 			tx,
 			file,
 			fileCleanupExplicitDelete,
-			time.Time{},
+			cleanupAt,
 		); err != nil {
 			return frameworkaudit.Event{}, err
 		}
@@ -466,6 +644,10 @@ func (a *App) deleteFile(c *gin.Context) {
 		c.Status(http.StatusAccepted)
 		return
 	}
+	if errors.Is(err, errFileUploadInProgress) {
+		writeFileUploadInProgressProblem(c)
+		return
+	}
 	if isFileAuthorizationError(err) {
 		writeFileAuthorizationProblem(c, err)
 		return
@@ -478,21 +660,14 @@ func (a *App) deleteFile(c *gin.Context) {
 	c.Status(http.StatusAccepted)
 }
 
-func extensionFor(contentType string) string {
-	switch strings.ToLower(contentType) {
-	case "image/jpeg":
-		return ".jpg"
-	case "image/png":
-		return ".png"
-	case "image/webp":
-		return ".webp"
-	default:
-		return ""
-	}
-}
-
-func strconvQuote(value string) string {
-	return `"` + strings.ReplaceAll(value, `"`, "") + `"`
+func writeFileUploadInProgressProblem(c *gin.Context) {
+	httpx.WriteProblem(
+		c,
+		http.StatusConflict,
+		"FILE_UPLOAD_IN_PROGRESS",
+		"File upload is still in progress",
+		"Cancel the resumable upload session before deleting this file.",
+	)
 }
 
 func newFilesAuthorizer() *frameworkauthz.Authorizer {
@@ -628,8 +803,12 @@ func isFileAuthorizationError(err error) bool {
 		errors.Is(err, frameworkauthz.ErrInvalidPolicy)
 }
 
-func fileResponse(file domain.FileObject) FileResponse {
-	return FileResponse{
+func (a *App) fileResponse(file domain.FileObject) FileResponse {
+	previewKind := string(frameworkstorage.PreviewNone)
+	if file.Status == "ready" {
+		previewKind = filePreviewKind(file.ContentType)
+	}
+	response := FileResponse{
 		ID:           file.ID,
 		Provider:     file.Provider,
 		OriginalName: file.OriginalName,
@@ -642,7 +821,27 @@ func fileResponse(file domain.FileObject) FileResponse {
 		Status:       file.Status,
 		CreatedAt:    file.CreatedAt,
 		UpdatedAt:    file.UpdatedAt,
+		PreviewKind:  previewKind,
 	}
+	if file.StorageProfileID != nil {
+		response.StorageProfileID = *file.StorageProfileID
+		if profile, ok := a.storageRegistry.Profile(*file.StorageProfileID); ok {
+			response.StorageProfileName = profile.Name
+			response.StorageProvider = string(profile.Provider)
+		}
+	}
+	return response
+}
+
+func (a *App) storeForFile(file domain.FileObject) (storage.Storage, error) {
+	if file.StorageProfileID != nil && strings.TrimSpace(*file.StorageProfileID) != "" {
+		if active, ok := a.storageRegistry.ActiveProfile(); ok && active.ID == *file.StorageProfileID {
+			return a.store, nil
+		}
+		return a.storageRegistry.Resolve(*file.StorageProfileID)
+	}
+	_, store, err := a.storageRegistry.ResolveLegacy(file.Provider, file.Bucket)
+	return store, err
 }
 
 func signedRequestResponse(signed storage.SignedRequest) SignedRequestResponse {
@@ -744,19 +943,25 @@ func (a *App) enqueueFileCleanup(
 	default:
 		return errors.New("file cleanup cause is invalid")
 	}
-	payload, err := json.Marshal(filecleanup.PayloadV2{
-		FileID:    file.ID,
-		Provider:  file.Provider,
-		ObjectKey: file.ObjectKey,
-		Mode:      mode,
+	version := filecleanup.PayloadVersion2
+	payloadValue := any(filecleanup.PayloadV2{
+		FileID: file.ID, Provider: file.Provider, ObjectKey: file.ObjectKey, Mode: mode,
 	})
+	if file.StorageProfileID != nil {
+		version = filecleanup.PayloadVersion3
+		payloadValue = filecleanup.PayloadV3{
+			FileID: file.ID, ProfileID: *file.StorageProfileID,
+			Provider: file.Provider, Bucket: file.Bucket, ObjectKey: file.ObjectKey, Mode: mode,
+		}
+	}
+	payload, err := json.Marshal(payloadValue)
 	if err != nil {
 		return err
 	}
 	principal := currentPrincipal(c)
 	_, err = queue.Enqueue(c.Request.Context(), jobs.EnqueueRequest{
 		Type:           filecleanup.JobType,
-		Version:        filecleanup.PayloadVersion2,
+		Version:        version,
 		Payload:        payload,
 		IdempotencyKey: "file:" + file.ID + ":" + idempotencySuffix,
 		ScheduledAt:    scheduledAt,
@@ -770,14 +975,18 @@ func (a *App) enqueueFileCleanup(
 	return err
 }
 
-func isUnsafeImageError(err error) bool {
+func isUnsafeFileError(err error) bool {
 	return errors.Is(err, frameworkstorage.ErrEmptyContent) ||
 		errors.Is(err, frameworkstorage.ErrContentTooLarge) ||
-		errors.Is(err, frameworkstorage.ErrUnsupportedMIMEType) ||
-		errors.Is(err, frameworkstorage.ErrMIMETypeMismatch) ||
-		errors.Is(err, frameworkstorage.ErrMalformedImage) ||
-		errors.Is(err, frameworkstorage.ErrImageDimensionsExceeded) ||
-		errors.Is(err, frameworkstorage.ErrImagePixelsExceeded)
+		errors.Is(err, frameworkstorage.ErrFileSizeMismatch)
+}
+
+func writeFileVerificationInterrupted(c *gin.Context, err error) bool {
+	if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	writeProblem(c, http.StatusRequestTimeout, "Upload verification was interrupted", "Retry the confirmation request.")
+	return true
 }
 
 func writeFileVerificationProblem(c *gin.Context, err error) {
@@ -786,8 +995,8 @@ func writeFileVerificationProblem(c *gin.Context, err error) {
 			c,
 			http.StatusRequestEntityTooLarge,
 			"FILE_TOO_LARGE",
-			"Uploaded image is too large",
-			"Upload an image within the configured byte limit.",
+			"Uploaded file is too large",
+			"Upload a file within the configured byte limit.",
 		)
 		return
 	}
@@ -795,7 +1004,56 @@ func writeFileVerificationProblem(c *gin.Context, err error) {
 		c,
 		http.StatusUnprocessableEntity,
 		"FILE_CONTENT_INVALID",
-		"Uploaded image is invalid",
-		"The object must be a complete JPEG, PNG, or WebP image within the configured dimension limits.",
+		"Uploaded file is invalid",
+		"The object must be non-empty and match the exact byte length declared by the upload intent.",
 	)
+}
+
+func filePreviewKind(contentType string) string {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case frameworkstorage.MIMEJPEG,
+		frameworkstorage.MIMEPNG,
+		frameworkstorage.MIMEWebP,
+		frameworkstorage.MIMEGIF:
+		return string(frameworkstorage.PreviewImage)
+	case frameworkstorage.MIMEPDF:
+		return string(frameworkstorage.PreviewPDF)
+	default:
+		return string(frameworkstorage.PreviewNone)
+	}
+}
+
+func singleUploadCredentialTTL(size int64) time.Duration {
+	if size > multipartThresholdBytes {
+		return 60 * time.Minute
+	}
+	return 10 * time.Minute
+}
+
+func setFileTransferDeadline(c *gin.Context) context.CancelFunc {
+	if c == nil {
+		return func() {}
+	}
+	deadline := time.Now().Add(fileTransferTimeout)
+	requestContext, cancel := context.WithDeadline(c.Request.Context(), deadline)
+	c.Request = c.Request.WithContext(requestContext)
+	controller := http.NewResponseController(c.Writer)
+	if err := controller.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		logRequestFailure(c, "file_transfer_read_deadline", err)
+	}
+	if err := controller.SetWriteDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		logRequestFailure(c, "file_transfer_write_deadline", err)
+	}
+	return cancel
+}
+
+func (a *App) fileVerifierForIntent(size int64) (*frameworkstorage.FileVerifier, error) {
+	if size <= a.cfg.FileUploadRuntime().MaxUploadBytes {
+		return a.fileVerifier, nil
+	}
+	policy, err := frameworkstorage.NewFilePolicy(size)
+	if err != nil {
+		return nil, err
+	}
+	return frameworkstorage.NewFileVerifier(policy)
 }

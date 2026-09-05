@@ -1,5 +1,522 @@
 # Findings
 
+## 2026-09-04 — `aginex new` project initialization
+
+- The requested CLI contract has two modes: no positional argument initializes
+  the current directory; one project-name argument creates that direct child
+  directory and initializes it there.
+- The existing `create-aginex-project` Skill requires collision protection and
+  a runnable Go/Next.js result, while the current CLI has no `new` command yet.
+- Project creation must be separated from environment commissioning: `new`
+  writes source and a safe `.env.example`, but it must not create or commit real
+  secrets, administrator credentials, databases, or uploaded data.
+- The Cobra root is currently assembled in `internal/cli/root.go`; `new` can be
+  added without exposing the removed runtime `bootstrap` or `migrate` commands.
+- Existing CLI tests construct commands directly and use `t.TempDir`, so the
+  initializer should accept injectable filesystem/current-directory
+  dependencies instead of changing the process working directory in tests.
+- The repository has no template package or embedded scaffold. The only current
+  generation path writes OpenAPI and the TypeScript client, so project template
+  ownership and the external-consumer boundary must be introduced explicitly.
+- The checked-in API and worker entry points are not reusable by an external Go
+  module because their complete Setup/configuration orchestration imports
+  `internal/config`, `internal/setup`, `internal/composition`, and
+  `internal/platform/database`. A generated external project must either use a
+  smaller public-only host, introduce a new public host API, or copy the entire
+  implementation; copying the framework would defeat dependency-based upgrades.
+- The public `framework/application` surface already exposes configuration
+  loading, database opening, module definition, migrations, bootstrap, API, and
+  worker construction. It is likely sufficient for a minimal environment-driven
+  host, but it does not expose the repository's managed first-run Setup
+  supervisor.
+- A globally installed CLI currently embeds the starter `Definition` for client
+  generation. A generated business project therefore needs a project-local
+  OpenAPI entry point, and the global CLI should delegate contract generation to
+  it instead of generating from the CLI binary's built-in module set.
+- `application.LoadConfig` intentionally rejects first-run Setup state; the
+  managed browser Setup supervisor is internal. A public-only minimal host can
+  run when database and bootstrap environment values are supplied, but it
+  cannot reproduce the advertised browser Setup flow without an additional
+  public host boundary.
+- The full checked-in `.env.example`, Compose file, Dockerfile, and Web shell
+  assume the repository distribution, so copying only those files into a thin
+  consumer template would leave broken imports/commands. The first scaffold
+  needs a deliberately smaller, internally consistent contract rather than an
+  arbitrary subset of the current tree.
+- The repository does not load `.env` files in Go; development commands inherit
+  only the invoking process environment. A thin environment-configured host
+  would therefore need either explicit shell setup/documentation or a new
+  project-local environment loader.
+- `FilesModule` permits disabled durable jobs in development/test but requires
+  PostgreSQL jobs in production. Keeping the current Files + starter-example
+  composition is viable for a development scaffold, provided production
+  guidance retains that gate.
+- A dependency-based scaffold remains the chosen direction because it preserves
+  the upgrade boundary established in the preceding design discussion. The
+  generator must not solve `new` by copying `framework/**` and `internal/**`
+  into every application.
+- A curated hybrid template is feasible: generate small Go composition/entry
+  points against public Aginex packages, and copy the current application-owned
+  Web starter, lockfile, Skills, and developer configuration as embedded CLI
+  assets. This avoids duplicating framework Go implementation while accepting
+  that the present Web starter is application-owned after generation.
+- Before implementation can claim the current first-run experience, Aginex
+  needs a public host boundary wrapping its internal Setup/config/worker
+  coordination. A reduced environment-only scaffold would compile but would
+  silently lose a documented framework capability, so it is not an acceptable
+  final template.
+- The existing installation writer demonstrates the required platform-specific
+  no-replace primitives (`renameat2` on Linux and `renamex_np` on Darwin). The
+  initializer should reuse that design, in its own CLI publisher, for an atomic
+  named-directory publish; current-directory mode needs per-entry no-replace
+  publication plus rollback because the working directory itself already
+  exists.
+- Project assets now have one explicit embedded whitelist at the module root.
+  It includes application-owned Web, Skill, workspace, example-environment,
+  Compose, and contract files while excluding framework/internal/cmd sources,
+  build outputs, caches, runtime data, and secrets.
+- A project short name is not necessarily its repository import path. The
+  default remains the short name for zero-configuration local use, while
+  `--module` independently records and renders a checked Go module path.
+- Copying the framework's own `go.mod` verbatim gives an application the wrong
+  direct-dependency graph. The generated file instead pins Aginex directly and
+  renders the bundled runtime dependencies as indirect, excluding CLI-only
+  Cobra dependencies; the matching filtered sums let a fresh external consumer
+  build with `-mod=readonly` and pass `go mod tidy -diff`.
+- Current-directory publication cannot be a single atomic rename. Rollback now
+  fingerprints every published top-level path and removes it only while its
+  content is unchanged; concurrent external edits are preserved and surfaced
+  as an explicit incomplete-publication error.
+- Linux and Darwin use native exclusive rename, Windows uses the non-replacing
+  `MoveFile` primitive, and unsupported directory publication on other systems
+  fails closed instead of exposing a partially copied target.
+- `application.Definition` now exposes complete `RunAPI` and `RunWorker`
+  lifecycles, so generated projects retain browser Setup, migration/bootstrap,
+  readiness, durable-worker coordination, and graceful shutdown without
+  importing Aginex internal packages.
+- A globally installed CLI must execute project-owned contract generation and
+  validate the generated project's embedded Skills in-process. Delegating to
+  `cmd/openapi` and removing the old `go run ./cmd/aginex` self-reference makes
+  both `aginex generate client` and `aginex check` work in an external project.
+- The source checkout currently declares the pre-release version
+  `v0.1.0-dev`. Development projects created with `--aginex-path` retain that
+  requirement together with an explicit local `replace`; remote users need a
+  published/tagged Aginex version before generated modules can resolve without
+  the local development directive.
+- Final adversarial review reproduced two additional Go resolution traps:
+  a module path containing an exact `vendor` segment changes Go import
+  semantics, while a module path equal to Aginex or one of its required modules
+  shadows a dependency. Both are now rejected before a target can be published.
+- Source-built development CLIs now fail closed when they have no downloadable
+  module version. An explicit `--aginex-path` validates a real Aginex checkout,
+  records its canonical path in a development-only `replace`, and keeps the
+  ordinary zero/one-argument contract intact for published CLI versions.
+
+
+## 2026-08-11 — PostgreSQL reinitialization ownership repair
+
+- The real `dev reinitialize` execution reached the database archive step and
+  PostgreSQL rejected `ALTER SCHEMA public RENAME ...` because the configured
+  application role is not the owner of the shared `public` schema.
+- The command's failure handling worked as intended: the configuration archive
+  was restored, and the PostgreSQL DDL ran inside an uncommitted transaction,
+  so the schema rename was not partially applied.
+- Requiring application roles to own `public` is unnecessarily privileged. The
+  safer archive boundary is a new role-owned backup schema containing the
+  application-owned relations, while the existing `public` schema, owner, and
+  grants remain untouched.
+- The replacement must preflight ownership and unsupported standalone objects
+  before DDL; indexes, constraints, and table row types move with their parent
+  table and must not be treated as independent archive objects.
+- The PostgreSQL migrations create tables, indexes, and the application-owned
+  `aginex_prevent_audit_mutation` trigger function. It is created by runtime
+  platform migration 00006 and must move with the archived tables rather than
+  being treated as foreign state. Standalone types and unsupported routine
+  kinds remain fail-closed.
+- The corrected rollback-only probe passes on the exact configured local
+  PostgreSQL database. Inside the transaction, all application relations and
+  the audit trigger function moved to the probe schema while the `public`
+  schema owner stayed unchanged; after rollback, the probe schema disappeared
+  and all original object counts and ownership were restored.
+
+
+## 2026-08-11 — v1-only configuration and local reinitialization
+
+- The temporary configuration-only v1/v2/v3 reader did not solve the real
+  upgrade path: the retained local PostgreSQL Files Goose history is at version
+  2 while the unpublished source now intentionally exposes only version 1.
+- The requested coherent policy is now v1-only for installation documents and
+  one current migration baseline. A reset must therefore be explicit and
+  recoverable rather than another compatibility layer.
+- The reset command must preserve the existing private installation file until
+  its exact database target and local-development safety can be established;
+  no startup path may trigger reset implicitly.
+- `dev` can remain backward-compatible as an executable parent command while
+  adding `dev reinitialize` as a subcommand. The reset defaults to a dry run and
+  requires the exact sanitized database target as `--confirm`.
+- Recoverable local database boundaries differ by dialect: SQLite moves a
+  checkpointed database file into the private backup directory; PostgreSQL
+  transactionally renames `public` to a timestamped backup schema; MySQL
+  atomically moves base tables into a timestamped backup database. Remote,
+  environment-managed, production, and system database targets fail closed.
+- A reset-only metadata inspector may recognize known unpublished draft marker
+  versions 1-3 solely to archive stale state. Runtime configuration remains
+  strict v1-only and does not default or run any older document.
+- The real ignored v2 marker now passes the reset-only dry run and resolves to
+  the sanitized local PostgreSQL target without exposing its DSN or credentials.
+  The dry run created no backup directory and did not alter the marker, proving
+  the default command is non-mutating.
+
+## 2026-08-11 — General files implementation notes
+
+- Optional storage capabilities must be resolved through `storage.AsMultipart`
+  and `storage.AsControlledRead`; the observability base wrapper intentionally
+  does not advertise capabilities its wrapped provider lacks.
+- Resumable completion must validate the persisted/provider part manifest
+  before the `active -> completing` CAS. Otherwise an early Complete request
+  freezes an incomplete upload and prevents the client from sending parts.
+- A retry from `completing` must treat a missing provider multipart inventory
+  as uncertain success and `Stat` the final object; a retry from `verifying`
+  must skip provider Complete entirely.
+- Binary Local routes now declare `application/octet-stream`. Existing image
+  fixtures that replay their browser MIME as the PUT Content-Type are obsolete
+  and must use the signed request headers instead.
+- The current-only migration baseline is now one `files/<dialect>/00001` family;
+  the unpublished current/legacy selectors and incremental 00002 files were
+  removed per the user's pre-release constraint.
+
+## 2026-08-10 — Access management contract review
+
+- The access module now declares separate least-privilege permissions for user
+  lifecycle, role assignment, Administrator transitions, role metadata, and
+  role grants. Permission definitions remain a read-only code-owned catalog.
+- Resource metadata exposes typed request/response contracts for all new user
+  and role operations. User audit metadata deliberately omits credentials and
+  treats email as sensitive; the service-layer audit payload still requires a
+  final key-name review because the audit sanitizer rejects password,
+  credential, token, and authorization material at any nesting depth.
+- The first Web API-helper pass consistently uses CSRF plus one stable
+  idempotency key per retryable write. One contract mismatch needs convergence:
+  `resetUserPassword` currently expects a `UserResponse`, while its resource
+  metadata declares no response body; the backend and generated client must
+  agree on either a typed 200 response or a bodyless 204 before type checking.
+- Added contract coverage that enumerates all access operations and permissions,
+  asserts `AuthorizationAll`, CSRF/idempotency/OpenAPI metadata, and verifies the
+  bootstrap Administrator grant set exactly matches the registered catalog at
+  `all` scope. It is expected to compile only after the handlers land.
+- The initial service implementation derives legal scopes from registered
+  operation policies, merges effective user grants with `all` dominance, emits
+  stable sorted responses, and excludes the canonical Administrator role from
+  generic role assignment. It validates every assigned role's grants against
+  both the catalog and the actor's delegation ceiling before writing.
+- Security review found a privilege-boundary bug in the first draft: generic
+  role replacement deleted every `user_roles` row, including Administrator,
+  and generic disable/delete/password-reset paths could target Administrator
+  accounts without the dedicated Administrator transition authority. The
+  backend implementer was directed to preserve/reject the system role in
+  generic replacement and prevent those generic operations from bypassing the
+  explicit Administrator workflow and last-admin invariant.
+- The dedicated Administrator grant/revoke paths correctly lock the canonical
+  row, require the actor to be a usable Administrator, prevent self-revocation,
+  require a login-capable target before grant, and perform the post-state
+  last-admin check. Role name reservation is case-insensitive; system role
+  metadata/grants/deletion are rejected, and in-use custom roles return 409.
+- The Web access helper centralizes scope checks and correctly requires an exact
+  `all` grant for administrative actions (while an `all` grant also satisfies an
+  `own` requirement). The initial People and Roles implementations are sizeable
+  route-local pages; final review should focus on action visibility and state
+  coverage rather than introducing a premature generic form framework.
+- The first People action matrix reused `users:update` for enable/disable and
+  exposed self/system-Administrator actions that the API must reject. Frontend
+  convergence must use the dedicated enable/disable codes, hide password reset,
+  delete, and generic role editing for system Administrators, hide self-reset,
+  require the actor's Administrator membership for Administrator transitions,
+  and exclude `systemManaged` roles from generic role checkboxes.
+- The Roles page correctly hides all writes for the system-managed role and
+  disables deletion while a custom role is assigned. Its permission editor must
+  also account for the separately protected `permissions:read` catalog and,
+  ideally, restrict visible scope choices to the actor's delegable grants so a
+  least-privilege role is not offered actions the API will reject.
+- The shared confirmation dialog uses native modal semantics, labels and
+  descriptions, Escape cancellation, cancel-first focus, pending locks, and
+  focus restoration. Shared console styles provide 44px controls, wrapping row
+  actions, responsive one-column forms/permission groups, and mobile-friendly
+  filters; final browser QA still needs to verify table-card behavior comes from
+  the existing global responsive rules.
+- The backend draft now preserves the Administrator join during generic role
+  replacement and rejects disable, delete, and password reset while the target
+  still holds Administrator. This closes the dedicated-transition bypass; the
+  remaining post-return last-admin branches in disable/delete are now redundant
+  cleanup rather than a correctness dependency.
+- The first handler pass follows the existing UoW pattern: hashes passwords
+  before opening the transaction, records idempotent responses and audit events
+  in the same transaction, omits email/credentials from audit fields, maps
+  domain conflicts to RFC problem responses, and returns typed list envelopes.
+  One validation gap remains: create-user trims `displayName` after structural
+  validation but must explicitly reject a whitespace-only result, as update-user
+  already does.
+- Expanding `UserResponse` exposed an authentication response inconsistency:
+  `/auth/me` currently populates permission strings/scopes but leaves roles and
+  `administrator` at helper defaults, so UI checks for an Administrator actor
+  would always fail. The current-user handler must return the database-backed
+  management response (or otherwise populate role membership accurately), and
+  login must ensure all non-null array fields serialize as arrays rather than
+  `null`.
+- The People page action matrix has been corrected to use distinct enable and
+  disable grants, hide self/system-Administrator destructive and credential
+  actions, require Administrator membership for dedicated transitions, filter
+  the system role from checkboxes, and treat reset-password as a bodyless write.
+  A least-privilege residual remains: role assignment UI also needs `roles:read`
+  to render its choices, not only `users:assign-roles`, or the disabled roles
+  query can leave that editor in a perpetual loading state.
+- The Roles editor now requires both `roles:grant` and `permissions:read`, derives
+  delegable scope choices from the actor's effective grants, preserves a
+  pre-existing grant the actor may view but cannot delegate as locked, and
+  disables submission when the permission catalog fails. This mirrors the API's
+  delegation ceiling without weakening backend enforcement. However, the API's
+  current full-replacement validator rejects every non-delegable input even when
+  it is an unchanged locked grant, so the UI's “preserve locked grant” behavior
+  and the backend contract still need to converge (either allow exact unchanged
+  preservation server-side or disable grant editing for that role).
+- The server-side replacement validator now matches the UI: newly added or
+  changed grants must be delegable, while every existing grant outside the
+  actor's ceiling must appear with its exact original scope. Such locked grants
+  cannot be deleted, downgraded, or upgraded; create-role still requires the
+  actor to be able to delegate every initial grant.
+- Authentication responses have converged with the expanded user contract:
+  login builds the database-backed roles/Administrator/effective-grants response
+  inside its transaction, `/auth/me` reloads the same management view and then
+  overlays the authenticated principal's sorted permission scopes, and the
+  fallback mapper normalizes nil permission slices to `[]`.
+- First generated-client type check found that `PermissionResponse.allowedScopes`
+  is emitted as `string[]`, even though runtime values are constrained to
+  `own|all`; the Go/OpenAPI model currently lacks an item-level enum. The source
+  contract should encode the enum (preferred) or the UI must narrow/validate it
+  at the boundary before using scope helpers. No generated file should be hand
+  edited.
+- Huma v2.39 explicitly supports `enum` tags on slice fields and applies the
+  values to array items, so `AllowedScopes []string` can carry
+  `enum:"own,all"` in the Go DTO and generate the desired TypeScript union
+  without introducing a parallel hand-maintained frontend type.
+- Administrator-sensitive user mutations now linearize on the canonical role:
+  generic role replacement, disable, delete, password reset, explicit grant/
+  revoke, and enable of an Administrator cannot race across instances. Enable
+  additionally requires a usable Administrator actor when the target is already
+  privileged. The implementation retains a few redundant post-rejection
+  last-admin branches, but correctness no longer depends on them.
+- The permission editor no longer assumes the catalog fits one API page. Its API
+  wrapper walks the list contract's 100-item pages and the Roles query consumes
+  the complete deduplicated catalog, with a focused pagination regression.
+- The serial Playwright administrator workflow now includes the full access
+  lifecycle: create a one-grant role, create and assign a person, verify role and
+  status rendering, disable/enable/delete the person, then delete the unassigned
+  role. It also switches both consoles to a 390px viewport and asserts no
+  document overflow plus an in-bounds primary action.
+- Local browser discovery passes, but the first attempted execution did not
+  enter the test body because the developer machine already has an initialized
+  API and Playwright's managed API process could not claim the same endpoint.
+  The documented gate requires an initially absent `AGINEX_CONFIG_FILE` and
+  isolated Setup-mode API/web processes; no passing E2E execution is claimed yet.
+- Independent review identified a MySQL `REPEATABLE READ` nuance: acquiring a
+  role lock after an earlier consistent read is not enough if grant rows are
+  subsequently read from the old snapshot. Assignment must either perform a
+  locking/current read of role grants or ensure every ordinary read begins only
+  after stable-order role locks; regression should cover concurrent grant
+  elevation versus assignment.
+- The browser workflow can be executed without disturbing the developer's live
+  application by giving Playwright unique API/Web ports, an absent temporary
+  `AGINEX_CONFIG_FILE`, SQLite Setup inputs, disabled durable jobs (the file-job
+  assertion is conditional locally), and a temporary storage root. This is
+  preferable to stopping or reusing the user's initialized 3000/8080 services.
+- Access reductions now revoke affected browser sessions in the same UoW:
+  effective user-role reductions, actual Administrator revocation, and role
+  grant reductions join the existing disable/delete/password-reset paths. Audit
+  metadata records only a safe `sessionCount`; no credential or token material
+  is introduced.
+- A remaining cross-instance P1 is password-reset versus login: a login that
+  verifies the old hash before reset deletes sessions can otherwise insert a new
+  valid session afterward. Login and reset must serialize on the password
+  identity (including SQLite's no-op-write fallback) so reset either deletes the
+  completed login session or the login verifies only the new hash.
+- The auth fix now makes standalone login explicitly transactional, takes a
+  `FOR UPDATE` current read of the password identity, and performs a SQLite
+  no-op write before verification/session insertion. Credential/lifecycle
+  mutations share an exported stable identity-lock helper, closing reset,
+  disable, and delete versus login. The same helper should cover newly promised
+  role/Admin access-reduction session revocations if the guarantee is meant to
+  exclude a concurrent post-delete login session, even though dynamic grant
+  reload already prevents retained privileges.
+- Assignment now existence-checks and rejects the system role, locks requested
+  custom roles in stable ID order, and reads their join-table grants with
+  `FOR UPDATE`. The locking read is a MySQL current read even if an earlier query
+  opened a `REPEATABLE READ` snapshot, so delegation checks cannot validate a
+  stale pre-elevation grant set. PostgreSQL receives equivalent row locks and
+  SQLite omits the clause after already acquiring its writer lock.
+- Independent review found that the idempotency request digest was an unkeyed
+  SHA-256 over the canonical body. For create/reset password JSON, a read-only DB
+  leak would permit fast offline dictionary matching and bypass Argon2's cost.
+  The digest must be HMAC-SHA256 under a high-entropy deployment secret (with
+  domain separation), preserving the existing 64-hex storage shape while never
+  persisting the key or raw body. Because this is a 0.1 development baseline,
+  transient conflicts with pre-change in-flight/24h records are acceptable but
+  should be documented.
+
+## People and Role Management Console — 2026-08-10
+
+- User direction: finish the People and Access consoles; the built-in
+  Administrator role must keep all permissions by default, while administrators
+  can create custom roles and select their permissions.
+- The current access module is intentionally fail-closed but incomplete: it
+  registers only `users:read`, `roles:read`, and GET list operations for users,
+  roles, and permissions. The Web pages are read-only `ResourceList` consumers.
+- Registered permission definitions are application/module metadata and are
+  synchronized during bootstrap. Runtime management must therefore target
+  role-permission grants and user-role assignments rather than permission-code
+  CRUD.
+- Existing tables already model users, password identities, roles,
+  permissions, `user_roles`, `role_permissions`, sessions, and soft-deleted
+  users; schema changes are not assumed until the invariant audit proves one is
+  necessary.
+- README explicitly lists complete user and role mutations as unfinished, so
+  this task closes a known v1 baseline gap rather than changing a read-only
+  product decision. Public self-registration remains out of scope.
+- The worktree was clean at task start and only the repository-root
+  `AGENTS.md` governs source changes.
+- Password identities are separate rows in `user_identities`; local-user
+  creation must hash into that table and must never revive or depend on the
+  legacy `users.password_hash` column. Existing `password.Hash` and auth login
+  behavior provide the supported credential boundary.
+- Browser sessions already have a transaction-aware, exactly-one-user revoke
+  primitive. Disabling or deleting a managed user should use it in the same
+  write transaction so an inactive account does not retain browser access.
+- The current core access module has no service layer for user/role management;
+  new handlers should keep domain invariants out of raw route glue and reuse the
+  atomic `Runtime.Writes` audit boundary.
+- `App` already owns the shared auth service and atomic unit of work, so an
+  access-management service can be injected alongside them without adding a
+  provider or schema dependency. Product handlers provide response/idempotency
+  mechanics but are not sufficient for security lifecycle invariants.
+- Authenticated principals resolve effective grants but do not preload their
+  role rows. Reserved-Administrator checks should query `user_roles` inside the
+  same transaction as the protected mutation instead of trusting request or
+  stale session metadata.
+- Existing role responses lose `role_permissions.scope`; the management
+  contract needs explicit grant DTOs carrying permission identity/code and
+  `own|all` scope so the console can round-trip authorization semantics.
+- Built-in access writes will use global/all authorization at the API boundary;
+  service logic must additionally enforce reserved-role, actor, and last-active-
+  Administrator invariants because permission possession alone cannot prevent
+  self-escalation or lockout.
+- The current three-dialect schema already supports this feature: users have
+  soft deletion after migration 7, password identities cascade from users,
+  user-role and role-permission joins have composite uniqueness/cascade FKs,
+  and grants carry a database-checked `own|all` scope. No Goose migration is
+  currently required.
+- Soft deletion does not fire the users FK cascade, so deleting a user should
+  deliberately disable password identities, revoke sessions, and decide
+  whether to retain role links as historical/restoration metadata. Email and
+  password-subject uniqueness intentionally prevent silently recreating a
+  deleted identity under the same address.
+- Custom-role hard deletion can rely on FK cascades for both assignments and
+  grants, but the reserved Administrator row must be rejected before deletion.
+- Managed local-user creation should reuse `httpx.UserPasswordLooksInsecure`
+  plus `password.Hash`: this rejects empty/whitespace/template credentials but
+  intentionally retains the repository's no-password-length-policy decision.
+- The contract middleware supplies typed DTOs and generic stable RFC problem
+  codes (`REQUEST_INVALID`, `RESOURCE_FORBIDDEN`, `RESOURCE_NOT_FOUND`,
+  `REQUEST_CONFLICT`). Domain errors should be mapped explicitly to 400/403/
+  404/409 before the generic 500 path so security invariants remain actionable
+  without leaking database/provider details.
+- Existing CRUD handlers write directly in `App`; this security-sensitive
+  feature warrants a focused `access` service with typed sentinel errors, while
+  HTTP handlers remain responsible for request/audit metadata and response
+  mapping.
+- The Web shell already caches the current principal under `['me']`, so page
+  actions can be permission-aware without another auth store. New pages should
+  use that query data to hide create/update/delete/assignment controls while the
+  API remains authoritative.
+- The current Product page demonstrates TanStack mutations, CSRF/idempotency,
+  localized toasts, semantic labels, and responsive tables, but it does not
+  guard actions by permission and has no edit/confirmation patterns. The access
+  console needs dedicated components/CSS rather than copying those gaps.
+- Existing Web API helpers centralize CSRF refresh and generated-client errors.
+  Every access write should use those helpers and an idempotency key; no manual
+  fetch contract is needed.
+- There are no current People/Access component tests. New focused tests should
+  mock the API and current-principal query to verify authorized/unauthorized
+  actions and core form transitions.
+- Database opening does not enable GORM's dialect error translation. Services
+  will perform portable uniqueness/existence prechecks and return 409 for known
+  conflicts; an unexpected race-level constraint error remains sanitized as
+  500 unless a framework-wide translation change is separately justified.
+- Existing app tests provide migrated SQLite/bootstrap helpers, login cookies,
+  CSRF-aware request serving, problem assertions, and direct grant fixtures.
+  A dedicated access-management integration test can exercise the real router,
+  auth middleware, idempotency/UoW audit, and session revocation without new
+  infrastructure.
+- Session-revocation tests already prove audit rollback semantics, giving a
+  strong pattern for verifying disable/delete/password-reset changes roll back
+  when audit persistence fails.
+- Grant-scope options can be derived from the registered operation routes:
+  permissions used only by `AuthorizationAll` routes accept only `all`, while
+  any actor/object/query use makes `own` meaningful; `all` remains valid for
+  every permission. The permission catalog can expose these allowed scopes
+  without hard-coding business resources in the UI.
+- Bootstrap already replaces Administrator's grants with the exact registered
+  permission set and then sets every join scope to `all`. API management must
+  block all Administrator role mutations; startup remains the sole authority
+  that can change its definition.
+- Delegated role managers need a privilege ceiling: a non-Administrator actor
+  must not grant or assign permissions/scopes exceeding their own effective
+  grants, and only an existing Administrator member may assign the reserved
+  Administrator role. This prevents `roles:grant` or `users:assign-roles` from
+  becoming unrestricted escalation primitives.
+- SQLite's runtime connection currently does not explicitly enable FK
+  enforcement for every pooled connection. Access writes will not rely on
+  implicit cascades for correctness: role deletion will reject assigned roles
+  and explicitly remove grant joins transactionally. A framework-wide SQLite
+  connection fix is valuable but outside this console's minimum mutation
+  surface.
+- The locked API separates user/role metadata CRUD from high-risk transitions:
+  role assignment, grants, enable/disable, reset-password, and Administrator
+  membership each have their own permission and operation. Generic role
+  assignment cannot add or remove Administrator.
+- Managed-user email is immutable in this version because it is also the
+  normalized password-identity subject. Creation is atomic and requires an
+  initial password; reset-password replaces only that credential and revokes
+  sessions without exposing secret material.
+- User deletion is explicitly soft deletion. It disables identities and revokes
+  sessions but retains the email, role history, and audit actor correlation;
+  the same email cannot be silently reused.
+- No `roles.system_key` migration will be introduced in this scoped change.
+  The canonical case-insensitive `Administrator` name remains a reserved,
+  API-immutable bootstrap contract; a future stable-key migration can harden
+  physical database identification independently.
+- Contract generation is repository-owned by `pnpm generate:contracts`, which
+  runs the Go OpenAPI generator and then `openapi-typescript` plus Biome. The
+  generated JSON/TypeScript artifacts will be updated only after backend and
+  frontend source converge.
+- Final verification mirrors CI: deterministic contract regeneration, full Go
+  test/race/vet gates, Web type/lint/tests/build, and Playwright discovery or
+  execution as the environment permits.
+- Audit sanitization rejects key names containing `password`, `credential`,
+  `token`, or `authorization` at any depth. Password-reset audit context must
+  use outcome-only safe keys such as `loginAccessChanged` and `sessionCount`;
+  neither secret values nor suggestive sensitive field names may be persisted.
+- The OpenAPI layer automatically documents UUID `{id}` path parameters, CSRF,
+  idempotency headers, and registered error statuses. New operations only need
+  correct typed operation contracts and query parameter metadata; manual schema
+  patching is unnecessary.
+- Documentation now treats access administration as framework core while
+  preserving public-registration closure and code-owned permissions. Its final
+  status wording must be reconciled with actual verification results before
+  handoff so documentation does not overclaim an unexecuted gate.
+- Existing bootstrap tests compare Administrator grants against the dynamic
+  registered permission set rather than a stale hard-coded count. Adding the
+  access permissions should not require weakening or mechanically updating that
+  invariant.
+
+
 ## Administrator Password Length Limits — 2026-08-10
 
 - User direction: remove administrator password length restrictions. Scope is
@@ -1211,3 +1728,123 @@
 - HTTP Setup retries need different credential semantics from normal access drift synchronization. Setup explicitly replaces and verifies the submitted administrator hash so a failed pre-commit attempt can change password; configured startup still preserves existing credentials and only writes when permissions/roles drift.
 - Installation publication must classify more than the exclusive rename itself. Any filesystem failure before publication now rechecks the destination: only a definite absence remains retryable, while an existing or uninspectable marker seals Setup; new directory hierarchies persist each component by syncing its parent before proceeding.
 - Candidate ownership needs a durable in-memory shutdown result as well as an atomic handler. Both sealed and activated candidates now have exactly-once cleanup barriers; active cleanup uses a Supervisor-owned bounded context, while concurrent or retried callers independently bound their wait and observe one stable sanitized result.
+# Access-management final security findings (2026-08-10)
+
+- A session deletion alone did not linearize with a concurrent password login: a login
+  could verify before an access reduction, then insert a session after the revocation.
+  All relevant access-reduction paths now acquire the same password-identity locks as
+  login before deleting sessions, in a stable role/user/identity lock order.
+- The idempotency subsystem used to persist an unkeyed SHA-256 of request bodies. For
+  password-bearing requests this enabled a fast offline dictionary check for anyone
+  who obtained read-only database access. The digest is now a domain-separated HMAC
+  keyed by the configured deployment session secret while retaining its 64-hex storage
+  shape and deterministic replay semantics.
+- The built-in Administrator role remains bootstrap-owned and immutable; its grants are
+  synchronized to every registered permission at `all` scope. Custom-role grants are
+  constrained by the actor's effective delegation ceiling.
+- Final structural review confirms the previous read-only access handlers/response
+  mappers were moved from `app.go` into the dedicated access implementation rather
+  than duplicated. Module registration now exposes the narrow user/role/permission
+  operation set, and `/auth/me` returns current role/grant state for permission-aware
+  actions.
+- Frontend review confirms write controls require exact `all`-scope grants, role
+  assignment filters the system-managed role, password reset consumes its 204 response,
+  and all writes use the shared CSRF/idempotency wrapper. Password create/reset audits
+  contain only safe access-change/session-count metadata, never the password or hash.
+- Role-grant replacement now locks the canonical Administrator row before the target
+  role, globally serializing grant reductions and closing a cross-role write-skew that
+  could otherwise let two concurrent changes jointly remove an actor's last
+  `roles:grant all` capability. SQLite's no-op writer locks fail closed where
+  `FOR UPDATE` is unavailable.
+# 2026-08-10 — Storage provider profiles
+
+- Existing runtime already has Local, S3-compatible, and Alibaba OSS adapters, but constructs one store at API/worker startup.
+- `file_objects` records provider and bucket but not a stable configuration identity; exact multi-profile routing therefore requires an additive nullable `storage_profile_id` migration.
+- FilesModule has both normal and `files_legacy` migration sources; the new migration must be added to SQLite, PostgreSQL, and MySQL in both sources and to the bundled schema-column verifier.
+- Existing installation v1 is strict, private, and first-publication-only. Profile writes need a separate revisioned update path while retaining the exclusive Setup commit semantics.
+- Current worktree contains substantial in-progress access-management changes in shared app modules, OpenAPI, generated client, messages, and navigation; edits must be narrow and merged.
+- The cleanest runtime handoff is immutable profile metadata carried inside `config.Config`: API and worker constructors already receive the same value after `LoadState`, while programmatic configs can synthesize one legacy profile.
+- Setup creates and publishes the installation marker before the long-lived runtime is returned, so the setup installation adapter must include its base storage configuration when creating v2.
+- FilesModule owns both normal and legacy migration bundles; the nullable profile column belongs in bundle version 2 rather than the core migration stream.
+- `services.Runtime.Storage` can remain an active-profile facade for extension compatibility, while built-in files and cleanup retain a richer internal registry.
+- Profile mutations must be implemented as narrow new handlers/files and only registered in the existing dirty `modules.go`/OpenAPI maps.
+- Existing installation publication already has platform-specific exclusive rename helpers; profile updates need a separate replacing rename path and can reuse the validated file/directory durability checks.
+- The repository already depends on `golang.org/x/sys/unix`, so Unix advisory locking can be added without a new dependency; non-Unix builds need a conservative fallback.
+- `FileObject` and cleanup payloads currently use only provider/key at execution time. A profile registry must be injected into both API and worker before routing changes can be safe.
+- Browser-readable revision headers are a two-sided CORS contract: `If-Match` must be allowed on preflight and `ETag` must be exposed, otherwise 200 profile reads still fail in the cross-origin Web client.
+- File persistence and database audit cannot be treated as two separately locked steps. Holding the installation lock across the audit callback lets a failed audit restore the previous revision before another process can publish a successor.
+
+# 2026-08-11 — General file uploads and resumable transfers
+
+- The existing Files API and page are image-only, use one fetch PUT, and expose
+  no upload progress; generic multi-file progress requires XHR and per-file state.
+- `file_objects` already carries filename, MIME, size, SHA-256, dimensions, and
+  status. Generic payload metadata needs no new column, but single-intent
+  capability safety needs a fixed `upload_expires_at`; resumable transfers need
+  dedicated session/part tables.
+- Current Local upload buffers the whole object and the shared policy is fixed
+  at JPEG/PNG/WebP plus 10 MiB, so 1 GiB support requires streaming temp files,
+  route-specific body limits/deadlines, and a generic verifier.
+- The public ObjectStore has no multipart or response-disposition capability;
+  additive optional interfaces keep cloud SDKs hidden without breaking custom
+  stores inside the current baseline.
+- S3/R2/OSS completion requires provider ETags from UploadPart responses. The
+  browser must ACK them immediately and bucket CORS must expose ETag; ListParts
+  is verification, not the durable client manifest.
+- The user explicitly confirmed Aginex has not shipped. The project Agent guide
+  and upload Skill now direct future work to update unshipped baselines instead
+  of preserving legacy API/config/migration compatibility.
+- Files operations are owned by one module with `files:create|read|delete` and
+  owner policy. Resumable session routes can reuse `files:create` and resolve
+  ownership through the linked FileObject; the global upload-policy read is a
+  protected non-mutating operation in the same module.
+- Storage settings already have revisioned ETag/If-Match and an installation-file
+  compensation transaction. The upload-policy update should reuse that commit
+  seam but bypass only the provider-specific environment-managed write block.
+- The existing File URL and Local content handlers always inline persisted MIME.
+  Safe generic files therefore require server-derived preview classification and
+  controlled disposition on both signed cloud reads and Local responses.
+- App construction currently instantiates a fully buffering ImageVerifier with
+  a hard-coded image policy. The current baseline should replace that field with
+  a generic streaming FileVerifier built from the runtime upload-policy snapshot.
+- Global request-limit middleware executes before routing and caps every body at
+  the JSON limit. Local binary upload routes need an explicit middleware bypass
+  followed by handler-local exact MaxBytesReader bounds; simply raising the
+  global limit would weaken every API operation.
+- Storage Registry already resolves retained profiles by FileObject profile ID.
+  A resumable session can therefore retain only its FileObject link plus the
+  provider upload ID; all bucket/key/provider routing remains server-derived.
+- The registered API contract currently declares Local binary routes as
+  `image/*`; generic upload/read must change these to `application/octet-stream`
+  and extend the contract media matcher if a full wildcard is ever used.
+- Existing idempotency replay authorization is enabled for every object-mode
+  Files write. New session mutations must either provide safe replay metadata
+  without signed URLs/ETags or deliberately omit idempotency on ephemeral sign
+  operations while retaining it on durable ACK/complete/cancel transitions.
+- The module runtime has an actor authorization mode that admits either own or
+  all grants without requiring an object check. `GET /files/upload-policy` is
+  actor-scoped; session listing is query-scoped; every session-specific route
+  remains object-scoped through its linked FileObject.
+- Existing `storage.cleanup` has three published-in-worktree payload versions
+  and combines provider deletion with audited FileObject transitions. Multipart
+  cleanup should be a separate job type keyed only by session ID, preserving the
+  old handler semantics while deriving provider identity from session+file rows.
+- Worker job handlers are registered explicitly after storage Registry creation;
+  multipart cleanup can be composed there without exposing provider upload IDs
+  in the durable job payload.
+- The storage workstream has established additive `ControlledRead` and
+  `MultipartObjectStore` contracts. Multipart application state can use the
+  provider-neutral `MultipartUpload{Key,ProviderUploadID}` and exact opaque
+  `UploadedPart` manifest without importing cloud SDKs.
+- Presigned single PUTs are mutable capabilities unless the provider operation
+  is create-only. S3-compatible URLs now sign `If-None-Match: *`, OSS signs its
+  forbid-overwrite header, and Local publishes with an atomic no-replace link;
+  this keeps verified SHA/MIME/preview metadata coupled to immutable bytes.
+- A signed upload can start immediately before credential expiry and use the
+  full transfer window; confirmation can then use a second full verification
+  window. Pending cleanup therefore uses a fixed persisted authorization expiry
+  plus both bounded 60-minute windows and safety margin, while replay never
+  extends the original authorization.
+- Provider inventory is reconciliation evidence, not the completion manifest.
+  ACK persists the browser-observed UploadPart ETag after normalized comparison,
+  and Complete sends that persisted opaque value after rechecking inventory.

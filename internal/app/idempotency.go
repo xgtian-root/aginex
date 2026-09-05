@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -23,6 +24,7 @@ import (
 	frameworkidempotency "github.com/xgtian-root/aginex/framework/idempotency"
 	"github.com/xgtian-root/aginex/framework/module"
 	"github.com/xgtian-root/aginex/framework/services"
+	frameworkstorage "github.com/xgtian-root/aginex/framework/storage"
 	"github.com/xgtian-root/aginex/internal/domain"
 	"github.com/xgtian-root/aginex/internal/platform/storage"
 	"gorm.io/gorm"
@@ -110,7 +112,7 @@ func (a *App) enforceIdempotency(
 			Method:        c.Request.Method,
 			Route:         route,
 			Key:           key,
-			RequestDigest: requestDigest(c.Request, body),
+			RequestDigest: requestDigest(c.Request, body, a.cfg.Session.Secret),
 		})
 		if err != nil {
 			a.writeIdempotencyClaimError(c, err)
@@ -350,8 +352,13 @@ func requestIdempotencyKey(header http.Header) (string, bool, error) {
 	return values[0], true, nil
 }
 
-func requestDigest(request *http.Request, body []byte) string {
-	hash := sha256.New()
+func requestDigest(request *http.Request, body []byte, secret string) string {
+	// The digest is persisted for replay conflict detection. It must not become
+	// a fast offline verifier for low-entropy fields (notably passwords), so use
+	// a deployment secret instead of an unkeyed content hash. The first field
+	// domain-separates this use from session token authentication.
+	hash := hmac.New(sha256.New, []byte(secret))
+	writeDigestField(hash, "aginex:idempotency-request:v1")
 	writeDigestField(hash, request.URL.EscapedPath())
 	writeDigestField(hash, request.URL.Query().Encode())
 	writeDigestField(hash, strings.ToLower(strings.TrimSpace(request.Header.Get("Content-Type"))))
@@ -405,7 +412,7 @@ func storedIdempotencyResponse(
 				err,
 			)
 		}
-		response.Upload = SignedRequestResponse{Headers: map[string]string{}}
+		response.Upload = nil
 		var err error
 		storedBody, err = json.Marshal(response)
 		if err != nil {
@@ -466,17 +473,43 @@ func (a *App) replayIdempotentResponse(
 		if file.Status != "pending" {
 			return errUploadIntentNotPending
 		}
-		signed, err := a.store.CreateUpload(c.Request.Context(), storage.UploadRequest{
-			Key:         file.ObjectKey,
-			ContentType: file.ContentType,
-			Size:        file.Size,
-			Expires:     10 * time.Minute,
+		if cached.Strategy == "resumable" {
+			cached.File = a.fileResponse(file)
+			encoded, encodeErr := json.Marshal(cached)
+			if encodeErr != nil {
+				return encodeErr
+			}
+			response.Body = encoded
+			goto replay
+		}
+		if file.UploadExpiresAt == nil {
+			return errUploadIntentExpired
+		}
+		fileStore, err := a.storeForFile(file)
+		if err != nil {
+			return err
+		}
+		remaining := file.UploadExpiresAt.UTC().Sub(time.Now().UTC()) - time.Second
+		if remaining <= 0 {
+			return errUploadIntentExpired
+		}
+		signed, err := fileStore.CreateUpload(c.Request.Context(), storage.UploadRequest{
+			Key:          file.ObjectKey,
+			ContentType:  frameworkstorage.StoredContentType,
+			Size:         file.Size,
+			Expires:      remaining,
+			Continuation: true,
 		})
 		if err != nil {
 			return err
 		}
-		cached.File = fileResponse(file)
-		cached.Upload = signedRequestResponse(signed)
+		signed, err = a.protectLocalSingleUpload(fileStore, file, signed)
+		if err != nil {
+			return err
+		}
+		cached.File = a.fileResponse(file)
+		upload := signedRequestResponse(signed)
+		cached.Upload = &upload
 		encoded, err := json.Marshal(cached)
 		if err != nil {
 			return err
@@ -484,6 +517,7 @@ func (a *App) replayIdempotentResponse(
 		response.Body = encoded
 	}
 
+replay:
 	for name, values := range response.Headers {
 		for _, value := range values {
 			c.Writer.Header().Add(name, value)
@@ -498,7 +532,10 @@ func (a *App) replayIdempotentResponse(
 	return nil
 }
 
-var errUploadIntentNotPending = errors.New("upload intent is no longer pending")
+var (
+	errUploadIntentNotPending = errors.New("upload intent is no longer pending")
+	errUploadIntentExpired    = errors.New("upload intent authorization has expired")
+)
 
 func (a *App) writeIdempotencyClaimError(c *gin.Context, err error) {
 	switch {
@@ -556,6 +593,14 @@ func (a *App) writeIdempotencyReplayError(c *gin.Context, err error) {
 			"Upload intent is no longer pending",
 			"The original upload intent can no longer be replayed.",
 		)
+	case errors.Is(err, errUploadIntentExpired):
+		writeIdempotencyProblem(
+			c,
+			http.StatusConflict,
+			"UPLOAD_INTENT_EXPIRED",
+			"Upload intent has expired",
+			"Create a new upload intent before retrying the upload.",
+		)
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		writeIdempotencyProblem(
 			c,
@@ -582,6 +627,7 @@ func (a *App) reauthorizeFileIdempotencyReplay(
 	replay module.IdempotencyReplay,
 ) error {
 	fileID := ""
+	sessionID := ""
 	switch operationID {
 	case "createUploadIntent":
 		var cached UploadIntentResponse
@@ -591,13 +637,15 @@ func (a *App) reauthorizeFileIdempotencyReplay(
 		fileID = cached.File.ID
 	case "confirmUpload", "deleteFile":
 		fileID = replay.PathParameter("id")
+	case "resumeUploadSession", "ackUploadSessionParts", "completeUploadSession", "cancelUploadSession":
+		sessionID = replay.PathParameter("id")
 	default:
 		return fmt.Errorf(
 			"unsupported file replay authorization for %q",
 			operationID,
 		)
 	}
-	if strings.TrimSpace(fileID) == "" {
+	if strings.TrimSpace(fileID) == "" && strings.TrimSpace(sessionID) == "" {
 		return gorm.ErrRecordNotFound
 	}
 	runtime, ok := services.RuntimeFromContext(ctx)
@@ -612,6 +660,12 @@ func (a *App) reauthorizeFileIdempotencyReplay(
 		return err
 	}
 	var file domain.FileObject
+	if sessionID != "" {
+		return query.Where(
+			"EXISTS (SELECT 1 FROM file_upload_sessions WHERE file_upload_sessions.file_id = file_objects.id AND file_upload_sessions.id = ?)",
+			sessionID,
+		).Take(&file).Error
+	}
 	return query.Where("id = ?", fileID).Take(&file).Error
 }
 

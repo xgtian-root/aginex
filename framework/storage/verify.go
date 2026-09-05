@@ -49,6 +49,8 @@ const (
 	MIMEJPEG = "image/jpeg"
 	MIMEPNG  = "image/png"
 	MIMEWebP = "image/webp"
+	MIMEGIF  = "image/gif"
+	MIMEPDF  = "application/pdf"
 )
 
 var supportedImageMIMETypes = map[string]struct{}{
@@ -287,6 +289,8 @@ func mimeTypeForFormat(format string) (string, bool) {
 		return MIMEPNG, true
 	case "webp":
 		return MIMEWebP, true
+	case "gif":
+		return MIMEGIF, true
 	default:
 		return "", false
 	}

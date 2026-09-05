@@ -1,5 +1,233 @@
 # Progress
 
+## 2026-09-04 — `aginex new` project initialization
+
+- Loaded the repository `create-aginex-project` workflow and the persistent
+  file-planning workflow.
+- Locked the zero/one-argument target semantics and non-overwrite, staging,
+  public-API, and secret-handling guardrails before implementation.
+- Started N1 to audit CLI conventions and define the smallest runnable external
+  project template.
+- Chose a dependency-based hybrid scaffold rather than an embedded full-source
+  fork. The audit identified public hosting/Setup coordination as the required
+  framework seam to expose before generated projects can match the starter.
+- Added the curated embedded asset boundary and verified its root package test.
+  The initializer implementation now has stable application-side input without
+  accidentally bundling repository internals or local build artifacts.
+- Implemented both `new` target modes, strict portable names, optional checked
+  Go module paths, deterministic manifests with ownership/hashes, staged
+  no-replace publication, and change-aware rollback.
+- Added broad CLI/scaffold regressions plus a real external-consumer gate. The
+  generated Go module passes readonly tests and a zero-diff tidy check using a
+  temporary local framework replacement; the Windows CLI also cross-compiles.
+- Updated installation, initialization, CLI contract, roadmap, and project
+  creation Skill documentation.
+- Exposed public API and worker hosting lifecycles and switched generated entry
+  points to those public contracts; no generated Go source imports framework
+  internals.
+- Completed both real binary smoke modes. The generated project passes
+  `doctor`, `check --skip-build`, readonly Go tests, zero-diff `go mod tidy`,
+  frozen-lockfile Web installation, Web type/lint checks, and all 132 Web tests.
+- Project-owned OpenAPI and TypeScript regeneration is deterministic and its
+  post-generation hashes match `.aginex/project.json`.
+- Completed N5: repository-wide `go test ./... -count=1`, `go vet ./...`, the
+  focused public-host race suite, Windows CLI cross-compilation, Skill
+  validation, the production Web build, and `git diff --check` all pass.
+- Reopened the initializer phases after final independent review reproduced
+  three compileability gaps: source-built CLIs need an explicit local Aginex
+  source boundary, `vendor` module path segments must be rejected, and an
+  application module must not shadow Aginex or any of its dependency modules.
+- Closed all three review findings with regression coverage. A real
+  source-built binary now fails without mutation and an actionable
+  `--aginex-path` message, then successfully creates and compiles both named and
+  current-directory projects when that path is supplied; adversarial module
+  names fail without targets or staging residue.
+- Re-ran the converged completion gates: full Go tests and vet, race tests for
+  public hosting plus CLI initialization, Windows CLI cross-compilation,
+  generated external-project readonly tests and zero-diff tidy, CLI help, and
+  `git diff --check` all pass.
+- The final independent re-review reports no remaining blocker. The generated
+  default-module project also cross-compiles its API, worker, OpenAPI, and
+  composition packages for Windows.
+
+
+## 2026-08-11 — PostgreSQL reinitialization ownership repair
+
+- Recovered the exact operator failure: the confirmed local reset failed while
+  renaming `public` with SQLSTATE 42501 because the configured role is not its
+  owner.
+- Confirmed from the command's error path that the private configuration archive
+  was restored and the database transaction did not commit.
+- Loaded the repository `test-and-debug` workflow and refreshed the persistent
+  planning files. Started PR2 to add a regression before changing the archive
+  implementation.
+- Inspected the sole PostgreSQL migration baseline and confirmed the application
+  schema consists of tables plus dependent indexes. Chose a transaction-scoped
+  preflight/move/postflight design that leaves `public` untouched.
+- Added the object-level PostgreSQL archiver, fail-closed catalog checks, unit
+  regression, and Operations documentation. The first focused test invocation
+  was blocked only by sandbox access to the user Go build cache.
+- Focused CLI regressions pass. The first rollback-only live PostgreSQL probe
+  made no persistent changes and exposed one legitimate application function
+  that the archive inventory must support before the probe can pass.
+- Added supported application-function inventory and movement with ownership
+  checks. The second live probe passed in 0.03 seconds and explicitly verified
+  both in-transaction archive state and complete post-rollback restoration.
+- PR2, PR3, and PR4 are complete. PR5 full relevant verification is in progress.
+- Completed PR5: `go test ./... -count=1`, `go vet ./...`, focused CLI
+  regressions, the explicit live rollback probe, and scoped `git diff --check`
+  all pass. No real reinitialization was committed; the operator can now rerun
+  the same confirmed command.
+
+
+## 2026-08-11 — v1-only configuration and local reinitialization
+
+- Loaded the `test-and-debug` and persistent file-planning workflows.
+- Recorded the new v1-only installation policy and safe-reset guardrails before
+  changing CLI or configuration code.
+- Confirmed from the prior startup probe that configuration-only compatibility
+  reaches database migration but cannot make the retained v2 Files history
+  compatible with the sole current v1 baseline.
+- Completed R1/R2: locked the `dev reinitialize` dry-run/typed-confirmation
+  contract, v1-only runtime configuration, local/production rejection, and a
+  real SQLite archive regression. The focused config and CLI suites pass.
+- Completed R3 and the documentation half of R4. The reset implementation now
+  revalidates file identity and target immediately before mutation, rejects
+  symlinked/non-private backup roots, and preserves per-dialect database state.
+- Ran `go run ./cmd/aginex dev reinitialize` against the actual ignored v2
+  marker. It printed only `postgres:aginex@localhost:5432`, the prospective
+  backup path, and the exact confirmation command; the marker stayed at v2 and
+  no backup directory was created.
+- Completed R4. The SQLite execution regression now reopens the archived
+  database and verifies retained schema, validates the archived v1 marker and
+  credential-free manifest, and confirms the post-reset runtime enters Setup.
+  CLI help and all focused config/CLI/API/worker tests pass.
+- Completed R5. `go test ./... -count=1`, `go vet ./...`, focused config/CLI
+  race tests, `pnpm check:web`, all 132 Web tests, `pnpm build:web`, Skill
+  validation, `aginex doctor`, `aginex check --skip-build`, and
+  `git diff --check` pass.
+- PostgreSQL and MySQL execution paths are implemented with transactional/
+  atomic archive boundaries, but were not executed against the user's retained
+  databases. The real PostgreSQL marker was exercised only through the
+  guaranteed non-mutating dry run; SQLite is the executed recovery contract.
+
+## 2026-08-11 — General file uploads
+
+- Recorded the pre-release/current-only rule in `AGENTS.md` and the upload Skill.
+- Added installation-wide pending/runtime file policy settings and the upload
+  policy endpoint.
+- Replaced the image-only intent/confirmation path with generic streaming file
+  verification, extensionless object keys, octet-stream storage, preview-kind
+  metadata, and controlled preview/download responses.
+- Added resumable intent/session/list/resume/sign/ACK/Local part/complete/cancel
+  handlers with 32 MiB parts, persisted opaque ETags, fingerprint matching,
+  CAS transitions, and uncertain provider completion recovery.
+- Registered the session operations in the module and OpenAPI contract; focused
+  compile passes. Existing app behavior tests are now being updated from the
+  retired image-only PUT contract.
+
+## 2026-08-10 — People and Role Management Console
+
+- Loaded the persistent planning workflow plus the Aginex business-resource,
+  RBAC, custom-operation, and admin-page skills.
+- Recovered a clean worktree and preserved the existing project history in the
+  shared planning files.
+- Started A1 by confirming that current access APIs and pages are list-only,
+  permission definitions are code-owned, and Administrator grants are already
+  synchronized by bootstrap.
+- Confirmed a clean starting tree, the separated password-identity model, and
+  the existing transaction-aware browser-session revocation seam. Parallel
+  backend, frontend, and verification audits are in progress before the public
+  contract is locked.
+- Mapped the central `App` composition, auth principal/grant loading, UoW audit
+  pattern, operation registry, contract metadata, and current list handlers.
+  A1 now focuses on locking explicit DTOs and security transitions.
+- Verified all three core migration histories. Existing schema/FKs/scopes cover
+  the requested management relationships, so no schema change is planned unless
+  implementation tests uncover dialect drift.
+- Audited password policy and RFC problem handling. Managed-user passwords will
+  preserve the established non-empty/non-template policy without reintroducing
+  length limits; domain conflicts and lockout guards will receive explicit
+  4xx mappings.
+- Audited the current Web shell, generated-client wrapper, Product CRUD pattern,
+  responsive styles, and test harness. The new console will reuse query/CSRF/
+  localization infrastructure while adding permission-aware actions and
+  confirmations missing from the starter Product UI.
+- Located the reusable Go integration-test harness and confirmed no framework
+  migration or global GORM error-mode change is needed for the first
+  implementation.
+- Locked the direction for system-managed Administrator grants, explicit
+  own/all role grants, delegation ceilings, and transactional self/last-admin
+  protections. The remaining A1 work is the exact route/DTO matrix.
+- Completed A1 and locked the route, permission, DTO, password, soft-delete,
+  role-grant, and Administrator transition semantics. A2 backend implementation
+  is now in progress; A3 can proceed against the fixed generated contract.
+- Backend, frontend, and documentation implementation are running in parallel
+  on disjoint files. Located the deterministic generation and CI-equivalent
+  verification commands for the convergence phase.
+- Sent the backend implementer the audit-sensitive-field constraint and mapped
+  the OpenAPI generator's automatic path/CSRF/idempotency behavior for review.
+- Documentation and the RBAC Skill have been updated in parallel; Skill
+  validation and diff whitespace checks pass. Final wording will be rechecked
+  after code and verification converge.
+- Split contract coverage into an independent test task while backend source is
+  implemented. Confirmed existing Administrator permission-count assertions are
+  registry-driven and should naturally cover the expanded permission set.
+- Backend permission/DTO/OpenAPI source and frontend API/shared-management
+  primitives are now landing. No generated artifact has been touched before
+  source convergence.
+- Reviewed the first typed access-management DTO pass: user and role create/
+  update payloads, role replacement, password reset, explicit `own|all` grant
+  inputs, and credential-free response shapes are represented. Backend service
+  and invariant review remains in progress before contract generation.
+- Completed the first security pass over the access service and escalated a
+  system-role bypass in generic user operations before convergence. Password
+  reset is locked to a bodyless 204 contract; the Web helper is being aligned.
+  Request-level regression coverage is now being added in parallel.
+- People and Roles page implementations, shared responsive/dialog styles, and
+  both locale catalogs have landed in source form. Their first action-matrix
+  review identified dedicated enable/disable and system-Administrator visibility
+  corrections, which are being applied before generated-client type checking.
+- The backend now compiles and the new request-level access suite passes,
+  including selected grants, forbidden callers, system-role immutability,
+  self/last-admin protections, session revocation, and delegation ceilings.
+  A full `internal/app` run found one stale pre-existing registry expectation;
+  implementation review also required accurate roles/Administrator data in
+  `/auth/me` before contract generation.
+- The stale built-in registry expectation has been expanded to the five current
+  resources. Frontend action matrices and delegation controls are converging;
+  one nuanced full-replacement case (preserving an unchanged grant above the
+  actor's ceiling) is under backend/frontend contract review.
+- Backend and frontend delegation semantics now agree on exact preservation of
+  locked grants, authentication responses carry accurate role/scope data, and
+  the full `go test ./internal/app -count=1` gate passes. A2 is awaiting the
+  independent security review; generated OpenAPI/client convergence is next.
+- Regenerated OpenAPI and the TypeScript client from source. Added Huma's
+  item-level enum metadata so `allowedScopes` is generated as
+  `("own" | "all")[]` rather than unbounded `string[]`; generated artifacts were
+  not hand edited. Web type checking can now proceed against the typed contract.
+- `pnpm check:web` passes (TypeScript plus Biome), and all 111 Web unit tests in
+  12 files pass against the generated contract. A3 source implementation is
+  functionally converged; production build and full repository gates remain.
+- The optimized Next.js production build passes. Full uncached `go test ./...
+  -count=1` and `go vet ./...` also pass with an isolated task-scoped Go cache.
+  Remaining gates are race/contract determinism/skills/check/E2E discovery and
+  final independent security review.
+- Focused access/bootstrap tests pass under the Go race detector. A second
+  source generation produced byte-identical OpenAPI and TypeScript artifacts
+  (`bd4f07…` and `f702e4…`), confirming contract determinism.
+- `aginex skills validate`, `aginex check --skip-build`, and Playwright test
+  discovery pass; the consolidated check now reports 112 Web tests. A serial
+  People/Access browser workflow is being added before the final E2E gate.
+- The serial access browser workflow and current-user retry states are now in
+  source and pass Web checks/build/discovery. Two isolated E2E starts did not
+  enter a test: the first hit the sandboxed default Go cache, and the second API
+  reached Setup on its unique port before the companion Web server failed to
+  start (consistent with the live dev server holding Next's shared dev lock).
+  A production-server configuration is the remaining non-invasive execution
+  path; the user's live services have not been stopped.
+
+
 ## 2026-08-10 — Administrator Password Length Limits
 
 - Loaded `test-and-debug` and the persistent planning workflow, recovered the
@@ -782,3 +1010,127 @@
 - Repository-wide test/race/vet, Web, contract, build, and syntax gates passed on that tree, but the last read-only adversarial pass identified two additional shutdown/commit TOCTOU blockers before handoff: a marker can appear while the pre-publication directory durability probe fails, and concurrent active-application Shutdown calls do not yet share one cleanup result. Both failure paths are now assigned for regression-backed fixes; completion remains pending until the gates pass again.
 - Both final blockers are closed. Every pre-publication filesystem failure rechecks the destination and treats existence or an ambiguous inspection as sealed; active-application cleanup now runs exactly once with an independent bounded context while all callers wait with their own contexts and receive the same sanitized result.
 - Final independent static review reports no remaining blocker under the locked single-backend-instance threat model. The converged tree passes full Go test/vet, full Go race, focused post-fix race, module verification, Web check and 30 unit tests, deterministic contract generation, production Web build, Playwright discovery, Bash/YAML validation, and `git diff --check`.
+# 2026-08-10 — Access console final security hardening
+
+- Serialized password login session creation with password reset, user disable/delete,
+  user-role reductions, Administrator revocation, and role-grant reductions by locking
+  the same password identity rows through session insertion or revocation.
+- Added a forced interleaving regression proving an old-password login cannot leave an
+  authenticatable session after a concurrent reset.
+- Replaced the persisted unkeyed idempotency request digest with a domain-separated
+  HMAC-SHA-256 keyed by the deployment session secret, preventing request digests for
+  password operations from becoming offline password verifiers after a database leak.
+- Backend focused tests are green; full Go, Web, generated-contract, and isolated
+  production-browser gates remain in progress.
+- Final full verification now passes `go test ./... -count=1`, `go vet ./...`,
+  `pnpm check:web`, and `pnpm test:web` (12 files / 112 tests). The isolated
+  Playwright production-server run and targeted race detector remain.
+- Targeted `-race` coverage for auth/access and the production Next.js build now pass.
+  The isolated Playwright runner could not bind localhost port 3301 in the managed
+  sandbox (`EPERM`); the required escalation was rejected because the current Codex
+  usage allowance is exhausted, so no browser-test assertion executed. E2E discovery
+  remains green, but the real browser flow is explicitly unverified in this run.
+- Removed the temporary workspace Playwright config. The sandbox likewise rejected
+  deletion of its generated Go-cache directory at
+  `/private/tmp/aginex-access-e2e.Dp5Wrg`; it contains only disposable compiler cache.
+- Regenerated OpenAPI and the TypeScript client after the final backend changes. Both
+  artifacts were byte-identical to the locked versions: OpenAPI SHA-256
+  `bd4f07b4e3904aede55572734a443d368e4ef8eb3c2677e0f250fed070eee5d3`, client SHA-256
+  `f702e467ce88d17d1add5aa53b9cb21c8aeeb8ab001f91880dd16dda7ebdd869`.
+- Independent security review of the frozen candidate reports zero open P0/P1 issues.
+  Final uncached repository tests, full vet, E2E discovery (4 tests), and diff whitespace
+  checks pass after the last cross-role write-skew lock-order fix.
+# 2026-08-10 — Storage provider profiles
+
+- Started implementation from the approved multi-provider profile plan.
+- Re-read the required planning, resource, schema, custom-operation, storage-upload, and admin-page skills.
+- Session catch-up reported no unsynchronized context; recorded the dirty-worktree baseline before edits.
+- Completed the baseline seam inventory. Chosen implementation keeps profile persistence in installation v2, exposes immutable runtime profile metadata through config, and adds exact routing behind an internal registry while preserving the public active store.
+- Added strict installation configuration v2 with revision metadata and durable storage profiles while preserving strict v1 decoding.
+- Added atomic profile updates with revision CAS, 0600 temporary files, fsync, symlink/permission checks, and a cross-process file lock.
+- Setup and environment markers now persist the actual initial storage target instead of silently defaulting to local storage.
+- Verified `go test ./internal/config ./cmd/server`.
+- Added an immutable startup Storage Registry and wired API/worker stores by profile ID; retained profile construction failures are degraded while the active profile remains required.
+- Added nullable indexed `storage_profile_id` migrations for all three dialects and both normal/legacy Files bundles, including safe current-schema re-adoption.
+- New files bind the active profile; confirm/read/local content/idempotent replay resolve the file's own profile, and responses now include profile identity/name/preset.
+- Added auditable, repeatable, unambiguous startup backfill for legacy file rows.
+- Added cleanup payload v3 with profile/bucket identity and retained v1/v2 fail-closed routing; focused app, worker, migration, and cleanup tests pass.
+- Added the complete permissioned `/api/v1/storage-settings` and `/api/v1/storage-profiles` surface with ETag/If-Match CAS, CSRF/idempotency, readiness tests, lifecycle constraints, environment-managed read-only mode, and compensating installation-file restore when auditing fails.
+- Added provider-specific validation for Local, Alibaba OSS, AWS S3, MinIO, and Cloudflare R2, including production MinIO allowlists and metadata/link-local endpoint rejection.
+- Added the responsive `/settings` Object Storage console, permission-aware navigation/actions, conditional provider fields, non-cached secret submission, restart/degraded notices, confirmation states, and profile names on the Files page.
+- Full `go test ./...`, `pnpm check:web`, and all 112 Web unit tests passed before the final contract regeneration and release gates.
+- Closed the file/audit concurrency window by holding the installation revision lock through the mandatory audit transaction and restoring the exact previous document before any later writer can proceed; rollback and concurrent-CAS tests pass.
+- Added explicit CORS support for `If-Match` and exposed `ETag`; the real browser run caught this cross-origin contract gap before delivery and now has a dedicated preflight regression.
+- Regenerated OpenAPI and the TypeScript client, then passed final `go test ./...`, `go vet ./...`, `pnpm check:web`, `pnpm test:web` (12 files / 112 tests), and the production Web build with `/settings` present.
+- SQLite fresh/legacy adoption and the legacy `storage_profile_id` up/down path pass. PostgreSQL/MySQL matrix cases skip because `AGINEX_TEST_POSTGRES_DSN` and `AGINEX_TEST_MYSQL_DSN` are not configured.
+- Local storage contract passes. Live S3-compatible and Alibaba OSS contracts skip because their endpoint/bucket/region/credential variables are not configured.
+- Ran the full Playwright administrator workflow against an isolated SQLite installation and local storage root: all 4 tests passed, including first-run Setup, upload, Object Storage page, audit, access management, and responsive flows. Existing workspace dev servers were preserved.
+- Final `git diff --check` passes; all storage-profile phases are complete.
+
+# 2026-08-11 — General file uploads and resumable transfers
+
+- Loaded the upload, admin-page, custom-operation, schema, verification,
+  frontend-design, persistent-planning, and skill-creator guidance.
+- Session catch-up reported no unsynchronized context. Recorded the substantial
+  existing access/storage-profile dirty-worktree baseline and will preserve it.
+- Added the explicit pre-release/current-baseline rule to `AGENTS.md` and updated
+  the upload Skill from image-only v1 guidance to safe general/resumable files.
+- Started Phase 1 contract and ownership inventory before parallel backend,
+  storage/migration, and Web implementation.
+- Split implementation into disjoint storage/provider, config/schema, Web, and
+  HTTP/state-machine workstreams; generated contracts remain owned by the final
+  integration pass.
+- Added typed upload-policy, discriminated intent, file preview, session, part
+  sign/ACK, and resume contracts without touching generated artifacts.
+- Extended revisioned Storage Settings with runtime/pending upload policy and
+  an audited, compensating `PUT /storage-settings/file-upload-policy`; focused
+  app/config compilation passes with the task-scoped Go cache.
+- Added actor-scoped effective upload-policy discovery and route-aware request
+  limits: JSON APIs retain their configured cap while only Local binary PUT
+  routes receive the 1 GiB absolute ceiling before exact handler validation.
+- Completed the current-only installation v3 policy and unique Files migration
+  baseline; no v1/v2 or current/legacy adoption branches remain.
+- Completed generic streaming verification, safe controlled reads, Local/S3/OSS
+  multipart capabilities, persisted resumable state, expiry/cancel cleanup jobs,
+  and the bounded API-process repair scanner.
+- Connected expiry and cancellation job enqueueing to the audited session
+  transactions; provider identifiers and ETags stay out of jobs and responses.
+- Regenerated OpenAPI and the TypeScript client once after the upload/session
+  contracts converged. Final Web corrections, HTTP regressions, documentation,
+  and repository-wide release gates are in progress.
+- Completed the transfer workbench and policy settings UI, including 20-file
+  review, four global transfers, two parts per file, XHR byte progress,
+  retry/pause/resume/reselect recovery, safe preview/download, and EN/ZH copy.
+- Closed adversarial upload-integrity findings: cloud and Local single uploads
+  are create-only; Local publication is fsynced and atomic; multipart Local
+  completion validates each open descriptor; browser UploadPart ETags remain
+  the persisted completion manifest; cancel/delete cannot race completion.
+- Hardened preview verification with full image decode and PDF xref/root
+  structure checks, fixed single-intent authorization expiry and cleanup
+  windows, request-context transfer deadlines, silent recovery without request
+  dumps, and bounded Local orphan-staging maintenance.
+- Focused storage, cleanup, configuration, HTTP, migration, and Web regressions
+  pass. Stuck completing/verifying recovery and final repository/provider/E2E
+  gates are the remaining Phase 5 work.
+- Completed audited recovery for stale `completing`/`verifying` sessions with
+  CAS leases, provider reconciliation, uncertainty-safe completion, and full
+  streaming verification; recovery never aborts a potentially completed object.
+- Independent security review closed all P0/P1 findings, including signed-URL
+  overwrite races, cancel/complete and delete/complete races, exact browser ETag
+  persistence, request-secret logging, Local publication durability, and stale
+  single-intent authorization windows.
+- The isolated SQLite Chromium run exposed concurrent confirm write-lock
+  failures. SQLite connections now use WAL, a 10-second busy timeout, and
+  immediate write transactions; the real five-file concurrent workflow passes
+  without transient 500 responses.
+- Added browser-level 33 MiB+ recovery acceptance: preserve only the ACKed first
+  part, reload, reselect by fingerprint, sign/re-upload only the missing part,
+  and verify the reassembled SHA-256.
+- Final gates pass: `go test ./... -count=1`, `go vet ./...`, deterministic
+  OpenAPI/client generation, `pnpm check:web`, 132 Web tests, production Web
+  build, four Chromium E2E workflows, Agent Skill validation, and
+  `git diff --check`.
+- PostgreSQL/MySQL migration and live S3-compatible/OSS contract subtests remain
+  explicitly skipped locally because their DSNs/endpoints/credentials are not
+  configured; CI retains PostgreSQL 18, MySQL 8.4, required MinIO, and the
+  secret-gated OSS job.

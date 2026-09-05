@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,6 +36,7 @@ import (
 	"github.com/xgtian-root/aginex/internal/platform/auditlog"
 	"github.com/xgtian-root/aginex/internal/platform/database"
 	"github.com/xgtian-root/aginex/internal/platform/migrate"
+	"github.com/xgtian-root/aginex/internal/platform/multipartcleanup"
 	"github.com/xgtian-root/aginex/internal/platform/storage"
 	"gorm.io/gorm"
 )
@@ -40,25 +44,27 @@ import (
 const principalKey = "aginex.principal"
 
 type App struct {
-	cfg            config.Config
-	db             *gorm.DB
-	sqlDB          *sql.DB
-	auth           *auth.Service
-	store          storage.Storage
-	imageFiles     *frameworkstorage.ImageVerifier
-	limiter        ratelimit.Limiter
-	idempotency    *frameworkidempotency.GORMStore
-	jobs           jobs.TransactionalQueue
-	jobInspector   jobs.Inspector
-	writes         *uow.UnitOfWork
-	registry       *module.Registry
-	operations     map[string]module.OperationDefinition
-	services       services.Runtime
-	observability  *observability.Recorder
-	activeRequests atomic.Int64
-	lifecycle      appLifecycle
-	http           *gin.Engine
-	openapi        *huma.OpenAPI
+	cfg             config.Config
+	db              *gorm.DB
+	sqlDB           *sql.DB
+	auth            *auth.Service
+	store           storage.Storage
+	storageRegistry *storage.Registry
+	fileVerifier    *frameworkstorage.FileVerifier
+	limiter         ratelimit.Limiter
+	idempotency     *frameworkidempotency.GORMStore
+	jobs            jobs.TransactionalQueue
+	jobInspector    jobs.Inspector
+	writes          *uow.UnitOfWork
+	registry        *module.Registry
+	operations      map[string]module.OperationDefinition
+	services        services.Runtime
+	observability   *observability.Recorder
+	administratorMu sync.Mutex
+	activeRequests  atomic.Int64
+	lifecycle       appLifecycle
+	http            *gin.Engine
+	openapi         *huma.OpenAPI
 }
 
 func New(cfg config.Config, db *gorm.DB) (*App, error) {
@@ -270,14 +276,23 @@ func newApplication(
 		}
 		jobInspector = jobStore
 	}
-	store, err := storage.FromConfig(ctx, cfg.Storage, cfg.HTTP.PublicURL)
+	filePolicy, err := frameworkstorage.NewFilePolicy(
+		cfg.FileUploadRuntime().MaxUploadBytes,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("configure file upload policy: %w", err)
+	}
+	storageRegistry, err := storage.NewRegistry(ctx, cfg, recorder, filePolicy)
 	if err != nil {
 		return nil, fmt.Errorf("configure storage: %w", err)
 	}
-	store = storage.Observe(store, cfg.Storage.Driver, recorder)
-	imageFiles, err := frameworkstorage.NewImageVerifier(frameworkstorage.DefaultImagePolicy())
+	store, err := storageRegistry.Active()
 	if err != nil {
-		return nil, fmt.Errorf("configure image verification: %w", err)
+		return nil, fmt.Errorf("configure active storage: %w", err)
+	}
+	fileVerifier, err := frameworkstorage.NewFileVerifier(filePolicy)
+	if err != nil {
+		return nil, fmt.Errorf("configure file verification: %w", err)
 	}
 	rateLimitStore, err := ratelimit.NewGORM(db)
 	if err != nil {
@@ -290,6 +305,11 @@ func newApplication(
 	writes, err := uow.New(db, auditlog.Recorder{})
 	if err != nil {
 		return nil, fmt.Errorf("configure unit of work: %w", err)
+	}
+	if registryHasResource(registry, filesResource) {
+		if err := backfillStorageProfileIDs(ctx, db, writes, storageRegistry, cfg.StorageRuntime().LoadedRevision); err != nil {
+			return nil, fmt.Errorf("backfill file storage profiles: %w", err)
+		}
 	}
 	runtimeServices, err := services.NewRuntime(
 		db,
@@ -304,7 +324,8 @@ func newApplication(
 
 	instance := &App{
 		cfg: cfg, db: db, sqlDB: sqlDB,
-		auth: auth.New(db, cfg.Session), store: store, imageFiles: imageFiles,
+		auth: auth.New(db, cfg.Session), store: store,
+		storageRegistry: storageRegistry, fileVerifier: fileVerifier,
 		limiter: limiter, idempotency: idempotencyStore, jobs: jobQueue,
 		jobInspector: jobInspector, writes: writes,
 		registry: registry, operations: operations,
@@ -312,6 +333,45 @@ func newApplication(
 		lifecycle: appLifecycle{
 			cleanupTimeout: cfg.HTTP.ShutdownGracePeriod,
 		},
+	}
+	if registryHasResource(registry, filesResource) {
+		cleanupHandler, cleanupErr := multipartcleanup.New(
+			db,
+			storageRegistry,
+			multipartcleanup.Config{
+				SystemActorID: "aginex-api-multipart-cleanup",
+			},
+		)
+		if cleanupErr != nil {
+			return nil, fmt.Errorf(
+				"configure multipart cleanup handler: %w",
+				cleanupErr,
+			)
+		}
+		cleanupScanner, cleanupErr := multipartcleanup.NewScanner(
+			db,
+			cleanupHandler,
+			multipartcleanup.ScannerConfig{
+				Interval: multipartcleanup.DefaultScanInterval,
+				Batch:    multipartcleanup.DefaultScanBatch,
+			},
+		)
+		if cleanupErr != nil {
+			return nil, fmt.Errorf(
+				"configure multipart cleanup scanner: %w",
+				cleanupErr,
+			)
+		}
+		if cleanupErr := registry.RegisterLifecycleHook(module.LifecycleHook{
+			Name:  "storage.multipart.cleanup",
+			Start: cleanupScanner.Start,
+			Stop:  cleanupScanner.Stop,
+		}); cleanupErr != nil {
+			return nil, fmt.Errorf(
+				"register multipart cleanup scanner: %w",
+				cleanupErr,
+			)
+		}
 	}
 	instance.http, err = instance.routes()
 	if err != nil {
@@ -361,6 +421,14 @@ func (a *App) routes() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	binaryUploadLimits, err := httpx.NewRequestLimits(httpx.RequestLimits{
+		MaxBodyBytes:   absoluteMaxUploadBytes,
+		MaxHeaderBytes: a.cfg.HTTP.MaxHeaderBytes,
+		MaxHeaderCount: a.cfg.HTTP.MaxHeaderCount,
+	})
+	if err != nil {
+		return nil, err
+	}
 	cors, err := httpx.NewCORS(httpx.CORSConfig{
 		AllowedOrigins:   a.cfg.AllowedWebOrigins(),
 		AllowCredentials: true,
@@ -368,11 +436,13 @@ func (a *App) routes() (*gin.Engine, error) {
 			"Authorization",
 			"Content-Type",
 			"Idempotency-Key",
+			"If-Match",
 			httpx.TraceParentHeader,
 			httpx.CSRFHeaderName,
 			"X-Request-ID",
 		},
 		ExposedHeaders: []string{
+			"ETag",
 			"Idempotency-Replayed",
 			"Retry-After",
 			"X-Request-ID",
@@ -393,7 +463,24 @@ func (a *App) routes() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	router.Use(a.requestContext(), gin.Recovery(), requestLimits, cors, csrf)
+	router.Use(
+		a.requestContext(),
+		// Gin's default recovery dumps the complete request on some panic
+		// paths, including signed query capabilities and cookies. Recovery is
+		// intentionally silent and returns only the stable public problem.
+		gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, _ any) {
+			httpx.AbortProblem(
+				c,
+				http.StatusInternalServerError,
+				"INTERNAL_ERROR",
+				"Request failed",
+				"The request could not be processed.",
+			)
+		}),
+		routeAwareRequestLimits(requestLimits, binaryUploadLimits),
+		cors,
+		csrf,
+	)
 	router.GET("/health/live", a.live)
 	router.GET("/health/ready", a.ready)
 
@@ -411,6 +498,21 @@ func (a *App) routes() (*gin.Engine, error) {
 		return nil, fmt.Errorf("mount registered HTTP operations: %w", err)
 	}
 	return router, nil
+}
+
+func routeAwareRequestLimits(
+	standard gin.HandlerFunc,
+	binaryUpload gin.HandlerFunc,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == http.MethodPut &&
+			(strings.HasPrefix(c.Request.URL.Path, "/api/v1/files/local-upload/") ||
+				strings.HasPrefix(c.Request.URL.Path, "/api/v1/files/upload-sessions/")) {
+			binaryUpload(c)
+			return
+		}
+		standard(c)
+	}
 }
 
 func (a *App) requestContext() gin.HandlerFunc {
@@ -613,6 +715,7 @@ func (a *App) login(c *gin.Context) {
 		return
 	}
 	var result auth.LoginResult
+	var response UserResponse
 	err := a.writes.Run(c.Request.Context(), func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		var loginErr error
 		result, loginErr = a.auth.LoginTx(
@@ -622,6 +725,10 @@ func (a *App) login(c *gin.Context) {
 			c.ClientIP(),
 			c.Request.UserAgent(),
 		)
+		if loginErr != nil {
+			return frameworkaudit.Event{}, loginErr
+		}
+		response, loginErr = a.userResponseTx(tx, result.User.ID)
 		if loginErr != nil {
 			return frameworkaudit.Event{}, loginErr
 		}
@@ -655,7 +762,7 @@ func (a *App) login(c *gin.Context) {
 		Secure:   a.cfg.Session.Secure,
 		SameSite: a.cfg.Session.SameSite,
 	})
-	c.JSON(http.StatusOK, userResponse(result.User, nil))
+	c.JSON(http.StatusOK, response)
 }
 
 func (a *App) logout(c *gin.Context) {
@@ -723,11 +830,39 @@ func (a *App) clearSessionCookie(c *gin.Context) {
 
 func (a *App) me(c *gin.Context) {
 	principal := currentPrincipal(c)
+	response, err := a.userResponseTx(
+		a.db.WithContext(c.Request.Context()),
+		principal.User.ID,
+	)
+	if err != nil {
+		if accessNotFound(err) {
+			writeProblem(
+				c,
+				http.StatusUnauthorized,
+				"Session expired",
+				"Sign in again to continue.",
+			)
+			return
+		}
+		writeAccessFailure(c, "get_current_user", err)
+		return
+	}
 	permissions := make([]string, 0, len(principal.Permissions))
 	for code := range principal.Permissions {
 		permissions = append(permissions, code)
 	}
-	c.JSON(http.StatusOK, userResponse(principal.User, permissions))
+	sort.Strings(permissions)
+	response.Permissions = permissions
+	response.Grants = make([]UserGrantResponse, 0, len(principal.GrantScopes))
+	for _, code := range permissions {
+		if scope, ok := principal.GrantScopes[code]; ok {
+			response.Grants = append(response.Grants, UserGrantResponse{
+				Permission: code,
+				Scope:      string(scope),
+			})
+		}
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func (a *App) listProducts(c *gin.Context) {
@@ -909,78 +1044,6 @@ func (a *App) deleteProduct(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (a *App) listUsers(c *gin.Context) {
-	page, pageSize := pagination(c)
-	var total int64
-	requestDB := a.db.WithContext(c.Request.Context())
-	if err := requestDB.Model(&domain.User{}).Count(&total).Error; err != nil {
-		logRequestFailure(c, "list_users_count", err)
-		writeProblem(c, http.StatusInternalServerError, "Users unavailable", "The user list could not be loaded.")
-		return
-	}
-	var users []domain.User
-	if err := requestDB.Preload("Roles").
-		Order("created_at DESC").
-		Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Find(&users).
-		Error; err != nil {
-		logRequestFailure(c, "list_users_query", err)
-		writeProblem(c, http.StatusInternalServerError, "Users unavailable", "The user list could not be loaded.")
-		return
-	}
-	items := make([]UserListResponse, 0, len(users))
-	for _, user := range users {
-		roles := make([]string, 0, len(user.Roles))
-		for _, role := range user.Roles {
-			roles = append(roles, role.Name)
-		}
-		items = append(items, userListResponse(user, roles))
-	}
-	c.JSON(http.StatusOK, Page[UserListResponse]{
-		Items: items, Page: page, PageSize: pageSize, Total: total,
-	})
-}
-
-func (a *App) listRoles(c *gin.Context) {
-	var roles []domain.Role
-	if err := a.db.WithContext(c.Request.Context()).
-		Preload("Permissions").
-		Order("name").
-		Find(&roles).
-		Error; err != nil {
-		logRequestFailure(c, "list_roles_query", err)
-		writeProblem(c, http.StatusInternalServerError, "Roles unavailable", "The role list could not be loaded.")
-		return
-	}
-	items := make([]RoleResponse, 0, len(roles))
-	for _, role := range roles {
-		items = append(items, roleResponse(role))
-	}
-	c.JSON(http.StatusOK, Page[RoleResponse]{
-		Items: items, Page: 1, PageSize: 100, Total: int64(len(items)),
-	})
-}
-
-func (a *App) listPermissions(c *gin.Context) {
-	var permissions []domain.Permission
-	if err := a.db.WithContext(c.Request.Context()).
-		Order("code").
-		Find(&permissions).
-		Error; err != nil {
-		logRequestFailure(c, "list_permissions_query", err)
-		writeProblem(c, http.StatusInternalServerError, "Permissions unavailable", "The permission list could not be loaded.")
-		return
-	}
-	items := make([]PermissionResponse, 0, len(permissions))
-	for _, permission := range permissions {
-		items = append(items, permissionResponse(permission))
-	}
-	c.JSON(http.StatusOK, Page[PermissionResponse]{
-		Items: items, Page: 1, PageSize: 100, Total: int64(len(items)),
-	})
-}
-
 func (a *App) listAuditLogs(c *gin.Context) {
 	page, pageSize := pagination(c)
 	var total int64
@@ -1077,34 +1140,6 @@ func productAuditFields(product domain.Product) map[string]any {
 	}
 }
 
-func userResponse(user domain.User, permissions []string) UserResponse {
-	if permissions == nil {
-		permissions = []string{}
-	}
-	return UserResponse{
-		ID:          user.ID,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Status:      user.Status,
-		Permissions: permissions,
-		CreatedAt:   user.CreatedAt,
-	}
-}
-
-func userListResponse(user domain.User, roles []string) UserListResponse {
-	if roles == nil {
-		roles = []string{}
-	}
-	return UserListResponse{
-		ID:          user.ID,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Status:      user.Status,
-		Roles:       roles,
-		CreatedAt:   user.CreatedAt,
-	}
-}
-
 func productResponse(product domain.Product) ProductResponse {
 	return ProductResponse{
 		ID:         product.ID,
@@ -1114,30 +1149,6 @@ func productResponse(product domain.Product) ProductResponse {
 		Status:     product.Status,
 		CreatedAt:  product.CreatedAt,
 		UpdatedAt:  product.UpdatedAt,
-	}
-}
-
-func permissionResponse(permission domain.Permission) PermissionResponse {
-	return PermissionResponse{
-		ID:          permission.ID,
-		Code:        permission.Code,
-		Description: permission.Description,
-		CreatedAt:   permission.CreatedAt,
-	}
-}
-
-func roleResponse(role domain.Role) RoleResponse {
-	permissions := make([]PermissionResponse, 0, len(role.Permissions))
-	for _, permission := range role.Permissions {
-		permissions = append(permissions, permissionResponse(permission))
-	}
-	return RoleResponse{
-		ID:          role.ID,
-		Name:        role.Name,
-		Description: role.Description,
-		Permissions: permissions,
-		CreatedAt:   role.CreatedAt,
-		UpdatedAt:   role.UpdatedAt,
 	}
 }
 

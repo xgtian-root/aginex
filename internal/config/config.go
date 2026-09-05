@@ -26,6 +26,7 @@ type Config struct {
 	Storage     Storage
 	WebOrigin   string
 	WebOrigins  []string
+	runtime     runtimeConfig
 }
 
 type HTTP struct {
@@ -86,13 +87,17 @@ type Bootstrap struct {
 }
 
 type Storage struct {
-	Driver          string
-	LocalRoot       string
-	Bucket          string
-	Region          string
-	Endpoint        string
-	AccessKeyID     string
-	AccessKeySecret string
+	ProfileID         string
+	Provider          StorageProvider
+	Driver            string
+	LocalRoot         string
+	Bucket            string
+	Region            string
+	Endpoint          string
+	AccessKeyID       string
+	AccessKeySecret   string
+	ForcePathStyle    bool
+	EndpointAllowlist []string
 }
 
 // loadEnvironmentConfig loads configuration owned by the process environment.
@@ -197,6 +202,7 @@ func loadEnvironmentConfig() (Config, error) {
 		return Config{}, err
 	}
 
+	_, storageDriverExplicit := os.LookupEnv("AGINEX_STORAGE_DRIVER")
 	cfg := Config{
 		Environment: value("AGINEX_ENV", "development"),
 		HTTP: HTTP{
@@ -259,17 +265,19 @@ func loadEnvironmentConfig() (Config, error) {
 			AdminPassword: os.Getenv("AGINEX_BOOTSTRAP_ADMIN_PASSWORD"),
 		},
 		Storage: Storage{
-			Driver:          strings.ToLower(value("AGINEX_STORAGE_DRIVER", "local")),
-			LocalRoot:       value("AGINEX_STORAGE_LOCAL_ROOT", "data/uploads"),
-			Bucket:          os.Getenv("AGINEX_STORAGE_BUCKET"),
-			Region:          os.Getenv("AGINEX_STORAGE_REGION"),
-			Endpoint:        os.Getenv("AGINEX_STORAGE_ENDPOINT"),
-			AccessKeyID:     os.Getenv("AGINEX_STORAGE_ACCESS_KEY_ID"),
-			AccessKeySecret: os.Getenv("AGINEX_STORAGE_ACCESS_KEY_SECRET"),
+			Driver:            strings.ToLower(value("AGINEX_STORAGE_DRIVER", "local")),
+			LocalRoot:         value("AGINEX_STORAGE_LOCAL_ROOT", "data/uploads"),
+			Bucket:            os.Getenv("AGINEX_STORAGE_BUCKET"),
+			Region:            os.Getenv("AGINEX_STORAGE_REGION"),
+			Endpoint:          os.Getenv("AGINEX_STORAGE_ENDPOINT"),
+			AccessKeyID:       os.Getenv("AGINEX_STORAGE_ACCESS_KEY_ID"),
+			AccessKeySecret:   os.Getenv("AGINEX_STORAGE_ACCESS_KEY_SECRET"),
+			EndpointAllowlist: csvValue("AGINEX_STORAGE_ENDPOINT_ALLOWLIST"),
 		},
 		WebOrigin:  webOrigins[0],
 		WebOrigins: webOrigins,
 	}
+	cfg.runtime.storageEnvironmentManaged = storageDriverExplicit
 	cfg = WithDefaults(cfg)
 	return cfg, nil
 }
@@ -367,6 +375,9 @@ func WithDefaults(cfg Config) Config {
 	if cfg.HTTP.ShutdownGracePeriod <= 0 {
 		cfg.HTTP.ShutdownGracePeriod = 10 * time.Second
 	}
+	if cfg.runtime.fileUploadPolicy.MaxUploadBytes == 0 {
+		cfg.runtime.fileUploadPolicy = DefaultFileUploadPolicy()
+	}
 	if len(cfg.WebOrigins) == 0 && cfg.WebOrigin != "" {
 		cfg.WebOrigins = []string{cfg.WebOrigin}
 	}
@@ -433,6 +444,12 @@ func validateWithoutDatabase(cfg Config) error {
 			"unsupported storage driver %q",
 			cfg.Storage.Driver,
 		)
+	}
+	if err := ValidateStorageEndpointPolicy(cfg.Environment, cfg.Storage); err != nil {
+		return err
+	}
+	if err := ValidateFileUploadPolicy(cfg.runtime.fileUploadPolicy); err != nil {
+		return err
 	}
 	switch cfg.Jobs.Driver {
 	case "disabled", "postgres":

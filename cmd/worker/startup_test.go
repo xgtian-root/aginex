@@ -341,12 +341,17 @@ func TestApplicationReadyRejectsCredentialedPublicURLWithoutLeakingIt(
 }
 
 func configuredWorkerState(publicURL string) config.State {
+	installation, err := config.NewManagedInstallation(
+		config.Database{Driver: "sqlite", DSN: "worker-startup.db"},
+		"0123456789abcdef0123456789abcdef",
+	)
+	if err != nil {
+		panic(err)
+	}
 	return config.State{
-		Status: config.StatusConfigured,
-		Config: config.Config{HTTP: config.HTTP{PublicURL: publicURL}},
-		Installation: &config.Installation{
-			Version: config.CurrentInstallationVersion,
-		},
+		Status:       config.StatusConfigured,
+		Config:       config.Config{HTTP: config.HTTP{PublicURL: publicURL}},
+		Installation: &installation,
 	}
 }
 

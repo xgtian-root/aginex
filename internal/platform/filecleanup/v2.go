@@ -21,6 +21,7 @@ const (
 	JobType         = "storage.cleanup"
 	PayloadVersion1 = uint(1)
 	PayloadVersion2 = uint(2)
+	PayloadVersion3 = uint(3)
 )
 
 // Mode identifies why a version-two cleanup delivery may delete an object.
@@ -51,7 +52,7 @@ func (handler *Handler) HandleV2(ctx context.Context, raw json.RawMessage) error
 	if err != nil {
 		return err
 	}
-	if job.Provider != handler.provider {
+	if handler.registry == nil && job.Provider != handler.provider {
 		return fmt.Errorf("%w: provider %q", ErrObjectChanged, job.Provider)
 	}
 
@@ -91,7 +92,11 @@ func (handler *Handler) expirePendingUpload(ctx context.Context, job PayloadV2) 
 		}
 
 		before := auditFields(file)
-		if err := handler.store.Delete(ctx, job.ObjectKey); err != nil {
+		jobStore, err := handler.storageForFile(&file, "", job.Provider, file.Bucket)
+		if err != nil {
+			return frameworkaudit.Event{}, err
+		}
+		if err := jobStore.Delete(ctx, job.ObjectKey); err != nil {
 			return frameworkaudit.Event{}, fmt.Errorf("delete expired upload object: %w", err)
 		}
 

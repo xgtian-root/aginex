@@ -9,6 +9,7 @@ import {
   Gauge,
   Images,
   LogOut,
+  Settings,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -50,6 +51,12 @@ const navigation = [
     label: "files",
     icon: Images,
     permission: "files:read",
+  },
+  {
+    href: "/settings",
+    label: "systemSettings",
+    icon: Settings,
+    permission: "storage-profiles:read",
   },
 ] as const;
 

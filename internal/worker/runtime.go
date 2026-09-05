@@ -15,12 +15,14 @@ import (
 	"github.com/xgtian-root/aginex/framework/module"
 	"github.com/xgtian-root/aginex/framework/observability"
 	"github.com/xgtian-root/aginex/framework/services"
+	frameworkstorage "github.com/xgtian-root/aginex/framework/storage"
 	"github.com/xgtian-root/aginex/framework/uow"
 	"github.com/xgtian-root/aginex/internal/config"
 	"github.com/xgtian-root/aginex/internal/platform/auditlog"
 	"github.com/xgtian-root/aginex/internal/platform/database"
 	"github.com/xgtian-root/aginex/internal/platform/filecleanup"
 	"github.com/xgtian-root/aginex/internal/platform/migrate"
+	"github.com/xgtian-root/aginex/internal/platform/multipartcleanup"
 	"github.com/xgtian-root/aginex/internal/platform/storage"
 	"gorm.io/gorm"
 )
@@ -29,6 +31,7 @@ const (
 	fileCleanupJobType      = filecleanup.JobType
 	fileCleanupJobVersionV1 = filecleanup.PayloadVersion1
 	fileCleanupJobVersionV2 = filecleanup.PayloadVersion2
+	fileCleanupJobVersionV3 = filecleanup.PayloadVersion3
 )
 
 var ErrJobsDisabled = errors.New("worker requires a durable jobs driver")
@@ -116,15 +119,20 @@ func NewWithModulesAndObservability(
 		return nil, fmt.Errorf("check postgres jobs schema: %w", err)
 	}
 
-	objectStore, err := storage.FromConfig(ctx, cfg.Storage, cfg.HTTP.PublicURL)
+	filePolicy, err := frameworkstorage.NewFilePolicy(
+		cfg.FileUploadRuntime().MaxUploadBytes,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("configure file upload policy: %w", err)
+	}
+	storageRegistry, err := storage.NewRegistry(ctx, cfg, recorder, filePolicy)
 	if err != nil {
 		return nil, fmt.Errorf("configure storage: %w", err)
 	}
-	objectStore = storage.Observe(
-		objectStore,
-		cfg.Storage.Driver,
-		recorder,
-	)
+	objectStore, err := storageRegistry.Active()
+	if err != nil {
+		return nil, fmt.Errorf("configure active storage: %w", err)
+	}
 	filesEnabled, err := modulesHaveResource(
 		applicationModules,
 		"files",
@@ -132,11 +140,11 @@ func NewWithModulesAndObservability(
 	if err != nil {
 		return nil, err
 	}
-	var cleanupV1, cleanupV2 module.JobHandler
+	var cleanupV1, cleanupV2, cleanupV3, multipartCleanup module.JobHandler
 	if filesEnabled {
-		cleanup, cleanupErr := filecleanup.New(
+		cleanup, cleanupErr := filecleanup.NewWithRegistry(
 			db,
-			objectStore,
+			storageRegistry,
 			filecleanup.Config{
 				Provider:      cfg.Storage.Driver,
 				SystemActorID: cfg.Jobs.WorkerID,
@@ -150,13 +158,30 @@ func NewWithModulesAndObservability(
 		}
 		cleanupV1 = cleanup.Handle
 		cleanupV2 = cleanup.HandleV2
+		cleanupV3 = cleanup.HandleV3
+		multipartHandler, cleanupErr := multipartcleanup.New(
+			db,
+			storageRegistry,
+			multipartcleanup.Config{SystemActorID: cfg.Jobs.WorkerID},
+		)
+		if cleanupErr != nil {
+			return nil, fmt.Errorf(
+				"configure multipart cleanup handler: %w",
+				cleanupErr,
+			)
+		}
+		multipartCleanup = multipartHandler.Handle
 	}
 	registry, err := composeRegistry(
 		cleanupV1,
 		cleanupV2,
+		cleanupV3,
 		applicationModules...,
 	)
 	if err != nil {
+		return nil, err
+	}
+	if err := registerMultipartCleanupHandler(registry, multipartCleanup); err != nil {
 		return nil, err
 	}
 	if err := registry.EnsureMigrationsCurrent(
@@ -375,6 +400,7 @@ func (runtime *Runtime) contextWithRuntimeServices(
 type cleanupModule struct {
 	handleV1 module.JobHandler
 	handleV2 module.JobHandler
+	handleV3 module.JobHandler
 }
 
 func (cleanupModule) Name() string {
@@ -389,35 +415,62 @@ func (item cleanupModule) Register(registry *module.Registry) error {
 	}); err != nil {
 		return err
 	}
-	return registry.RegisterJobHandler(module.JobHandlerDefinition{
+	if err := registry.RegisterJobHandler(module.JobHandlerDefinition{
 		Type:    fileCleanupJobType,
 		Version: fileCleanupJobVersionV2,
 		Handle:  item.handleV2,
+	}); err != nil {
+		return err
+	}
+	return registry.RegisterJobHandler(module.JobHandlerDefinition{
+		Type: fileCleanupJobType, Version: fileCleanupJobVersionV3, Handle: item.handleV3,
 	})
 }
 
 func composeRegistry(
 	handleV1 module.JobHandler,
 	handleV2 module.JobHandler,
+	handleV3 module.JobHandler,
 	applicationModules ...module.Module,
 ) (*module.Registry, error) {
 	registry := module.NewRegistry()
 	modules := append([]module.Module(nil), applicationModules...)
-	if handleV1 != nil || handleV2 != nil {
-		if handleV1 == nil || handleV2 == nil {
+	if handleV1 != nil || handleV2 != nil || handleV3 != nil {
+		if handleV1 == nil || handleV2 == nil || handleV3 == nil {
 			return nil, errors.New(
-				"compose worker modules: both file cleanup handlers are required",
+				"compose worker modules: all file cleanup handlers are required",
 			)
 		}
 		modules = append([]module.Module{cleanupModule{
 			handleV1: handleV1,
 			handleV2: handleV2,
+			handleV3: handleV3,
 		}}, modules...)
 	}
 	if err := registry.RegisterModules(modules...); err != nil {
 		return nil, fmt.Errorf("compose worker modules: %w", err)
 	}
 	return registry, nil
+}
+
+func registerMultipartCleanupHandler(
+	registry *module.Registry,
+	handle module.JobHandler,
+) error {
+	if handle == nil {
+		return nil
+	}
+	if registry == nil {
+		return errors.New("register multipart cleanup handler: registry is required")
+	}
+	if err := registry.RegisterJobHandler(module.JobHandlerDefinition{
+		Type:    multipartcleanup.JobType,
+		Version: multipartcleanup.PayloadVersion,
+		Handle:  handle,
+	}); err != nil {
+		return fmt.Errorf("register multipart cleanup handler: %w", err)
+	}
+	return nil
 }
 
 func modulesHaveResource(

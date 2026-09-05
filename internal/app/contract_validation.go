@@ -590,6 +590,9 @@ func normalizedDTOType(value reflect.Type) reflect.Type {
 }
 
 func mediaTypeMatches(actual, expected string) bool {
+	if expected == "*/*" {
+		return actual != ""
+	}
 	if actual == expected {
 		return true
 	}

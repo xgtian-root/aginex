@@ -6,11 +6,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/xgtian-root/aginex/framework/authz"
 	"github.com/xgtian-root/aginex/framework/jobs"
 	"github.com/xgtian-root/aginex/framework/module"
 	internalapp "github.com/xgtian-root/aginex/internal/app"
 	"github.com/xgtian-root/aginex/internal/config"
+	"github.com/xgtian-root/aginex/internal/platform/multipartcleanup"
 )
 
 type workerTestModule struct {
@@ -37,6 +39,10 @@ func TestComposeRegistryRegistersVersionedFileCleanupHandler(t *testing.T) {
 			received[fileCleanupJobVersionV2] = string(payload)
 			return nil
 		},
+		func(_ context.Context, payload json.RawMessage) error {
+			received[fileCleanupJobVersionV3] = string(payload)
+			return nil
+		},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +57,7 @@ func TestComposeRegistryRegistersVersionedFileCleanupHandler(t *testing.T) {
 	}{
 		{version: fileCleanupJobVersionV1, payload: json.RawMessage(`{"version":1}`)},
 		{version: fileCleanupJobVersionV2, payload: json.RawMessage(`{"version":2}`)},
+		{version: fileCleanupJobVersionV3, payload: json.RawMessage(`{"version":3}`)},
 	}
 	for _, test := range cases {
 		err = dispatcher.Dispatch(context.Background(), jobs.Job{
@@ -72,6 +79,46 @@ func TestComposeRegistryRegistersVersionedFileCleanupHandler(t *testing.T) {
 	}
 }
 
+func TestMultipartCleanupRegistrationPreservesFileCleanupVersions(t *testing.T) {
+	registry, err := composeRegistry(
+		func(context.Context, json.RawMessage) error { return nil },
+		func(context.Context, json.RawMessage) error { return nil },
+		func(context.Context, json.RawMessage) error { return nil },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	if err := registerMultipartCleanupHandler(
+		registry,
+		func(context.Context, json.RawMessage) error {
+			called = true
+			return nil
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if handlers := registry.JobHandlers(); len(handlers) != 4 {
+		t.Fatalf("registered handlers = %#v", handlers)
+	}
+	dispatcher, err := jobs.NewDispatcher(registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.Dispatch(context.Background(), jobs.Job{
+		ID: uuid.NewString(), Type: multipartcleanup.JobType,
+		Version: multipartcleanup.PayloadVersion,
+		Payload: json.RawMessage(`{"sessionId":"00000000-0000-4000-8000-000000000001","cause":"expiry"}`),
+		State:   jobs.StateRunning, Attempts: 1, MaxAttempts: 10,
+		CreatedBy: authz.NewSystemActor("test-worker"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("multipart cleanup handler was not dispatched")
+	}
+}
+
 func TestComposeRegistryIncludesApplicationJobHandlers(t *testing.T) {
 	called := false
 	applicationModule := workerTestModule{
@@ -88,6 +135,7 @@ func TestComposeRegistryIncludesApplicationJobHandlers(t *testing.T) {
 		},
 	}
 	registry, err := composeRegistry(
+		func(context.Context, json.RawMessage) error { return nil },
 		func(context.Context, json.RawMessage) error { return nil },
 		func(context.Context, json.RawMessage) error { return nil },
 		applicationModule,
@@ -117,7 +165,7 @@ func TestComposeRegistryIncludesApplicationJobHandlers(t *testing.T) {
 }
 
 func TestZeroBusinessWorkerDoesNotRegisterFileCleanup(t *testing.T) {
-	registry, err := composeRegistry(nil, nil)
+	registry, err := composeRegistry(nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

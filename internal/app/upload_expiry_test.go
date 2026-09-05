@@ -38,9 +38,12 @@ func TestUploadIntentEnqueuesPendingExpiryInsideWriteTransaction(t *testing.T) {
 	if len(queue.requests) != 1 {
 		t.Fatalf("queued requests = %d, want 1", len(queue.requests))
 	}
+	if prepared.Upload == nil {
+		t.Fatal("single upload intent omitted upload authorization")
+	}
 	request := queue.requests[0]
 	if request.Type != filecleanup.JobType ||
-		request.Version != filecleanup.PayloadVersion2 ||
+		request.Version != filecleanup.PayloadVersion3 ||
 		request.IdempotencyKey != "file:"+prepared.File.ID+":pending-expiry" {
 		t.Fatalf("expiry request = %#v", request)
 	}
@@ -71,6 +74,74 @@ func TestUploadIntentEnqueuesPendingExpiryInsideWriteTransaction(t *testing.T) {
 	}
 	if persisted != 1 {
 		t.Fatalf("persisted expiry jobs = %d, want 1", persisted)
+	}
+}
+
+func TestPendingSingleDeleteWaitsForFixedUploadAuthorizationExpiry(t *testing.T) {
+	_, db, server, cookie := newFileHandlerTestApp(t)
+	queue := &expiryRecordingQueue{}
+	server.jobs = queue
+	prepared, intent := createPendingLocalUpload(t, server, cookie, validPNG(t))
+	if intent.Code != http.StatusCreated || prepared.Upload == nil {
+		t.Fatalf("intent = %d %#v", intent.Code, prepared)
+	}
+	deletion := serveRequest(
+		server,
+		cookie,
+		http.MethodDelete,
+		"/api/v1/files/"+prepared.File.ID,
+		nil,
+		"",
+	)
+	if deletion.Code != http.StatusAccepted {
+		t.Fatalf("delete status = %d, body = %s", deletion.Code, deletion.Body.String())
+	}
+	if len(queue.requests) != 2 {
+		t.Fatalf("cleanup requests = %d, want pending expiry and explicit delete", len(queue.requests))
+	}
+	explicit := queue.requests[1]
+	wantSchedule := prepared.Upload.ExpiresAt.Add(pendingUploadCleanupGrace)
+	if explicit.IdempotencyKey != "file:"+prepared.File.ID+":explicit-delete" || !explicit.ScheduledAt.Equal(wantSchedule) {
+		t.Fatalf("explicit cleanup = %#v, want schedule %s", explicit, wantSchedule)
+	}
+	var stored domain.FileObject
+	if err := db.First(&stored, "id = ?", prepared.File.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.UploadExpiresAt == nil || !stored.UploadExpiresAt.Equal(prepared.Upload.ExpiresAt) || stored.Status != "deleting" {
+		t.Fatalf("stored pending delete = %#v", stored)
+	}
+}
+
+func TestSingleConfirmationCannotStartAfterBoundedVerificationWindow(t *testing.T) {
+	cfg, db, server, cookie := newFileHandlerTestApp(t)
+	image := validPNG(t)
+	prepared, intent := createPendingLocalUpload(t, server, cookie, image)
+	if intent.Code != http.StatusCreated {
+		t.Fatalf("intent = %d, body = %s", intent.Code, intent.Body.String())
+	}
+	uploadPendingLocalObject(t, server, cookie, cfg, prepared, image)
+	expired := time.Now().UTC().Add(-fileTransferTimeout - time.Minute)
+	if err := db.Model(&domain.FileObject{}).
+		Where("id = ?", prepared.File.ID).
+		Update("upload_expires_at", expired).Error; err != nil {
+		t.Fatal(err)
+	}
+	confirmation := serveRequest(
+		server,
+		cookie,
+		http.MethodPost,
+		"/api/v1/files/"+prepared.File.ID+"/confirm",
+		nil,
+		"",
+	)
+	assertProblemCode(t, confirmation, http.StatusConflict, "UPLOAD_INTENT_EXPIRED")
+	var stored domain.FileObject
+	if err := db.First(&stored, "id = ?", prepared.File.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "pending" {
+		t.Fatalf("expired confirmation status = %q", stored.Status)
 	}
 }
 
@@ -127,15 +198,18 @@ func TestUploadIntentRollsBackExpiryEnqueueWithAuditFailure(t *testing.T) {
 	}
 }
 
-func TestInvalidUploadCleanupCannotCollideWithPendingExpiry(t *testing.T) {
+func TestMalformedPreviewCandidateDoesNotScheduleInvalidCleanup(t *testing.T) {
 	cfg, _, server, cookie := newFileHandlerTestApp(t)
 	queue := &expiryRecordingQueue{}
 	server.jobs = queue
-	image := validPNG(t)
+	malformedJPEG := []byte{
+		0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0x00,
+		0x01, 0x02, 0x03, 0x04, 0x05,
+	}
 	body, err := json.Marshal(map[string]any{
 		"filename":    "forged.jpg",
 		"contentType": "image/jpeg",
-		"size":        len(image),
+		"size":        len(malformedJPEG),
 		"visibility":  "private",
 	})
 	if err != nil {
@@ -156,8 +230,11 @@ func TestInvalidUploadCleanupCannotCollideWithPendingExpiry(t *testing.T) {
 	if err := json.Unmarshal(intent.Body.Bytes(), &prepared); err != nil {
 		t.Fatal(err)
 	}
+	if prepared.Upload == nil {
+		t.Fatal("single upload intent omitted upload authorization")
+	}
 	uploadPath := prepared.Upload.URL[len(cfg.HTTP.PublicURL):]
-	upload := serveRequest(server, cookie, http.MethodPut, uploadPath, image, "image/jpeg")
+	upload := serveRequest(server, cookie, http.MethodPut, uploadPath, malformedJPEG, "application/octet-stream")
 	if upload.Code != http.StatusNoContent {
 		t.Fatalf("upload status = %d, body = %s", upload.Code, upload.Body.String())
 	}
@@ -169,25 +246,14 @@ func TestInvalidUploadCleanupCannotCollideWithPendingExpiry(t *testing.T) {
 		nil,
 		"",
 	)
-	if confirm.Code != http.StatusUnprocessableEntity {
+	if confirm.Code != http.StatusOK {
 		t.Fatalf("confirm status = %d, body = %s", confirm.Code, confirm.Body.String())
 	}
-	if len(queue.requests) != 2 {
-		t.Fatalf("queued requests = %d, want expiry and invalid cleanup", len(queue.requests))
+	if len(queue.requests) != 1 {
+		t.Fatalf("queued requests = %d, want only pending expiry", len(queue.requests))
 	}
-	expiry := queue.requests[0]
-	invalid := queue.requests[1]
-	if expiry.IdempotencyKey != "file:"+prepared.File.ID+":pending-expiry" ||
-		invalid.IdempotencyKey != "file:"+prepared.File.ID+":invalid-delete" ||
-		expiry.IdempotencyKey == invalid.IdempotencyKey {
-		t.Fatalf("cleanup idempotency keys = %q / %q", expiry.IdempotencyKey, invalid.IdempotencyKey)
-	}
-	var invalidPayload filecleanup.PayloadV2
-	if err := json.Unmarshal(invalid.Payload, &invalidPayload); err != nil {
-		t.Fatal(err)
-	}
-	if invalidPayload.Mode != filecleanup.ModeExplicitDelete {
-		t.Fatalf("invalid cleanup mode = %q", invalidPayload.Mode)
+	if queue.requests[0].IdempotencyKey != "file:"+prepared.File.ID+":pending-expiry" {
+		t.Fatalf("cleanup idempotency key = %q", queue.requests[0].IdempotencyKey)
 	}
 }
 

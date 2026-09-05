@@ -18,9 +18,11 @@
 
 > [!IMPORTANT]
 > Aginex is currently an early development baseline, not a stable release.
-> Authentication, RBAC, audit logs, product CRUD, image uploads, the admin
+> Authentication, RBAC, audit logs, product CRUD, general file uploads, the admin
 > shell, contract generation, and Agent Skills are implemented. APIs and
-> project conventions may still change before v1.
+> project conventions may still change before v1. The repository maintains one
+> coherent current baseline rather than compatibility shims for unpublished
+> configuration, migrations, APIs, or generated clients.
 
 ## What is Aginex?
 
@@ -43,7 +45,7 @@ Use Aginex when your task needs one or more of these capabilities:
   event for every successful write.
 - SQL schemas that evolve through reviewable Goose migrations on SQLite,
   PostgreSQL, and MySQL.
-- Image and object workflows backed by local storage, S3-compatible services,
+- General file and object workflows backed by local storage, S3-compatible services,
   or Alibaba Cloud OSS.
 - Durable PostgreSQL jobs, idempotent HTTP operations, health checks, and
   production-oriented container images.
@@ -90,7 +92,7 @@ Select the Skill by task intent, not merely by the file being edited:
 | Add a dashboard, report, settings screen, or other admin page | `add-admin-page` |
 | Change a table, column, index, constraint, or data migration | `change-database-schema` |
 | Add or modify roles, permissions, or protected actions | `configure-rbac` |
-| Add an image upload flow or storage integration | `add-image-upload` |
+| Add a file upload, attachment, resumable transfer, or storage integration | `add-image-upload` |
 | Diagnose a bug, CI failure, migration problem, or readiness issue | `test-and-debug` |
 | Upgrade framework dependencies or conventions | `upgrade-aginex` |
 
@@ -115,6 +117,11 @@ contract and updates its tests and documentation:
 - Application HTTP APIs live under `/api/v1`, errors use
   `application/problem+json`, and lists use `{items,page,pageSize,total}`.
 - Cloud SDKs stay behind platform interfaces.
+- Aginex is pre-release. Unless compatibility is explicitly requested, update
+  the unpublished current baseline directly; the current installation document
+  remains strict version 1 until a release boundary is explicitly declared.
+  Unpublished field changes do not increment it, and every other version fails
+  closed.
 - Generated and application-owned files must not be overwritten without first
   checking for drift.
 
@@ -122,16 +129,26 @@ contract and updates its tests and documentation:
 
 | Area | Current baseline |
 |---|---|
-| Identity | First-run administrator setup, Argon2id passwords, revocable cookie sessions |
-| Authorization | Explicit RBAC with lowercase `resource:action` permissions |
+| Identity | First-run administrator setup, administrator-managed user CRUD, activation, password reset, role assignment, Argon2id passwords, and revocable cookie sessions |
+| Authorization | Role CRUD and explicit grants with lowercase `resource:action` permissions and `own`/`all` scope |
 | Audit | Actor, action, resource, request, and timestamp records |
 | Business example | Searchable, paginated product CRUD |
-| Files | Upload intent, direct upload, verification, signed reads, and deletion |
+| Files | Arbitrary-type multi-file queue, direct and optional resumable upload, streamed verification, safe preview/download, signed reads, and deletion |
 | Reliability | Database-backed idempotency, a durable PostgreSQL worker, and protected job inspection/retry APIs |
 | Admin UI | English/Simplified-Chinese login, Setup, dashboard, products, users, roles, audit, and files pages |
 | API contract | `/api/v1`, RFC 9457-style problem responses, OpenAPI, generated TypeScript client |
 | Delivery | Non-root API, worker, and standalone web images |
-| Tooling | `dev`, `doctor`, `check`, contract generation, security gates, SBOMs, and Skill validation |
+| Tooling | `new`, `dev`, `doctor`, `check`, contract generation, security gates, SBOMs, and Skill validation |
+
+Access administration is a framework capability, not part of the starter product
+example. Administrators can manage users and their roles, and manage roles and
+their permission grants. Permission definitions remain owned by compiled module
+code and are synchronized at startup; the administration API does not create
+arbitrary permission definitions. The system-managed `Administrator` role always
+receives every registered permission at `all` scope and cannot be renamed,
+deleted, or weakened. User and role mutations preserve at least one usable
+administrator, reject self-lockout, and prevent an operator from delegating
+authority beyond their own grants. Public self-registration remains disabled.
 
 The web app uses English by default, negotiates a first visit from the browser's
 `Accept-Language` header, and stores an explicit language choice in the
@@ -217,6 +234,51 @@ alternative write path.
 CRUD engine. A derived application remains responsible for its domain rules;
 Aginex provides the boundaries those rules build on.
 
+## Install the CLI and create an application
+
+After an Aginex version containing this command is published, install it with Go:
+
+```bash
+go install github.com/xgtian-root/aginex/cmd/aginex@latest
+aginex --version
+```
+
+Go installs the executable into `GOBIN`, or into `$(go env GOPATH)/bin` when
+`GOBIN` is unset. Add that directory to `PATH` if your shell cannot find
+`aginex`. When developing Aginex itself, install the exact local checkout and
+explicitly link generated projects back to that checkout:
+
+```bash
+go install ./cmd/aginex
+aginex new testproject --aginex-path /absolute/path/to/aginex
+```
+
+`--aginex-path` is a development-only escape hatch. It writes an explicit local
+`replace` directive to the generated `go.mod`; remove that directive and pin a
+published Aginex version before sharing or releasing the application. A
+source-built development CLI fails closed without this flag instead of creating
+a project whose framework version cannot be downloaded.
+
+There are two initialization modes:
+
+```bash
+# Initialize an existing empty current directory.
+mkdir my-app && cd my-app
+aginex new
+
+# Or create a new child directory below the current directory.
+aginex new testproject
+
+# Use a publishable Go module path when the repository location is known.
+aginex new testproject --module github.com/example/testproject
+```
+
+The command refuses non-empty current directories and every pre-existing named
+target; it never silently overwrites files. It writes source, `.env.example`,
+and `.aginex/project.json`, but does not create `.env`, credentials, databases,
+uploads, or install dependencies. Run `pnpm install` in the generated project,
+then start it with `aginex dev` and complete browser Setup.
+
 ## Run the baseline locally
 
 ### Prerequisites
@@ -287,7 +349,9 @@ Sign in with the administrator credentials entered in Setup.
 
 | Command | Purpose |
 |---|---|
+| `aginex new [name] [--module path] [--aginex-path path]` | Initialize the empty current directory, or create and initialize a named child directory; `--aginex-path` is only for an unreleased local checkout |
 | `go run ./cmd/aginex dev` | Run the API and web development servers together |
+| `go run ./cmd/aginex dev reinitialize` | Dry-run a recoverable reset of stale local pre-release configuration/database state; execute only with the exact printed `--confirm` target |
 | `go run ./cmd/aginex doctor` | Check the local toolchain and project structure |
 | `go run ./cmd/aginex check` | Run backend tests, Skill validation, frontend checks, tests, and build |
 | `go run ./cmd/aginex check --skip-build` | Run the verification gate without the production web build |
@@ -354,13 +418,14 @@ file.
 | `AGINEX_JOBS_WORKER_ID` | `aginex-worker` | Unique identity for each worker replica |
 | `AGINEX_BOOTSTRAP_ADMIN_EMAIL` | — | One-time administrator email for an environment-configured first start that bypasses browser Setup |
 | `AGINEX_BOOTSTRAP_ADMIN_PASSWORD` | — | Matching one-time administrator password; insecure and whitespace-padded values are rejected in production |
-| `AGINEX_STORAGE_DRIVER` | `local` | `local`, `s3`, or `oss` |
-| `AGINEX_STORAGE_LOCAL_ROOT` | `data/uploads` | Local object root |
+| `AGINEX_STORAGE_DRIVER` | `local` | `local`, `s3`, or `oss`; explicitly setting it makes the Object Storage console read-only |
+| `AGINEX_STORAGE_LOCAL_ROOT` | `data/uploads` | Local object root; this setting alone does not disable console-managed cloud profiles |
 | `AGINEX_STORAGE_BUCKET` | — | Cloud storage bucket |
 | `AGINEX_STORAGE_REGION` | — | Cloud storage region |
 | `AGINEX_STORAGE_ENDPOINT` | — | S3-compatible or OSS endpoint |
 | `AGINEX_STORAGE_ACCESS_KEY_ID` | — | Cloud access key ID |
 | `AGINEX_STORAGE_ACCESS_KEY_SECRET` | — | Cloud access key secret |
+| `AGINEX_STORAGE_ENDPOINT_ALLOWLIST` | — | Comma-separated MinIO endpoint hosts allowed in production; production custom endpoints also require HTTPS |
 | `AGINEX_API_INTERNAL_URL` | `http://127.0.0.1:8080` | Server-only API URL used by the Next runtime; inject a reachable service URL such as `http://api:8080` into a separate web container; it is not a browser variable or build argument |
 | `NEXT_PUBLIC_API_URL` | empty | Browser-facing API origin compiled into the web build; empty uses same-origin `/api/v1` routing |
 
@@ -381,8 +446,33 @@ docker compose --profile storage up -d
 After starting a database, either enter its host, port, database name,
 credentials, and transport mode in browser Setup, or set both database
 environment variables plus the one-time administrator values for a
-preconfigured start. Storage remains environment-configured. The Compose
+preconfigured start. Administrators can maintain Local, Alibaba OSS, AWS S3,
+MinIO, and Cloudflare R2 profiles under **System settings → Object storage**.
+They can independently set the upload maximum from 1 MiB through 1 GiB in
+whole-MiB increments (10 MiB by default) and enable resumable uploads (disabled
+by default). Saved storage and upload-policy changes apply after both API and
+worker restart; already-created uploads retain their creation-time policy and
+storage profile. Set
+`AGINEX_STORAGE_DRIVER` explicitly only when storage must remain entirely
+environment-managed and its profile controls should be read-only; the
+installation-wide file policy remains independently editable. The Compose
 credentials are for local development only.
+
+The file page accepts any non-empty file type and queues at most 20 files per
+selection. Files at or below 32 MiB use one upload; when resumable uploads are
+enabled and the active provider supports them, files strictly larger than
+32 MiB use fixed 32 MiB parts, at most 32 parts, and a 24-hour server session.
+The browser must reselect the original file after a refresh before a session can
+resume; Aginex does not persist browser `File` objects or credentials.
+
+Object bytes are stored as `application/octet-stream` and verified by streaming
+before metadata becomes ready. Only structurally valid JPEG, PNG, WebP, GIF,
+and PDF files can be previewed. SVG, HTML, text, Office documents, archives,
+executables, malformed preview candidates, and all other types are delivered
+as attachments. Virus scanning, file versioning, folder upload, and automatic
+cross-device resume are outside the current baseline. Cloud-provider browser
+uploads additionally require the bucket CORS and multipart lifecycle settings
+described in the [operations guide](docs/operations.md#file-upload-policy-and-provider-requirements).
 
 ## API conventions
 
@@ -420,8 +510,8 @@ The current codebase is an executable v1 development baseline. The next major
 milestones are:
 
 - OIDC Authorization Code + PKCE and identity linking
-- Complete user and role mutations and product editing workflows
-- `aginex new` and resource generation
+- Complete product editing workflows
+- Resource generation
 - Browser end-to-end tests and a mandatory live OSS release gate
 - Idempotency cleanup scheduling and operator dashboards for durable jobs
 - Stable release documentation

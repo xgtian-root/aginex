@@ -10,20 +10,24 @@ import (
 	"time"
 )
 
-func TestPolicyRejectsUnsafeImages(t *testing.T) {
-	policy := DefaultImagePolicy()
+func TestFilePolicyAllowsArbitraryTypesButBoundsKeyAndSize(t *testing.T) {
+	policy := DefaultFilePolicy()
 	cases := []struct {
 		request UploadRequest
 		err     error
 	}{
 		{UploadRequest{Key: "../secret", ContentType: "image/png", Size: 1}, ErrInvalidKey},
-		{UploadRequest{Key: "image.svg", ContentType: "image/svg+xml", Size: 1}, ErrInvalidType},
 		{UploadRequest{Key: "huge.png", ContentType: "image/png", Size: policy.MaxBytes + 1}, ErrTooLarge},
 	}
 	for _, item := range cases {
-		if err := policy.Validate(item.request); !errors.Is(err, item.err) {
+		if err := validateUpload(policy, item.request); !errors.Is(err, item.err) {
 			t.Fatalf("request %#v: error = %v", item.request, err)
 		}
+	}
+	if err := validateUpload(policy, UploadRequest{
+		Key: "documents/example.svg", ContentType: "image/svg+xml", Size: 1,
+	}); err != nil {
+		t.Fatalf("arbitrary file type was rejected: %v", err)
 	}
 }
 
@@ -33,14 +37,16 @@ func TestLocalStorageContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := []byte("\x89PNG\r\n\x1a\nexample")
-	if err := store.Put("users/avatar.png", content, "image/png"); err != nil {
+	if _, err := store.Put(
+		context.Background(), "users/avatar.png", bytes.NewReader(content), int64(len(content)),
+	); err != nil {
 		t.Fatal(err)
 	}
 	info, err := store.Stat(context.Background(), "users/avatar.png")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Size != int64(len(content)) || info.ContentType != "image/png" {
+	if info.Size != int64(len(content)) || info.ContentType != StoredContentType {
 		t.Fatalf("info = %#v", info)
 	}
 	reader, err := store.Open(context.Background(), "users/avatar.png")
