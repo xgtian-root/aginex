@@ -1888,6 +1888,10 @@
             "readOnly": true,
             "type": "string"
           },
+          "accessBaseUrl": {
+            "maxLength": 2048,
+            "type": "string"
+          },
           "accessKeyId": {
             "maxLength": 512,
             "type": "string",
@@ -1949,6 +1953,9 @@
             ],
             "format": "uri",
             "readOnly": true,
+            "type": "string"
+          },
+          "accessBaseUrl": {
             "type": "string"
           },
           "accountId": {

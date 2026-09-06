@@ -37,7 +37,7 @@ jobs:
           cache: true
           cache-dependency-path: |
             cli/go.sum
-            backend/go.sum
+            server/go.sum
       - name: Set up pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
         with:
@@ -114,7 +114,7 @@ jobs:
           cache: true
           cache-dependency-path: |
             cli/go.sum
-            backend/go.sum
+            server/go.sum
       - name: Start pinned MinIO test service
         run: >-
           docker run --detach --rm
@@ -143,24 +143,24 @@ jobs:
             -e "SET GLOBAL log_bin_trust_function_creators = 1;" || true
       - name: Download independent module dependencies
         run: |
-          GOWORK=off go -C backend mod download all
+          GOWORK=off go -C server mod download all
           GOWORK=off go -C cli mod download all
       - name: Verify module checksums
         run: |
           GOWORK=off go -C cli mod verify
-          GOWORK=off go -C backend mod verify
+          GOWORK=off go -C server mod verify
       - name: Test
         run: |
           GOWORK=off go -C cli test -p 1 ./...
-          GOWORK=off go -C backend test -p 1 ./...
+          GOWORK=off go -C server test -p 1 ./...
       - name: Race test
         run: |
           GOWORK=off go -C cli test -race -p 1 ./...
-          GOWORK=off go -C backend test -race -p 1 ./...
+          GOWORK=off go -C server test -race -p 1 ./...
       - name: Vet
         run: |
           GOWORK=off go -C cli vet ./...
-          GOWORK=off go -C backend vet ./...
+          GOWORK=off go -C server vet ./...
       - name: Verify scaffold snapshot
         run: go run ./cli/cmd/sync-templates -check
       - name: Validate Agent Skills
@@ -259,7 +259,7 @@ jobs:
           cache: true
           cache-dependency-path: |
             cli/go.sum
-            backend/go.sum
+            server/go.sum
       - name: Set up pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
         with:
@@ -303,16 +303,16 @@ jobs:
           cache: true
           cache-dependency-path: |
             cli/go.sum
-            backend/go.sum
+            server/go.sum
       - name: Go vulnerability analysis
         run: |
           go -C cli run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
-          go -C backend run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+          go -C server run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
       - name: Go static security analysis
         run: >-
           go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           -exclude-dir=.cache -exclude-dir=node_modules
-          -quiet -severity high -confidence high ./cli/... ./backend/...
+          -quiet -severity high -confidence high ./cli/... ./server/...
       - name: Repository vulnerability, secret, and misconfiguration scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

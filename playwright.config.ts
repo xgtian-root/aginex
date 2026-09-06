@@ -40,7 +40,7 @@ export default defineConfig({
   webServer: [
     {
       name: "Aginex API",
-      command: "go run ./backend/cmd/server",
+      command: "go run ./server/cmd/server",
       url: `${apiURL}/health/ready`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

@@ -254,7 +254,7 @@ aginex new testproject --aginex-path /absolute/path/to/aginex
 ```
 
 `--aginex-path` is a development-only escape hatch. It writes an explicit local
-`replace` directive to the generated `backend/go.mod`; remove that directive and pin a
+`replace` directive to the generated `server/go.mod`; remove that directive and pin a
 published Aginex version before sharing or releasing the application. A
 source-built development CLI fails closed without this flag instead of creating
 a project whose framework version cannot be downloaded.
@@ -350,22 +350,23 @@ Sign in with the administrator credentials entered in Setup.
 | Command | Purpose |
 |---|---|
 | `aginex new [name] [--module path] [--aginex-path path]` | Initialize the empty current directory, or create and initialize a named child directory; `--aginex-path` is only for an unreleased local checkout |
-| `go run ./cli/cmd/aginex dev` | Run the API and web development servers together |
+| `go run ./cli/cmd/aginex dev` | Run API and web together; also supervise the worker when `AGINEX_JOBS_DRIVER=postgres` |
 | `go run ./cli/cmd/aginex dev reinitialize` | Dry-run a recoverable reset of stale local pre-release configuration/database state; execute only with the exact printed `--confirm` target |
+| `go run ./cli/cmd/aginex dev reconcile-storage-presentation` | Reconcile verified MIME metadata and ETags for existing ready OSS files; safe to rerun |
 | `go run ./cli/cmd/aginex doctor` | Check the local toolchain and project structure |
 | `go run ./cli/cmd/aginex check` | Run backend tests, Skill validation, frontend checks, tests, and build |
 | `go run ./cli/cmd/aginex check --skip-build` | Run the verification gate without the production web build |
 | `go run ./cli/cmd/aginex generate client` | Regenerate OpenAPI and the TypeScript API client |
 | `go run ./cli/cmd/aginex skills validate` | Validate all canonical Agent Skills |
-| `go run ./backend/cmd/worker` | Run the durable PostgreSQL worker |
+| `go run ./server/cmd/worker` | Run the durable PostgreSQL worker |
 | `pnpm dev:admin` | Run only the Next.js development server |
 | `pnpm e2e` | Run Chromium workflows against automatically initialized API/web processes |
 
 Run individual checks when narrowing down a failure:
 
 ```bash
-go test ./cli/... ./backend/...
-go vet ./cli/... ./backend/...
+go test ./cli/... ./server/...
+go vet ./cli/... ./server/...
 pnpm check:admin
 pnpm test:admin
 pnpm build:admin
@@ -423,6 +424,7 @@ file.
 | `AGINEX_STORAGE_BUCKET` | — | Cloud storage bucket |
 | `AGINEX_STORAGE_REGION` | — | Cloud storage region |
 | `AGINEX_STORAGE_ENDPOINT` | — | S3-compatible or OSS endpoint |
+| `AGINEX_STORAGE_ACCESS_BASE_URL` | — | Required HTTPS browser-visible bucket origin for OSS signed preview/download URLs; accepts the official bucket domain or a bound custom CNAME (use CNAME for inline previews) |
 | `AGINEX_STORAGE_ACCESS_KEY_ID` | — | Cloud access key ID |
 | `AGINEX_STORAGE_ACCESS_KEY_SECRET` | — | Cloud access key secret |
 | `AGINEX_STORAGE_ENDPOINT_ALLOWLIST` | — | Comma-separated MinIO endpoint hosts allowed in production; production custom endpoints also require HTTPS |
@@ -448,6 +450,12 @@ credentials, and transport mode in browser Setup, or set both database
 environment variables plus the one-time administrator values for a
 preconfigured start. Administrators can maintain Local, Alibaba OSS, AWS S3,
 MinIO, and Cloudflare R2 profiles under **System settings → Object storage**.
+Alibaba OSS profiles require a browser-visible HTTPS access domain. Use the
+official bucket domain or a custom CNAME already bound to that bucket; private
+preview and download URLs remain short-lived and signed on this origin.
+Some OSS official bucket domains return `x-oss-force-download: true` even when
+the signed preview requests `Content-Disposition: inline`. Bind and configure
+a custom CNAME when files must render inline in the browser.
 They can independently set the upload maximum from 1 MiB through 1 GiB in
 whole-MiB increments (10 MiB by default) and enable resumable uploads (disabled
 by default). Saved storage and upload-policy changes apply after both API and
@@ -493,7 +501,7 @@ cli/                               Independent Go CLI module
   cmd/aginex/                      Developer CLI entrypoint
   internal/                        CLI orchestration and scaffolding
   templates/                       Embedded scaffold and source manifest
-backend/                           Independent Go backend module
+server/                            Independent Go backend module
   cmd/server/                      API executable
   cmd/worker/                      Durable background worker
   cmd/openapi/                     OpenAPI generator
@@ -505,7 +513,7 @@ admin/                             Next.js administration application
 .agents/skills/                    Canonical development workflows
 .github/workflows/                 CI verification
 docs/                              Product, dependency and API documentation
-go.work                            Local CLI/backend workspace
+go.work                            Local CLI/server workspace
 ```
 
 The CLI and backend have separate `go.mod`/`go.sum` files and no Go package
@@ -517,11 +525,11 @@ manifest; the root pnpm workspace and lockfile coordinate frontend tooling.
 Scaffold assets are listed explicitly in `cli/templates/sources.json`. After
 changing a canonical asset, run `go run ./cli/cmd/sync-templates`; use `-check`
 for read-only verification. The synchronizer rejects locally edited snapshots.
-`aginex new` creates `backend/`, `admin/`, and a workspace containing only the
+`aginex new` creates `server/`, `admin/`, and a workspace containing only the
 application backend. `--aginex-path` accepts this repository root and references
-its `backend/` module. Backend template version metadata lives in
+its `server/` module. Backend template version metadata lives in
 `cli/templates/assets.go` independently of CLI build metadata. Nested module
-release tags use `cli/vX.Y.Z` and `backend/vX.Y.Z` respectively.
+release tags use `cli/vX.Y.Z` and `server/vX.Y.Z` respectively.
 
 ## Project status and roadmap
 

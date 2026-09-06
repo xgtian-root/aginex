@@ -45,7 +45,7 @@ removed instead of being preserved as a compatibility mode.
    contexts. Run every business mutation through `Runtime.Writes.Run`, return a
    valid sanitized audit event, and use the transaction-bound job queue when
    enqueue must commit with the write.
-8. Use the public `backend/framework/storage.ObjectStore` contract. Object keys remain
+8. Use the public `server/framework/storage.ObjectStore` contract. Object keys remain
    private metadata; signed URLs must not be logged, audited, or placed in an
    idempotency replay record. Resolve multipart and controlled-read behavior as
    optional provider capabilities instead of importing cloud SDK types.
@@ -94,11 +94,17 @@ either bundled history; the checked-in starter definition requires both.
 In production, registering `FilesModule` also requires
 `AGINEX_JOBS_DRIVER=postgres` so file deletion and orphan recovery remain
 durable. A definition without the files module may keep jobs disabled.
+For local development, `aginex dev` automatically supervises the independent
+worker whenever that PostgreSQL jobs driver is configured.
 
 Saving a storage profile or file-upload policy changes only the pending
 installation revision. Restart both API and worker to load it. Existing upload
 sessions retain their creation-time provider, size, and multipart parameters;
 do not cancel them merely to apply a new default.
+Alibaba OSS profiles must also provide the browser-visible HTTPS
+`accessBaseUrl`. After upgrading an existing OSS profile, run
+`aginex dev reconcile-storage-presentation` once before validating direct
+provider previews.
 
 ## Removed behavior
 

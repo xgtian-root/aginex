@@ -1,5 +1,51 @@
 # Findings
 
+## 2026-09-06 — OSS provider read URLs and durable cleanup
+
+- The reported upload exists in OSS at its full nested object key; upload is
+  not the failing subsystem.
+- Private raw OSS access returns 403, so provider-hosted preview must remain a
+  short-lived signed read rather than a public object URL.
+- Delete rejects before changing state when the API has no durable queue; the
+  current runtime uses the disabled jobs default and no worker process exists.
+- `aginex dev` currently starts only API and admin. The worker already waits for
+  API initialization and already implements idempotent `storage.cleanup` jobs,
+  making conditional CLI supervision the narrow repair.
+- OSS cannot safely override the response MIME in the current signed-read path.
+  Verified preview types therefore need their provider object Content-Type
+  finalized after byte verification, while the finalized object leaves durable
+  disposition empty and each signed URL selects inline or attachment.
+- Existing ready OSS objects require an explicit re-runnable reconciliation;
+  mutating provider metadata from a GET URL endpoint would violate read
+  semantics and audit expectations.
+- Both one-shot and multipart completion have the same post-verification seam
+  and must invoke the optional metadata finalizer before committing `ready`.
+- Transparent storage observability wrappers explicitly re-expose optional
+  capabilities, so the new finalizer needs the same unwrapping/instrumentation
+  treatment as controlled reads and multipart operations.
+- The current OSS adapter has one client for every operation. A second client
+  configured with the read origin and CNAME addressing can change only signed
+  GET URLs while leaving upload/stat/delete routing untouched.
+- Reconciliation can be idempotent without auditing ETags: compare provider
+  Content-Type/Content-Disposition and database/provider ETag internally; when
+  either needs convergence, update the opaque ETag transactionally and audit
+  only the before/after presentation MIME.
+- The existing backend maintenance command already owns strict config loading
+  and the CLI subprocess boundary. Adding a sibling reconciliation command
+  keeps the independent CLI module from importing backend packages.
+- Live reconciliation changed one existing OSS object and its database ETag;
+  an immediate second run reported zero changes and one already-current item,
+  proving the operational path is idempotent.
+- The restarted API route list no longer contains the retired provider-content
+  proxy, and the independently started PostgreSQL worker reached ready state
+  with the same module fingerprint as the API.
+- The exact live signed provider request returns `200` and `image/png`, but the
+  official Bucket domain adds `x-oss-force-download: true` and changes the
+  requested inline disposition to attachment. The Bucket reports no bound
+  CNAMEs, so browser-inline preview cannot be completed without external DNS
+  and OSS CNAME configuration; this does not affect provider-hosted download.
+
+
 ## 2026-09-04 — `aginex new` project initialization
 
 - The requested CLI contract has two modes: no positional argument initializes
@@ -1848,3 +1894,46 @@
 - Provider inventory is reconciliation evidence, not the completion manifest.
   ACK persists the browser-observed UploadPart ETag after normalized comparison,
   and Complete sends that persisted opaque value after rechecking inventory.
+
+# 2026-09-06 — Alibaba OSS browser upload repair
+
+- The configured OSS bucket accepts the exact presigned PUT (`200`), and the
+  object can be headed and opened server-side. Bucket, region, credentials,
+  permissions, and upload signature are therefore valid.
+- An OPTIONS request shaped like the admin's direct upload receives
+  `403 AccessForbidden` with `CORSResponse: CORS is not enabled for this
+  bucket`; this is the direct cause of XHR status `0` and the visible failure.
+- The current provider readiness path calls only `GetBucketInfo`, so activation
+  can report success while the required browser data plane is unusable.
+- The live contract then fails on signed read with `400 InvalidRequest: Can not
+  override response header on content-type`. Alibaba OSS explicitly disallows
+  `response-content-type`; `response-content-disposition` remains supported.
+- Objects are intentionally uploaded as `application/octet-stream` until their
+  bytes are verified. Removing the unsupported query parameter alone restores
+  downloads but cannot safely preserve inline previews; verified previews need
+  a server-controlled response path or a carefully audited metadata rewrite.
+- A provider-neutral browser-readiness probe can issue OPTIONS against a fresh
+  presigned destination without uploading bytes. This tests the actual browser
+  path and avoids requiring `oss:GetBucketCors` control-plane permission.
+- The existing authenticated Local content handler already derives safe MIME
+  and disposition from verified metadata. A provider-content endpoint can reuse
+  those invariants for OSS preview while attachments continue using direct
+  short-lived signed reads.
+- The admin has a focused workbench test seam for an `ObjectUploadError(0)`, so
+  the CORS/network guidance can be regression-tested without a live browser.
+- The admin workspace is Biome-managed and does not install Prettier; targeted
+  formatting must use `biome check --write` to avoid unrelated tree churn.
+- The installed profile document stores OSS provider details but no web-origin
+  list; readiness must use the runtime configuration's normalized allowed web
+  origins (localhost defaults locally), not persist another origin contract in
+  the storage profile.
+- The pinned Alibaba OSS v2 SDK exposes typed Get/PutBucketCors operations, so
+  the live bucket rule can be inspected and configured without printing or
+  exporting persisted credentials.
+- The live bucket now reports one CORS rule, so the repair helper must inspect
+  its exact non-secret contract and must not overwrite it blindly.
+- The existing live rule now allows both local admin origins, all required
+  upload methods/headers, and exposes `ETag`; no bucket write is necessary.
+- Bucket control-plane readiness and browser CORS readiness are independent
+  network operations; each receives its own bounded timeout so a successful
+  first check cannot consume the second check's entire budget.

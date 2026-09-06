@@ -11,7 +11,7 @@ updates:
   - package-ecosystem: gomod
     directories:
       - /cli
-      - /backend
+      - /server
     schedule:
       interval: weekly
     groups:

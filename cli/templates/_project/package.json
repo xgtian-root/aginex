@@ -9,7 +9,7 @@
     "test:admin": "pnpm --filter @aginex/admin test",
     "e2e": "playwright test",
     "e2e:list": "playwright test --list",
-    "generate:contracts": "go run ./backend/cmd/openapi -output docs/openapi.json && pnpm --filter @aginex/admin generate:client"
+    "generate:contracts": "go run ./server/cmd/openapi -output docs/openapi.json && pnpm --filter @aginex/admin generate:client"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1"

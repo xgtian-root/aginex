@@ -20,6 +20,7 @@ test-results/
 
 # Local data
 /data/
+/server/data/
 *.db
 *.db-shm
 *.db-wal

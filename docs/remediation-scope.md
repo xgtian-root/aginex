@@ -93,7 +93,7 @@ POSTA, rather than Aginex core, owns:
   idempotency behavior of each handler;
 - moderation, approval, publishing, search-ranking, and data-quality rules;
 - the choice and operation of antivirus, image transformation, telemetry
-  exporters/backends, email/SMS, and backup vendors;
+  exporters/servers, email/SMS, and backup vendors;
 - business metrics, SLOs, dashboards, alert thresholds, sampling, and retention;
 - user-facing MFA enrollment, account recovery, and high-risk confirmation
   experiences.

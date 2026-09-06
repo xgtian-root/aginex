@@ -29,7 +29,7 @@ Read the matching Skill under `.agents/skills/` before changing the project.
 ## Repository Layout
 
 - `cli/` is the independent Go CLI module; it invokes backend tools through subprocesses and must not import backend Go packages.
-- `backend/` is the independent Go backend module, including `framework/`, `internal/`, migrations, and executable entrypoints.
+- `server/` is the independent Go backend module, including `framework/`, `internal/`, migrations, and executable entrypoints.
 - `admin/` is the Next.js administration application; retain `admin/app/` for App Router routes.
-- Run Go checks per module (`go -C backend test ./...`, plus `go -C cli test ./...` in this source repository); frontend checks use `pnpm check:admin`, `pnpm test:admin`, and `pnpm build:admin`.
+- Run Go checks per module (`go -C server test ./...`, plus `go -C cli test ./...` in this source repository); frontend checks use `pnpm check:admin`, `pnpm test:admin`, and `pnpm build:admin`.
 - Edit canonical scaffold assets, then run `go run ./cli/cmd/sync-templates`; use `-check` for read-only drift verification. Never edit the embedded snapshot directly.

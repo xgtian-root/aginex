@@ -22,4 +22,4 @@ description: Add a non-CRUD Aginex API operation with typed inputs and outputs, 
 
 ## Completion Gate
 
-The operation appears in OpenAPI, preserves resource invariants, is permission-protected and audited, and passes backend/frontend checks.
+The operation appears in OpenAPI, preserves resource invariants, is permission-protected and audited, and passes server/frontend checks.

@@ -1543,6 +1543,7 @@ export interface components {
        * @example https://example.com/schemas/StorageProfileRequest.json
        */
       readonly $schema?: string;
+      accessBaseUrl?: string;
       accessKeyId?: string;
       accessKeySecret?: string;
       accountId?: string;
@@ -1562,6 +1563,7 @@ export interface components {
        * @example https://example.com/schemas/StorageProfileResponse.json
        */
       readonly $schema?: string;
+      accessBaseUrl?: string;
       accountId?: string;
       active: boolean;
       authConfigured: boolean;

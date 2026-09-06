@@ -357,6 +357,9 @@ delivery, so handlers must be idempotent. Claims use database row locking,
 heartbeated leases, retry backoff and jitter, and a terminal `dead` state.
 Production compositions with `FilesModule` must keep at least one worker
 running after the API becomes ready.
+In development, setting the same driver causes `aginex dev` to start and
+supervise the independent worker with API and admin. With jobs disabled the
+CLI omits the worker, and file deletion is unavailable by design.
 
 Resumable sessions enqueue the versioned `storage.multipart.cleanup` job for
 expiry and cancellation. The API also runs a safety-net scan every 15 minutes,
@@ -393,6 +396,16 @@ or unfinished cleanup work cannot be deleted. In production, custom MinIO
 endpoints must use HTTPS and their hosts must be listed in
 `AGINEX_STORAGE_ENDPOINT_ALLOWLIST`; userinfo, query strings, fragments,
 link-local addresses, and cloud metadata endpoints are always rejected.
+Alibaba OSS additionally requires `accessBaseUrl`, an HTTPS origin without a
+path, query, fragment, or credentials. It may be the official bucket domain or
+a CNAME already bound to the bucket. Upload/control traffic continues to use
+the provider endpoint; private preview/download URLs are signed on the access
+origin. Some official OSS bucket domains force downloads even for signed inline
+responses (`x-oss-force-download: true`); configure a bound custom CNAME when
+browser-inline previews are required. Run
+`aginex dev reconcile-storage-presentation` after introducing or
+changing this field to align verified MIME and ETag metadata for existing ready
+OSS files; the command is audited and safe to rerun.
 
 ## File upload policy and provider requirements
 

@@ -15,6 +15,12 @@ import messages from "../../../messages/en.json";
 import FilesPage from "./page";
 
 const mocks = vi.hoisted(() => ({
+  ApiError: class ApiError extends Error {},
+  ObjectUploadError: class ObjectUploadError extends Error {
+    constructor(readonly status: number) {
+      super();
+    }
+  },
   acknowledgeUploadParts: vi.fn(),
   completeUploadSession: vi.fn(),
   confirmUpload: vi.fn(),
@@ -35,11 +41,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-  ObjectUploadError: class ObjectUploadError extends Error {
-    constructor(readonly status: number) {
-      super();
-    }
-  },
+  ApiError: mocks.ApiError,
+  ObjectUploadError: mocks.ObjectUploadError,
   acknowledgeUploadParts: mocks.acknowledgeUploadParts,
   completeUploadSession: mocks.completeUploadSession,
   confirmUpload: mocks.confirmUpload,
@@ -246,6 +249,25 @@ describe("FilesPage transfer workbench", () => {
     expect(firstKey).toEqual(expect.any(String));
     expect(secondKey).toEqual(expect.any(String));
     expect(secondKey).not.toBe(firstKey);
+  });
+
+  it("explains likely bucket CORS failures after direct-upload retries", async () => {
+    mocks.uploadPreparedFile.mockRejectedValue(new mocks.ObjectUploadError(0));
+    renderPage();
+    fireEvent.change(await findFileInput(), {
+      target: { files: [new File(["report"], "report.csv")] },
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Start 1 transfers" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "The browser could not reach object storage. Check the bucket CORS rules and your network connection.",
+      ),
+    ).toBeVisible();
+    expect(mocks.uploadPreparedFile).toHaveBeenCalledTimes(4);
   });
 
   it("re-signs a transiently failed part and acknowledges two parts together", async () => {

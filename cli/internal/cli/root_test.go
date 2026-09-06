@@ -56,4 +56,19 @@ func TestRootCommandDoesNotExposeRuntimeInitialization(t *testing.T) {
 		reinitialize.Name() != "reinitialize" {
 		t.Fatalf("dev reinitialize command = %#v, error = %v", reinitialize, err)
 	}
+	if reconcile, _, err := dev.Find([]string{"reconcile-storage-presentation"}); err != nil ||
+		reconcile.Name() != "reconcile-storage-presentation" {
+		t.Fatalf("dev reconcile command = %#v, error = %v", reconcile, err)
+	}
+}
+
+func TestDevStartsWorkerOnlyForPostgresJobs(t *testing.T) {
+	t.Setenv("AGINEX_JOBS_DRIVER", "disabled")
+	if durableWorkerConfigured() {
+		t.Fatal("disabled jobs unexpectedly start the durable worker")
+	}
+	t.Setenv("AGINEX_JOBS_DRIVER", "postgres")
+	if !durableWorkerConfigured() {
+		t.Fatal("postgres jobs did not start the durable worker")
+	}
 }

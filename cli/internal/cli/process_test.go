@@ -16,7 +16,7 @@ import (
 
 func TestProjectRootFromNestedDirectory(t *testing.T) {
 	root := t.TempDir()
-	for _, name := range []string{"backend/go.mod", "admin/package.json", "go.work"} {
+	for _, name := range []string{"server/go.mod", "admin/package.json", "go.work"} {
 		file := filepath.Join(root, name)
 		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 			t.Fatal(err)
@@ -40,14 +40,14 @@ func TestProjectRootFromNestedDirectory(t *testing.T) {
 
 func TestBackendProcessPreservesRootStreamsArgumentsAndExitCode(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "backend", "cmd", "probe")
+	source := filepath.Join(root, "server", "cmd", "probe")
 	if err := os.MkdirAll(source, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"backend/go.mod": "module example.com/probe\n\ngo 1.25.0\n",
-		"go.work":        "go 1.25.0\n\nuse ./backend\n",
-		"backend/cmd/probe/main.go": `package main
+		"server/go.mod": "module example.com/probe\n\ngo 1.25.0\n",
+		"go.work":        "go 1.25.0\n\nuse ./server\n",
+		"server/cmd/probe/main.go": `package main
 import ("fmt"; "os"; "io")
 func main() { wd, _ := os.Getwd(); fmt.Println(wd); fmt.Println(os.Args[1]); io.Copy(os.Stdout, os.Stdin); fmt.Fprintln(os.Stderr, "probe error"); os.Exit(7) }
 `,

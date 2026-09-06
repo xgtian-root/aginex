@@ -20,7 +20,7 @@ func projectRoot(start string) (string, error) {
 	}
 	for {
 		found := true
-		for _, file := range []string{"backend/go.mod", "admin/package.json", "go.work"} {
+		for _, file := range []string{"server/go.mod", "admin/package.json", "go.work"} {
 			info, err := os.Stat(filepath.Join(directory, file))
 			if err != nil || !info.Mode().IsRegular() {
 				found = false
@@ -32,7 +32,7 @@ func projectRoot(start string) (string, error) {
 		}
 		parent := filepath.Dir(directory)
 		if parent == directory {
-			return "", fmt.Errorf("no Aginex project root above %s (expected backend/go.mod, admin/package.json and go.work)", start)
+			return "", fmt.Errorf("no Aginex project root above %s (expected server/go.mod, admin/package.json and go.work)", start)
 		}
 		directory = parent
 	}
@@ -67,7 +67,7 @@ func backendProcess(ctx context.Context, cmd *cobra.Command, root, entry string,
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	build := projectProcess(ctx, cmd, root, "go", "-C", "backend", "build", "-o", binary, "./cmd/"+entry)
+	build := projectProcess(ctx, cmd, root, "go", "-C", "server", "build", "-o", binary, "./cmd/"+entry)
 	build.Stdin = nil
 	if err := build.Run(); err != nil {
 		cleanup()

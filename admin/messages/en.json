@@ -314,6 +314,7 @@
     "deletedToast": "File deleted.",
     "deleteError": "The file could not be deleted.",
     "objectUploadError": "Object upload returned {status}.",
+    "cloudUploadConnectionError": "The browser could not reach object storage. Check the bucket CORS rules and your network connection.",
     "uploadError": "The file could not be uploaded and verified.",
     "temporaryUrlError": "A temporary file URL could not be created.",
     "header": {
@@ -736,6 +737,7 @@
       "bucket": "Bucket",
       "region": "Region",
       "endpoint": "Endpoint",
+      "accessBaseUrl": "External access domain",
       "accountId": "Account ID",
       "accessKeyId": "Access Key ID",
       "accessKeySecret": "Access Key Secret",
@@ -754,6 +756,7 @@
       "editTitle": "Edit storage profile",
       "description": "Saving always repeats a read-only bucket connectivity check.",
       "optional": "Optional; derived from the official region",
+      "accessBaseUrlHint": "Use a custom CNAME already bound to this bucket for inline previews. Official HTTPS bucket domains are accepted, but some force browser downloads.",
       "secretHint": "Secrets are never returned. Leave both fields empty to retain them, or submit both to rotate.",
       "testPassed": "Connection test passed"
     },

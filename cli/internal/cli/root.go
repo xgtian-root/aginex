@@ -48,6 +48,14 @@ func devCommand() *cobra.Command {
 			defer cleanup()
 			admin := projectProcess(ctx, cmd, root, "pnpm", "dev:admin")
 			processes := []*exec.Cmd{server, admin}
+			if durableWorkerConfigured() {
+				worker, workerCleanup, err := backendProcess(ctx, cmd, root, "worker")
+				if err != nil {
+					return err
+				}
+				defer workerCleanup()
+				processes = append(processes, worker)
+			}
 			results := make(chan error, len(processes))
 			started := 0
 			for _, process := range processes {
@@ -61,7 +69,11 @@ func devCommand() *cobra.Command {
 				started++
 				go func(p *exec.Cmd) { results <- p.Wait() }(process)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Aginex API and admin development servers are starting. Press Ctrl+C to stop.")
+			if len(processes) == 3 {
+				fmt.Fprintln(cmd.OutOrStdout(), "Aginex API, admin, and durable worker are starting. Press Ctrl+C to stop.")
+			} else {
+				fmt.Fprintln(cmd.OutOrStdout(), "Aginex API and admin development servers are starting. Durable jobs are disabled. Press Ctrl+C to stop.")
+			}
 			first := <-results
 			interrupted := cmd.Context().Err() != nil
 			cancel()
@@ -89,7 +101,26 @@ func devCommand() *cobra.Command {
 			return process.Run()
 		},
 	})
+	command.AddCommand(&cobra.Command{
+		Use: "reconcile-storage-presentation", Short: "Reconcile verified OSS object presentation metadata", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := projectRoot(".")
+			if err != nil {
+				return err
+			}
+			process, cleanup, err := backendProcess(cmd.Context(), cmd, root, "aginex-tool", append([]string{"reconcile-storage-presentation"}, args...)...)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return process.Run()
+		},
+	})
 	return command
+}
+
+func durableWorkerConfigured() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("AGINEX_JOBS_DRIVER")), "postgres")
 }
 
 func generateCommand() *cobra.Command {
@@ -163,7 +194,7 @@ func diagnose(directory string) []diagnostic {
 		toolDiagnostic("pnpm", true, "pnpm", "--version"),
 		toolDiagnostic("Docker", false, "docker", "--version"),
 	}
-	for _, file := range []string{"backend/go.mod", "go.work", "admin/package.json", "package.json", "pnpm-workspace.yaml", "AGENTS.md"} {
+	for _, file := range []string{"server/go.mod", "go.work", "admin/package.json", "package.json", "pnpm-workspace.yaml", "AGENTS.md"} {
 		path := filepath.Join(directory, file)
 		_, err := os.Stat(path)
 		detail := path
@@ -204,7 +235,7 @@ func checkCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			steps := [][]string{{"go", "-C", "backend", "test", "./..."}}
+			steps := [][]string{{"go", "-C", "server", "test", "./..."}}
 			if _, err := os.Stat(filepath.Join(root, "cli", "go.mod")); err == nil {
 				steps = append(steps, []string{"go", "-C", "cli", "test", "./..."}, []string{"go", "run", "./cli/cmd/sync-templates", "-check"})
 			}

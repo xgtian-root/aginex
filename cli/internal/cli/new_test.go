@@ -38,7 +38,7 @@ func TestNewCommandInitializesCurrentDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	goMod := readTestFile(t, filepath.Join(target, "backend/go.mod"))
+	goMod := readTestFile(t, filepath.Join(target, "server/go.mod"))
 	assertGeneratedGoMod(t, goMod, "my-project-42", testFrameworkVersion)
 	manifest := readProjectManifest(t, target)
 	if manifest.ProjectName != "my-project-42" || manifest.ModulePath != "my-project-42" {
@@ -70,7 +70,7 @@ func TestNewCommandCreatesNamedChildDirectory(t *testing.T) {
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("named target mode = %v", info.Mode())
 	}
-	goMod := readTestFile(t, filepath.Join(target, "backend/go.mod"))
+	goMod := readTestFile(t, filepath.Join(target, "server/go.mod"))
 	assertGeneratedGoMod(t, goMod, "test-project", testFrameworkVersion)
 	if !strings.Contains(output, "Created Aginex project test-project in "+target) {
 		t.Fatalf("command output = %q", output)
@@ -91,7 +91,7 @@ func TestNewCommandUsesExplicitGoModulePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	goMod := readTestFile(t, filepath.Join(target, "backend/go.mod"))
+	goMod := readTestFile(t, filepath.Join(target, "server/go.mod"))
 	assertGeneratedGoMod(
 		t,
 		goMod,
@@ -103,7 +103,7 @@ func TestNewCommandUsesExplicitGoModulePath(t *testing.T) {
 		manifest.ModulePath != "github.com/example/test-project" {
 		t.Fatalf("manifest project identity = %#v", manifest)
 	}
-	server := readTestFile(t, filepath.Join(target, "backend", "cmd", "server", "main.go"))
+	server := readTestFile(t, filepath.Join(target, "server", "cmd", "server", "main.go"))
 	if !bytes.Contains(
 		server,
 		[]byte(`"github.com/example/test-project/internal/composition"`),
@@ -115,11 +115,11 @@ func TestNewCommandUsesExplicitGoModulePath(t *testing.T) {
 func TestNewCommandUsesExplicitLocalAginexCheckout(t *testing.T) {
 	workingDirectory := t.TempDir()
 	localAginex := filepath.Join(t.TempDir(), "Aginex Source")
-	if err := os.MkdirAll(filepath.Join(localAginex, "backend"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(localAginex, "server"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
-		filepath.Join(localAginex, "backend/go.mod"),
+		filepath.Join(localAginex, "server/go.mod"),
 		[]byte("module "+frameworkModulePath+"\n\ngo 1.25.0\n"),
 		0o644,
 	); err != nil {
@@ -137,7 +137,7 @@ func TestNewCommandUsesExplicitLocalAginexCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	goModPath := filepath.Join(workingDirectory, "local-app", "backend/go.mod")
+	goModPath := filepath.Join(workingDirectory, "local-app", "server/go.mod")
 	parsed, err := modfile.Parse(goModPath, readTestFile(t, goModPath), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestNewCommandUsesExplicitLocalAginexCheckout(t *testing.T) {
 	}
 	if len(parsed.Replace) != 1 ||
 		parsed.Replace[0].Old.Path != frameworkModulePath ||
-		parsed.Replace[0].New.Path != filepath.ToSlash(filepath.Join(canonicalLocalAginex, "backend")) {
+		parsed.Replace[0].New.Path != filepath.ToSlash(filepath.Join(canonicalLocalAginex, "server")) {
 		t.Fatalf("local framework replacements = %#v", parsed.Replace)
 	}
 }
@@ -238,11 +238,11 @@ func TestResolveFrameworkBuildVersion(t *testing.T) {
 func TestNewCommandRejectsNonAginexLocalCheckoutWithoutMutation(t *testing.T) {
 	workingDirectory := t.TempDir()
 	wrongCheckout := t.TempDir()
-	if err := os.Mkdir(filepath.Join(wrongCheckout, "backend"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(wrongCheckout, "server"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
-		filepath.Join(wrongCheckout, "backend/go.mod"),
+		filepath.Join(wrongCheckout, "server/go.mod"),
 		[]byte("module example.com/not-aginex\n\ngo 1.25.0\n"),
 		0o644,
 	); err != nil {
@@ -685,13 +685,13 @@ func TestNewCommandGeneratesCompleteScaffoldWithoutLocalState(t *testing.T) {
 		"admin/app/layout.tsx",
 		"admin/lib/api.generated.ts",
 		"admin/package.json",
-		"backend/cmd/openapi/main.go",
-		"backend/cmd/server/main.go",
-		"backend/cmd/worker/main.go",
+		"server/cmd/openapi/main.go",
+		"server/cmd/server/main.go",
+		"server/cmd/worker/main.go",
 		"compose.yaml",
 		"docs/openapi.json",
-		"backend/go.mod",
-		"backend/go.sum",
+		"server/go.mod",
+		"server/go.sum",
 		"package.json",
 		"pnpm-lock.yaml",
 		"pnpm-workspace.yaml",
@@ -789,7 +789,7 @@ func TestGeneratedProjectBuildsAsExternalConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(repositoryRoot, "backend", "go.mod")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(repositoryRoot, "server", "go.mod")); os.IsNotExist(err) {
 		t.Skip("external consumer integration requires the backend source checkout")
 	}
 	workingDirectory := t.TempDir()
@@ -804,7 +804,7 @@ func TestGeneratedProjectBuildsAsExternalConsumer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	goModPath := filepath.Join(target, "backend/go.mod")
+	goModPath := filepath.Join(target, "server/go.mod")
 	goMod := readTestFile(t, goModPath)
 	parsed, err := modfile.Parse(goModPath, goMod, nil)
 	if err != nil {
@@ -816,7 +816,7 @@ func TestGeneratedProjectBuildsAsExternalConsumer(t *testing.T) {
 	}
 	if len(parsed.Replace) != 1 ||
 		parsed.Replace[0].Old.Path != frameworkModulePath ||
-		parsed.Replace[0].New.Path != filepath.ToSlash(filepath.Join(canonicalRepositoryRoot, "backend")) {
+		parsed.Replace[0].New.Path != filepath.ToSlash(filepath.Join(canonicalRepositoryRoot, "server")) {
 		t.Fatalf("generated local framework replacement = %#v", parsed.Replace)
 	}
 
@@ -825,7 +825,7 @@ func TestGeneratedProjectBuildsAsExternalConsumer(t *testing.T) {
 		{"mod", "tidy", "-diff"},
 	} {
 		command := exec.Command("go", arguments...)
-		command.Dir = filepath.Join(target, "backend")
+		command.Dir = filepath.Join(target, "server")
 		command.Env = append(
 			os.Environ(),
 			"GOPROXY=off",
@@ -952,7 +952,7 @@ func fixedFrameworkVersion(version string) func() (string, error) {
 func minimalScaffoldAssets() fs.FS {
 	return fstest.MapFS{
 		"asset.txt": &fstest.MapFile{Data: []byte("fixture asset\n"), Mode: 0o444},
-		"backend/go.mod": &fstest.MapFile{Data: []byte(`module github.com/xgtian-root/aginex/backend
+		"server/go.mod": &fstest.MapFile{Data: []byte(`module github.com/xgtian-root/aginex/server
 
 go 1.25.0
 

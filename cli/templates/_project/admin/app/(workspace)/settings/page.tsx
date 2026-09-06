@@ -254,6 +254,12 @@ export default function SettingsPage() {
                       <dt>{t("fields.region")}</dt>
                       <dd>{profile.region || "—"}</dd>
                     </div>
+                    {profile.provider === "aliyun-oss" && (
+                      <div>
+                        <dt>{t("fields.accessBaseUrl")}</dt>
+                        <dd>{profile.accessBaseUrl || "—"}</dd>
+                      </div>
+                    )}
                     <div>
                       <dt>{t("fields.credentials")}</dt>
                       <dd>
@@ -587,6 +593,7 @@ function ProfileEditor({
       bucket: text("bucket"),
       region: text("region"),
       endpoint: text("endpoint"),
+      accessBaseUrl: text("accessBaseUrl"),
       accountId: text("accountId"),
       ...(text("accessKeyId") ? { accessKeyId: text("accessKeyId") } : {}),
       ...(text("accessKeySecret")
@@ -670,6 +677,7 @@ function ProfileEditor({
                 "bucket",
                 "region",
                 "endpoint",
+                "accessBaseUrl",
                 "accountId",
                 "accessKeyId",
                 "accessKeySecret",
@@ -729,6 +737,19 @@ function ProfileEditor({
               required={provider === "minio"}
               type="url"
             />
+          </label>
+        )}
+        {provider === "aliyun-oss" && (
+          <label className="field field-wide">
+            <span>{t("fields.accessBaseUrl")}</span>
+            <input
+              defaultValue={profile?.accessBaseUrl}
+              name="accessBaseUrl"
+              placeholder="https://files.example.com"
+              required
+              type="url"
+            />
+            <small>{t("editor.accessBaseUrlHint")}</small>
           </label>
         )}
         <label className="field">

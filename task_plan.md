@@ -1,5 +1,52 @@
 # Aginex v1 Implementation Plan
 
+## Current Goal: OSS Provider Read URLs and Durable File Cleanup (2026-09-06)
+
+Implement provider-hosted signed OSS preview/download URLs, verified object
+presentation metadata, strict OSS access-domain configuration, durable
+PostgreSQL deletion jobs, automatic development worker orchestration, and a
+re-runnable reconciliation path for existing ready OSS files.
+
+### OSS Repair Phases
+
+| Phase | Status | Exit criteria |
+|---|---|---|
+| O1. Regression contracts and configuration boundary | complete | Tests lock access-domain validation, provider-hosted reads, metadata finalization, and worker orchestration |
+| O2. Storage and API implementation | complete | OSS uses the configured read host, verified MIME is finalized, and the API proxy route is retired |
+| O3. Admin, CLI, and reconciliation | complete | Settings expose the field, dev launches configured workers, and existing objects can be reconciled with audit |
+| O4. Runtime rollout and live checks | external_config_required | Current config is updated and services run with PostgreSQL jobs; inline preview awaits an OSS CNAME and destructive delete awaits an authenticated user session |
+| O5. Full verification and template convergence | complete | Go/Web/build/provider checks pass and scaffold snapshots have no drift |
+
+### OSS Repair Guardrails
+
+- Preserve direct browser cloud uploads and verify bytes before promoting any
+  object MIME; never inline active or unverified content.
+- Keep service/control endpoints separate from the browser-visible read
+  origin, and sign private OSS reads on the configured HTTPS origin.
+- Keep cleanup asynchronous and durable; API acceptance is not completion, so
+  a separately supervised worker must consume every accepted delete.
+- Keep installation configuration strict at version 1 and update the current
+  unpublished baseline without legacy readers or fallback fields.
+- Preserve unrelated work in the already-dirty backend-to-server rename.
+
+### OSS Repair Errors Encountered
+
+| Error | Attempt | Resolution |
+|---|---|---|
+| Focused Go tests could not read the user Go build cache in the sandbox | 1 | Re-run with a task-scoped writable `GOCACHE`; do not change cache ownership or source behavior |
+| Focused app tests retained the retired OSS API-proxy expectation and an OSS profile fixture lacked the new required origin | 1 | Replace the workaround regression with provider-hosted signing coverage and update strict OSS fixtures |
+| Combined CLI/template/documentation patch assumed README wording from the generated template | 1 | Apply the source/CLI edits independently, then inspect and patch the repository README's actual worker section |
+| Reconciliation test's minimal audit table used DTO field names instead of GORM column names | 1 | Align the test-only schema with `sanitized_before` and `sanitized_after`; production migrations are unchanged |
+| Combined docs patch used the pre-stable guide's worker wording against Operations | 1 | Patch README/template and each Operations section independently from exact local context |
+| OSS editor accessibility test expected only the visible label, but the nested hint is correctly part of the accessible name | 1 | Match the accessible name by its stable label prefix while retaining the descriptive hint |
+| Template sync rejected a direct `.env.example` snapshot edit | 1 | Move the access-origin change to the canonical root `.env.example`, restore the snapshot copy, then let the sync tool regenerate it |
+| Live reconciliation could not connect to local PostgreSQL inside the sandbox | 1 | Re-run the same scoped maintenance command with approved local database and OSS network access |
+| Safari address-bar automation appended instead of replacing the stale proxy URL, and undocumented key names could not select/submit it reliably | 1 | Stop mutating the browser tab; verify the configured signed provider URL with an opt-in live storage contract that never prints the signed URL or credentials |
+| Live OSS read used the configured provider host, verified MIME, empty durable disposition, and signed `inline` override but returned `attachment` with `x-oss-force-download: true` | 2 | A read-only Bucket CNAME query confirmed no domain is bound. Preserve signed provider URLs, document the provider constraint, and require a bound custom CNAME to complete live inline-preview rollout |
+| Full admin suite retained the old official-domain placeholder after the UI began recommending CNAME for inline previews | 1 | Update the assertion to the custom-domain example and rerun the complete suite |
+| The current bootstrap administrator variables are empty, so the live API cannot be authenticated for a destructive delete check | 1 | Do not bypass authentication or mutate the database directly; rely on the passing API/queue/handler contracts and leave the confirmed test object intact for user verification |
+| Template drift check was invoked from the `server` working directory and could not resolve `cli/templates/sources.json` | 1 | Re-run the same check from the repository root, where the sync manifest paths are defined |
+
 ## Current Goal: `aginex new` Project Initialization (2026-09-04)
 
 Implement a collision-safe project initializer with two explicit target modes:
@@ -736,3 +783,47 @@ multipart resume across Local, S3-compatible, and OSS storage.
 - Arbitrary file types are accepted, but only verified JPEG/PNG/WebP/GIF/PDF
   may preview; every other file is forced to attachment.
 - Preserve and merge every unrelated dirty-worktree change already present.
+
+# 2026-09-06 — Alibaba OSS browser upload repair
+
+## Goal
+
+Make an activated Alibaba OSS profile genuinely usable from the browser: fail
+readiness when direct-upload CORS is absent, keep upload errors actionable, and
+make signed downloads compatible with OSS without weakening verified preview
+security.
+
+## Phases
+
+| Phase | Status | Deliverable |
+|---|---|---|
+| 1. Reproduction and contract decisions | complete | Live PUT/read/preflight evidence and bounded provider-neutral design |
+| 2. Regression tests | complete | Red tests for OSS CORS readiness, signed reads, and browser status-zero guidance |
+| 3. Backend and frontend implementation | complete | Provider capability, secure read behavior, and actionable UI copy |
+| 4. Canonical template synchronization | complete | Generated API artifacts and scaffold snapshots synchronized from canonical sources |
+| 5. Verification | complete | Focused/full Go and Web gates, generated-contract/template drift, and live OSS preflight/upload/download/cleanup all pass |
+
+## Locked decisions
+
+- Do not make the bucket public or expose credentials; keep browser uploads on
+  short-lived signed PUT requests.
+- OSS profile readiness must distinguish control-plane bucket access from the
+  CORS policy required by the browser data plane.
+- Never use OSS `response-content-type`; attachments may remain signed direct
+  reads, while verified inline previews must retain a server-controlled safe
+  content type.
+- Preserve all pre-existing refactor and planning-file changes.
+
+## Errors Encountered
+
+| Error | Attempt | Resolution |
+|---|---|---|
+| Live OSS browser preflight returned `403 AccessForbidden` because CORS is disabled | Initial provider probe | Add validated CORS readiness and document/configure the required bucket rule |
+| Live OSS signed read returned `400 InvalidRequest` for `response-content-type` | Existing cloud contract | Remove the unsupported OSS query parameter and preserve inline safety through a controlled application path |
+| Focused Go test could not write the macOS user build cache | First red-test run | Re-run all Go checks with a task-scoped `GOCACHE` under `/private/tmp` |
+| New frontend failure-path test reached a missing `ApiError` export in the existing full API mock | First red-test run | Add the minimal mock class so `localizeApiError` can evaluate the intended fallback path |
+| New browser-readiness interface used `context.Context` without importing `context` | First implementation compile | Add the missing standard-library import and rerun the focused package |
+| The admin workspace does not provide a `prettier` command | First formatting attempt | Use the repository's configured Biome formatter on only the edited admin files |
+| OSS SDK `GetBucketCors` returned a non-service wrapper for the unconfigured bucket | First live readback | Inspect the unwrap type chain without emitting endpoints or credentials, then only write after independently confirming the browser preflight remains disabled |
+| Sandboxed live CORS inspection failed DNS resolution | First inspection command | Re-ran the same bounded read-only helper with approved network access |
+| Final scaffold drift check failed after later source/test updates | First final drift gate | Re-run canonical synchronization after all source changes, then repeat the read-only check |

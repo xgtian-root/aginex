@@ -314,6 +314,7 @@
     "deletedToast": "文件已删除。",
     "deleteError": "无法删除文件。",
     "objectUploadError": "对象上传返回状态 {status}。",
+    "cloudUploadConnectionError": "浏览器无法访问对象存储，请检查存储桶 CORS 规则和网络连接。",
     "uploadError": "无法完成文件上传和验证。",
     "temporaryUrlError": "无法创建临时文件 URL。",
     "header": {
@@ -736,6 +737,7 @@
       "bucket": "Bucket",
       "region": "Region",
       "endpoint": "Endpoint",
+      "accessBaseUrl": "外网访问域名",
       "accountId": "Account ID",
       "accessKeyId": "Access Key ID",
       "accessKeySecret": "Access Key Secret",
@@ -754,6 +756,7 @@
       "editTitle": "编辑 Storage Profile",
       "description": "保存时会重新执行只读 Bucket 连通性检查。",
       "optional": "可选，由官方 Region 推导",
+      "accessBaseUrlHint": "浏览器内联预览请填写已绑定到该 Bucket 的自定义 CNAME。官方 HTTPS 域名也可使用，但部分 Bucket 会强制下载。",
       "secretHint": "密钥不会回显。保持两项为空可保留当前密钥；轮换时必须成对填写。",
       "testPassed": "连接测试通过"
     },

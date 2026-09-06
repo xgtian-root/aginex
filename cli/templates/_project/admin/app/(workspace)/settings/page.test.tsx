@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "../../../messages/en.json";
@@ -89,6 +89,31 @@ describe("SettingsPage file upload policy", () => {
       screen.queryByRole("button", { name: "New profile" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Managed by environment")).toBeInTheDocument();
+  });
+});
+
+describe("SettingsPage OSS profile editor", () => {
+  it("requires a browser-visible OSS access origin", async () => {
+    mocks.getStorageSettings.mockResolvedValue({
+      ...(await mocks.getStorageSettings()),
+      value: {
+        ...(await mocks.getStorageSettings()).value,
+        environmentManaged: false,
+      },
+    });
+
+    renderSettingsPage();
+    fireEvent.click(await screen.findByRole("button", { name: "New profile" }));
+
+    const input = screen.getByRole("textbox", {
+      name: /^External access domain/,
+    });
+    expect(input).toBeRequired();
+    expect(input).toHaveAttribute("type", "url");
+    expect(input).toHaveAttribute(
+      "placeholder",
+      "https://files.example.com",
+    );
   });
 });
 

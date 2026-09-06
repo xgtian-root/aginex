@@ -15,7 +15,7 @@ description: Diagnose and verify Aginex backend, frontend, migration, authentica
 
 ## Verification Order
 
-1. `go -C backend test ./...` (and `go -C cli test ./...` in the framework source repository)
+1. `go -C server test ./...` (and `go -C cli test ./...` in the framework source repository)
 2. `pnpm check:admin`
 3. `pnpm test:admin`
 4. `pnpm build:admin`

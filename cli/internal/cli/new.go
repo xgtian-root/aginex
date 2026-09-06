@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	frameworkModulePath = "github.com/xgtian-root/aginex/backend"
+	frameworkModulePath = "github.com/xgtian-root/aginex/server"
 	scaffoldSchema      = 1
 	scaffoldTemplate    = 1
 )
@@ -226,7 +226,7 @@ func resolveLocalAginexPath(workingDirectory, requestedPath string) (string, err
 	if !info.IsDir() {
 		return "", fmt.Errorf("local Aginex checkout %q is not a directory", requestedPath)
 	}
-	resolved = filepath.Join(resolved, "backend")
+	resolved = filepath.Join(resolved, "server")
 	goModPath := filepath.Join(resolved, "go.mod")
 	goMod, err := os.ReadFile(goModPath)
 	if err != nil {
@@ -369,13 +369,13 @@ func renderScaffold(root string, assets fs.FS, model scaffoldModel) error {
 		return err
 	}
 	generated := map[string]string{
-		"README.md":                                  projectReadme,
-		"backend/cmd/aginex-tool/main.go":            projectToolMain,
-		"go.work":                                    projectWorkspace,
-		"backend/cmd/openapi/main.go":                projectOpenAPIMain,
-		"backend/cmd/server/main.go":                 projectServerMain,
-		"backend/cmd/worker/main.go":                 projectWorkerMain,
-		"backend/internal/composition/definition.go": projectComposition,
+		"README.md":                                 projectReadme,
+		"server/cmd/aginex-tool/main.go":            projectToolMain,
+		"go.work":                                   projectWorkspace,
+		"server/cmd/openapi/main.go":                projectOpenAPIMain,
+		"server/cmd/server/main.go":                 projectServerMain,
+		"server/cmd/worker/main.go":                 projectWorkerMain,
+		"server/internal/composition/definition.go": projectComposition,
 	}
 	paths := make([]string, 0, len(generated))
 	for file := range generated {
@@ -454,9 +454,9 @@ func copyScaffoldAssets(root string, assets fs.FS, model scaffoldModel) error {
 
 func customizeScaffoldAsset(assetPath string, content []byte, model scaffoldModel) ([]byte, error) {
 	switch assetPath {
-	case "backend/go.mod":
+	case "server/go.mod":
 		return projectGoMod(content, model)
-	case "backend/go.sum":
+	case "server/go.sum":
 		return projectGoSum(content), nil
 	case "package.json":
 		var document map[string]any
@@ -798,7 +798,7 @@ func normalizeFrameworkVersion(version string) (string, error) {
 const projectComposition = `// Package composition owns the module set used by every application process.
 package composition
 
-import "github.com/xgtian-root/aginex/backend/framework/application"
+import "github.com/xgtian-root/aginex/server/framework/application"
 
 var definition = mustDefine()
 
@@ -918,23 +918,25 @@ live in ` + "`.env.example`" + `; real environment files and credentials are ign
 - ` + "`aginex generate client`" + ` regenerates OpenAPI from this project's
   composition and updates the typed Web client.
 
-Development defaults to disabled durable jobs. A production Files deployment
-uses PostgreSQL jobs and runs ` + "`go run ./backend/cmd/worker`" + ` after the API is ready.
+Development defaults to disabled durable jobs. Set
+` + "`AGINEX_JOBS_DRIVER=postgres`" + ` when using Files with PostgreSQL;
+` + "`aginex dev`" + ` then starts and supervises the independent worker with the API and admin.
+A production Files deployment must run the API and worker as separate services.
 
-Application modules are selected in ` + "`backend/internal/composition/definition.go`" + `.
-The Aginex framework version is pinned in ` + "`backend/go.mod`" + `, while
+Application modules are selected in ` + "`server/internal/composition/definition.go`" + `.
+The Aginex framework version is pinned in ` + "`server/go.mod`" + `, while
 ` + "`.aginex/project.json`" + ` records the initial file hashes and ownership boundary for
 safe future upgrades.
 {{if .FrameworkPath}}
 This project currently uses a local Aginex checkout through a development-only
-` + "`replace`" + ` directive in ` + "`backend/go.mod`" + `. Remove that directive and pin a published
+` + "`replace`" + ` directive in ` + "`server/go.mod`" + `. Remove that directive and pin a published
 Aginex version before sharing or releasing the application.
 {{end}}
 `
 
 const projectWorkspace = `go 1.25.0
 
-use ./backend
+use ./server
 `
 
 const projectToolMain = `package main
@@ -945,7 +947,7 @@ import (
  "os"
  "os/signal"
  "syscall"
- "github.com/xgtian-root/aginex/backend/framework/devtools"
+ "github.com/xgtian-root/aginex/server/framework/devtools"
 )
 
 func main() {

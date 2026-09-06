@@ -349,7 +349,9 @@ export default function FilesPage() {
       }
       const fallback =
         error instanceof ObjectUploadError
-          ? t("objectUploadError", { status: error.status || "—" })
+          ? error.status === 0
+            ? t("cloudUploadConnectionError")
+            : t("objectUploadError", { status: error.status })
           : t("uploadError");
       updateItem(item.id, {
         status: "error",

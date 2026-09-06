@@ -1,5 +1,46 @@
 # Progress
 
+## 2026-09-06 — OSS provider read URLs and durable cleanup
+
+- Loaded the upload, debugging, and persistent planning workflows.
+- Reproduced the queue-disabled delete error and verified the uploaded object
+  exists at the recorded nested OSS key.
+- Locked private provider reads, required customizable HTTPS access origin,
+  PostgreSQL durable jobs, and independent worker execution with the user.
+- Started O1 by mapping the storage/profile/API/CLI seams and preserving the
+  repository's unrelated in-progress backend-to-server rename.
+- Completed the implementation seam audit for one-shot and resumable confirm,
+  optional storage capabilities, generated routes, and worker startup.
+- Added the strict `accessBaseUrl` model and validation, split OSS read/control
+  signing, introduced verified presentation finalization, invoked it from both
+  upload completion paths, and removed the provider proxy handler from source.
+- Replaced the obsolete proxy regression with OSS read-host signing coverage;
+  focused config/storage/app tests now pass with a task-scoped Go cache.
+- Added the OSS access-origin field to the administration editor/card and both
+  locale catalogs, plus a required-URL UI regression.
+- Added and tested an audited, re-runnable reconciliation command and
+  conditional PostgreSQL worker supervision in `aginex dev`.
+- Updated the current private installation with the official bucket access
+  origin. Live reconciliation changed one object on the first run and no-op'd
+  on the second.
+- Restarted the API with PostgreSQL jobs and started the independent worker;
+  both are running and ready on the new configuration.
+- Re-finalized the existing object with verified MIME and no durable content
+  disposition. A live signed read reached the configured provider host with a
+  200 response, while a read-only CNAME query proved the remaining inline
+  preview blocker is OSS force-download behavior on the official domain and no
+  custom CNAME is currently bound.
+- Updated the current development `.env` to use PostgreSQL jobs so future
+  `aginex dev` runs supervise the worker automatically. Live API deletion was
+  not forced because the retained bootstrap administrator credentials are
+  empty; the full API acceptance, durable queue, and cleanup handler suites
+  cover the deletion state machine without bypassing authentication.
+- Completed O5: full server and CLI Go suites, admin type/lint, all 134 admin
+  tests, the production admin build, canonical template synchronization and
+  drift check, generated-contract proxy-route absence, and `git diff --check`
+  all pass. API and worker processes remain running and ready.
+
+
 ## 2026-09-04 — `aginex new` project initialization
 
 - Loaded the repository `create-aginex-project` workflow and the persistent
@@ -1134,3 +1175,56 @@
   explicitly skipped locally because their DSNs/endpoints/credentials are not
   configured; CI retains PostgreSQL 18, MySQL 8.4, required MinIO, and the
   secret-gated OSS job.
+
+# 2026-09-06 — Alibaba OSS browser upload repair
+
+- Read the required upload, debug, and file-planning Skills.
+- Preserved the large in-progress backend-to-server refactor and unrelated
+  dirty worktree.
+- Ran focused existing storage/config/app tests successfully.
+- Ran the secret-gated live OSS contract: presigned PUT, HEAD, and server read
+  succeeded; signed GET failed with the provider's unsupported content-type
+  override.
+- Ran a bounded live browser-shaped probe: OPTIONS failed because bucket CORS
+  is disabled; test objects were deleted and the temporary probe was removed.
+- Started regression-test phase; no production code changed yet.
+- Locked the implementation seams: OPTIONS-based OSS readiness using configured
+  web origins, direct signed attachment reads without response-content-type,
+  and authenticated server streaming for verified OSS previews.
+- Added red tests for the OSS signed-read query, browser CORS preflight, and
+  actionable XHR status-zero guidance. The frontend assertion failed as
+  expected; the first Go attempt was blocked by the user build cache and will
+  use the existing task-scoped cache pattern.
+- Implemented the OSS preflight checker, actionable readiness problem, removed
+  the unsupported response-content-type query, and added localized browser
+  CORS/network guidance. The focused frontend test now passes.
+- Added a red application regression proving verified OSS previews must use an
+  authenticated provider-content route; implemented that route while retaining
+  direct signed URLs for attachment downloads.
+- Formatted the four edited admin files with the repository's Biome setup.
+- Focused storage/application Go tests and the 10-test Files page suite pass
+  after implementation.
+- Regenerated OpenAPI and the typed admin client, then synchronized the
+  canonical source allowlist into CLI scaffold templates and snapshots.
+- Full CLI tests and the admin typecheck/lint gate pass. The full server suite
+  remains in progress with all completed packages passing so far.
+- The full server suite completed successfully; all 133 admin tests pass and
+  the scaffold drift check reports a clean synchronized snapshot.
+- The optimized Next.js administration build completes successfully.
+- Read back the live bucket CORS contract with approved network access. Its
+  existing rule already satisfies Aginex direct-upload requirements, so no
+  destructive or redundant PutBucketCors operation was performed.
+- The live end-to-end repair probe passes browser preflight, signed PUT, signed
+  GET, and cleanup. The temporary probe object and local helper were removed.
+- Final source review confirms persisted file provider values use the normalized
+  `oss` driver, matching the authenticated preview routing guard.
+- Re-synchronized after the final test/helper edits. The read-only template
+  check and `git diff --check` now pass, and no temporary helper path remains in
+  the scaffold manifest or snapshot.
+- Gave control-plane and browser-readiness probes independent three-second
+  budgets, reran focused storage/application regressions successfully, and
+  synchronized that final source adjustment into the scaffold.
+- The final CLI suite and template drift gate pass; the repeated full server
+  suite is still running with every completed package passing.
+- The repeated full server suite completed successfully after the independent
+  readiness timeout adjustment.

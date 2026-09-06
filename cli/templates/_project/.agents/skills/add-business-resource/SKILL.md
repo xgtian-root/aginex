@@ -29,7 +29,7 @@ Build the smallest complete vertical slice. Follow `products` as the reference i
 
 ## Completion Gate
 
-- `go -C backend test ./...` (and `go -C cli test ./...` in the framework source repository)
+- `go -C server test ./...` (and `go -C cli test ./...` in the framework source repository)
 - `pnpm check:admin`
 - `pnpm build:admin`
 - Up and down migrations exist for all three dialects.

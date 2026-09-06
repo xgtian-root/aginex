@@ -2,12 +2,12 @@
 
 FROM docker.io/library/golang:1.25.12-alpine3.24@sha256:56961d79ea8129efddcc0b8643fd8a5416b4e6228cfd477e3fd61deb2672c587 AS go-build
 WORKDIR /src
-COPY backend/go.mod backend/go.sum ./backend/
-WORKDIR /src/backend
+COPY server/go.mod server/go.sum ./server/
+WORKDIR /src/server
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     go mod download \
     && go mod verify
-COPY backend ./
+COPY server ./
 ARG TARGETOS=linux
 ARG TARGETARCH
 ARG VERSION=0.1.0-dev
@@ -17,11 +17,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -mod=readonly -buildvcs=false -trimpath \
-      -ldflags="-s -w -X github.com/xgtian-root/aginex/backend/internal/buildinfo.Version=${VERSION} -X github.com/xgtian-root/aginex/backend/internal/buildinfo.Commit=${COMMIT} -X github.com/xgtian-root/aginex/backend/internal/buildinfo.BuildDate=${BUILD_DATE}" \
+      -ldflags="-s -w -X github.com/xgtian-root/aginex/server/internal/buildinfo.Version=${VERSION} -X github.com/xgtian-root/aginex/server/internal/buildinfo.Commit=${COMMIT} -X github.com/xgtian-root/aginex/server/internal/buildinfo.BuildDate=${BUILD_DATE}" \
       -o /out/aginex-api ./cmd/server \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -mod=readonly -buildvcs=false -trimpath \
-      -ldflags="-s -w -X github.com/xgtian-root/aginex/backend/internal/buildinfo.Version=${VERSION} -X github.com/xgtian-root/aginex/backend/internal/buildinfo.Commit=${COMMIT} -X github.com/xgtian-root/aginex/backend/internal/buildinfo.BuildDate=${BUILD_DATE}" \
+      -ldflags="-s -w -X github.com/xgtian-root/aginex/server/internal/buildinfo.Version=${VERSION} -X github.com/xgtian-root/aginex/server/internal/buildinfo.Commit=${COMMIT} -X github.com/xgtian-root/aginex/server/internal/buildinfo.BuildDate=${BUILD_DATE}" \
       -o /out/aginex-worker ./cmd/worker \
     && mkdir -p /out/runtime-data/uploads
 
