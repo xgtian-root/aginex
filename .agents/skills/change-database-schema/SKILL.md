@@ -7,20 +7,19 @@ description: Evolve an Aginex database schema safely across SQLite, PostgreSQL, 
 
 ## Workflow
 
-1. Inspect all existing dialect migrations, data volume assumptions, and affected API/UI contracts.
-2. Create the same timestamped/versioned migration in `sqlite`, `postgres`, and `mysql`.
-3. Prefer expand-and-contract changes: add nullable/defaulted structure, backfill, switch code, then tighten or remove later.
-4. Update models and stable DTOs deliberately; preserve public field names unless the change is explicitly breaking.
-5. Test migration up, application behavior, and down on a disposable database for every available dialect.
-6. Document irreversible data loss or operational sequencing.
+1. Inspect the affected schema, dialect migrations, release boundary, data assumptions, and API/UI contracts.
+2. For Aginex's unpublished pre-release baseline, update the existing baseline coherently in `sqlite`, `postgres`, and `mysql`. Do not add compatibility shims or a second migration family for unshipped drafts unless the user explicitly requests compatibility.
+3. For a released migration or a deployed consumer with existing data, leave released SQL immutable and add equivalent versioned Goose up/down migrations in all three dialects. Use expand-and-contract or an explicit migration/backfill strategy when needed to preserve data and contracts.
+4. Update affected models and DTOs; keep dialect SQL out of services and handlers.
+5. Verify equivalent up/down intent across all dialects, then exercise the changed migration and affected application behavior on disposable databases for available dialects. Report unavailable dialects explicitly.
 
 ## Constraints
 
-- Never use GORM `AutoMigrate`.
-- Never edit an already released migration.
-- Never remove or narrow data in one step without an explicit compatibility plan.
-- Keep dialect-specific SQL out of services and handlers.
+- Never use GORM `AutoMigrate` or edit an already released migration.
+- Preserve the strict configuration version and pre-release contract in `AGENTS.md`.
+- Stale local drafts use the explicit recoverable `aginex dev reinitialize` workflow; do not reset data or invoke it just to make a test pass.
+- Destructive or narrowing changes to existing user data require an explicit data-preservation or approved loss plan.
 
 ## Completion Gate
 
-All dialects have equivalent up/down intent, application tests pass, existing data has a safe path, and contract changes are documented.
+All three dialects express equivalent schema intent, relevant migration/application checks pass, released data has a safe path, and contract changes plus unavailable verification are documented. Sync changed canonical scaffold assets through the template generator without importing unrelated drift.

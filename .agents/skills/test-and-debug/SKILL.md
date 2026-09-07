@@ -10,17 +10,22 @@ description: Diagnose and verify Aginex backend, frontend, migration, authentica
 1. Reproduce the smallest failure and capture the exact command, status, request ID, and first useful error.
 2. Classify it as environment, migration, backend, auth/RBAC, API contract, frontend, storage, or E2E.
 3. Read the nearest implementation and test before changing code; preserve unrelated work.
-4. Add or strengthen a regression test that fails for the observed reason.
+4. Add or strengthen a regression test when a behavior defect or data/auth risk warrants it; use existing focused checks for documentation, configuration, or low-impact changes.
 5. Fix the root cause, run the narrow test, then expand verification.
 
-## Verification Order
+## Verification by Change
 
-1. `go -C server test ./...` (and `go -C cli test ./...` in the framework source repository)
-2. `pnpm check:admin`
-3. `pnpm test:admin`
-4. `pnpm build:admin`
-5. Database/storage integration and Playwright checks relevant to the change
-6. `aginex doctor` and `aginex check`
+Start with the smallest check that exercises the changed behavior. Expand when affected contracts, shared infrastructure, failures, or an explicit CI/release gate justify it.
+
+| Change | Relevant verification |
+| --- | --- |
+| Backend Go | Affected packages/tests in `server`; use `go -C server test ./...` for broad backend changes or the full backend gate. |
+| CLI/framework tooling | Affected checks in `cli`; use `go -C cli test ./...` for broad CLI changes. |
+| Admin UI | Relevant UI tests and `pnpm check:admin`; include `pnpm test:admin` and `pnpm build:admin` when the affected frontend/build surface requires them. |
+| Database schema | Follow `change-database-schema`: review all three dialects and run available disposable-database migration checks. |
+| Auth, storage, API contracts | Exercise the affected boundary and consumers; run the relevant integration/Playwright matrix, including browser behavior when applicable. |
+| Installation or generated projects | Relevant `aginex doctor` / `aginex check` and scaffold verification. |
+| Documentation/instructions only | Check semantics, links, and affected template synchronization; application suites are not a default prerequisite. |
 
 ## Constraints
 
@@ -30,4 +35,4 @@ description: Diagnose and verify Aginex backend, frontend, migration, authentica
 
 ## Completion Gate
 
-The regression test proves the cause, the narrow fix passes, the full relevant gate passes, and any unavailable external matrix entry is reported explicitly.
+The evidence demonstrates the cause, the scoped fix and required relevant gates pass, and any unavailable external matrix entry is reported explicitly.
