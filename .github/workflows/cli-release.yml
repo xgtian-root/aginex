@@ -48,8 +48,13 @@ jobs:
             server/go.sum
       - name: Download dependencies for offline scaffold tests
         run: |
-          go -C cli mod download all
-          go -C server mod download all
+          dependency_dir="$(mktemp -d)"
+          trap 'rm -rf "$dependency_dir"' EXIT
+          for module in cli server; do
+            mkdir "$dependency_dir/$module"
+            cp "$module/go.mod" "$module/go.sum" "$dependency_dir/$module/"
+            go -C "$dependency_dir/$module" mod download all
+          done
       - name: Test CLI and verify scaffold
         run: |
           go -C cli test ./...
