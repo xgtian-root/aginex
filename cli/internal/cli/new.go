@@ -36,7 +36,7 @@ var portableProjectName = regexp.MustCompile(
 )
 
 var errUnpublishedFrameworkBuild = errors.New(
-	"source-built Aginex CLI has no published framework version; use --aginex-path with a local Aginex checkout",
+	"source-built Aginex CLI has no clean, pinned framework version; use --aginex-path with a local Aginex checkout",
 )
 
 type newProjectDependencies struct {
@@ -929,8 +929,8 @@ The Aginex framework version is pinned in ` + "`server/go.mod`" + `, while
 safe future upgrades.
 {{if .FrameworkPath}}
 This project currently uses a local Aginex checkout through a development-only
-` + "`replace`" + ` directive in ` + "`server/go.mod`" + `. Remove that directive and pin a published
-Aginex version before sharing or releasing the application.
+` + "`replace`" + ` directive in ` + "`server/go.mod`" + `. Remove that directive and pin a downloadable
+Aginex source-commit version before sharing or releasing the application.
 {{end}}
 `
 

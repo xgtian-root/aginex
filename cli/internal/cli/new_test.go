@@ -190,6 +190,10 @@ func TestResolveFrameworkBuildVersion(t *testing.T) {
 			mainVersion: "v1.3.0", declaredVersion: "1.2.0", want: "v1.2.0",
 		},
 		{
+			name:        "CLI-only release with source commit pin",
+			mainVersion: "v0.1.0-dev", declaredVersion: "v0.0.0-20260907062300-aa50cf765344", want: "v0.0.0-20260907062300-aa50cf765344",
+		},
+		{
 			name:            "release binary metadata",
 			mainVersion:     "(devel)",
 			declaredVersion: "1.2.3",

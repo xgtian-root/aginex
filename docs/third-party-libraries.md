@@ -88,7 +88,7 @@ MinIO SDK。
 | `github.com/spf13/cobra` | CLI 命令结构 | P0 |
 | `github.com/charmbracelet/huh` | 交互式初始化表单 | P0 |
 | `github.com/Masterminds/semver/v3` | 版本兼容判断 | P0 |
-| GoReleaser | 跨平台 CLI 发布 | P0 |
+| Go 标准库 + GitHub CLI / Actions | 六平台 CLI 打包、校验、Release 与 Homebrew tap 发布；支持 `cli/` 标签前缀 | P0 |
 
 生成模板使用 Go 标准库 `embed` 和 `text/template`。CLI 不覆盖已修改文件，
 不依赖 AST 魔改工具自动合并业务代码。

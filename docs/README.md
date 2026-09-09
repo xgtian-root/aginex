@@ -13,6 +13,7 @@ Aginex 是一个面向 Coding Agent 的 Go/Gin + Next.js 开源管理后台框�
 | [生产部署与运维](operations.md) | Draft | 镜像、迁移、Worker、只读运行、健康检查与 CI 门禁 |
 | [生产整改边界](remediation-scope.md) | Draft | 框架基础能力、可选模块、POSTA 业务归属和发布门禁 |
 | [预稳定版升级说明](prestable-upgrade.md) | Draft | 2026-07-30 基线之后的破坏性 API、安全和发布迁移步骤 |
+| [CLI 构建与发布](cli-release.md) | Implemented | 六平台二进制、Go 安装、GitHub Release 与 Homebrew 自动更新 |
 | [生成的 OpenAPI 契约](openapi.json) | Generated | Huma API 描述与 TypeScript 客户端输入 |
 
 项目根目录的 `AGENTS.md` 负责把开发任务路由到 `.agents/skills/` 下的九个

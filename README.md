@@ -236,12 +236,38 @@ Aginex provides the boundaries those rules build on.
 
 ## Install the CLI and create an application
 
+The first planned CLI release is `v0.1.0-dev`, using the Git tag
+`cli/v0.1.0-dev`. After it is published, install that exact version with
+`go install github.com/xgtian-root/aginex/cli/cmd/aginex@v0.1.0-dev` or download
+its binary archive. This prerelease does not update the default Homebrew formula.
+
+Build a native executable from this checkout with `./cli/build.sh`; the output
+is `cli/dist/aginex` (`aginex.exe` on Windows). Use `./cli/build.sh --all` to
+produce macOS, Linux, and Windows archives for amd64 and arm64, with SHA-256
+checksums. The script can be invoked from any working directory and requires
+the full source checkout and a Go toolchain compatible with `cli/go.mod`.
+
+After the first stable CLI release and Homebrew tap setup, install a prebuilt
+executable with:
+
+```bash
+brew install xgtian-root/tap/aginex
+```
+
 After an Aginex version containing this command is published, install it with Go:
 
 ```bash
 go install github.com/xgtian-root/aginex/cli/cmd/aginex@latest
 aginex --version
 ```
+
+Pin a version by replacing `@latest` with `@vX.Y.Z`; prereleases are installed
+with their exact version, such as `@v0.2.0-rc.1`. Go downloads and compiles the
+CLI module; it does not use the GitHub Release binary archives. Both installation
+routes report the CLI version through `aginex --version`.
+
+See [CLI builds and releases](docs/cli-release.md) for tag-triggered publishing,
+Homebrew credentials, framework source pinning, and retry instructions.
 
 Go installs the executable into `GOBIN`, or into `$(go env GOPATH)/bin` when
 `GOBIN` is unset. Add that directory to `PATH` if your shell cannot find
@@ -255,7 +281,7 @@ aginex new testproject --aginex-path /absolute/path/to/aginex
 
 `--aginex-path` is a development-only escape hatch. It writes an explicit local
 `replace` directive to the generated `server/go.mod`; remove that directive and pin a
-published Aginex version before sharing or releasing the application. A
+downloadable Aginex source-commit version before sharing or releasing the application. A
 source-built development CLI fails closed without this flag instead of creating
 a project whose framework version cannot be downloaded.
 
@@ -528,8 +554,10 @@ for read-only verification. The synchronizer rejects locally edited snapshots.
 `aginex new` creates `server/`, `admin/`, and a workspace containing only the
 application backend. `--aginex-path` accepts this repository root and references
 its `server/` module. Backend template version metadata lives in
-`cli/templates/assets.go` independently of CLI build metadata. Nested module
-release tags use `cli/vX.Y.Z` and `server/vX.Y.Z` respectively.
+`cli/templates/assets.go` independently of CLI build metadata. CLI releases
+use `cli/vX.Y.Z` tags. Generated projects pin the server Go module to a source
+commit through a Go pseudo-version; publishing the CLI does not require a
+separate server tag or server Release.
 
 ## Project status and roadmap
 

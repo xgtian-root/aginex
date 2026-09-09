@@ -1,0 +1,187 @@
+name: CLI build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ["cli/v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing CLI tag, initially cli/v0.1.0-dev"
+        required: true
+        type: string
+      tap_only:
+        description: "Retry installation checks and Homebrew update for an already published release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.25.12"
+  GOTOOLCHAIN: local
+  GOWORK: "off"
+  RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/cli/') && github.ref_name || github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+
+jobs:
+  build:
+    if: ${{ !inputs.tap_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cli/go.sum
+      - name: Test CLI and verify scaffold
+        run: |
+          go -C cli test ./...
+          go -C cli vet ./...
+          go -C cli run ./cmd/sync-templates -root .. -check
+      - name: Build six platforms
+        shell: bash
+        run: |
+          if [[ -n "$RELEASE_TAG" ]]; then
+            [[ "$RELEASE_TAG" == cli/v* ]] || { echo "Expected an existing cli/vX.Y.Z tag" >&2; exit 1; }
+            ./cli/build.sh --release "${RELEASE_TAG#cli/}"
+          else
+            ./cli/build.sh --all
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-distribution
+          path: cli/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cli/go.sum
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: cli-distribution
+          path: cli/dist/
+      - name: Check all architectures and execute native CLI
+        run: go -C cli run ./cmd/release smoke
+
+  publish:
+    needs: [build, smoke]
+    if: ${{ startsWith(github.ref, 'refs/tags/cli/') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cli/go.sum
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: cli-distribution
+          path: cli/dist/
+      - name: Publish verified assets without overwriting releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: go -C cli run ./cmd/release publish
+      - name: Verify installation from the published Go module
+        shell: bash
+        run: go -C cli run ./cmd/release verify-install --version "${RELEASE_TAG#cli/}"
+
+  brew:
+    needs: publish
+    if: ${{ always() && (needs.publish.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.tap_only)) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cli/go.sum
+      - name: Recheck Go installation for tap-only retries
+        if: ${{ inputs.tap_only }}
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" == cli/v* ]] || { echo "Expected cli/vX.Y.Z" >&2; exit 1; }
+          go -C cli run ./cmd/release verify-install --version "${RELEASE_TAG#cli/}"
+      - name: Install and test the published Homebrew formula
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          [[ "$RELEASE_TAG" == *-* ]] && exit 0
+          if ! command -v brew >/dev/null; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          brew tap-new aginex-ci/release
+          formula_dir="$(brew --repository aginex-ci/release)/Formula"
+          gh release download "$RELEASE_TAG" --repo xgtian-root/aginex --pattern aginex.rb --dir "$formula_dir"
+          trap 'brew uninstall --force aginex-ci/release/aginex; brew untap aginex-ci/release' EXIT
+          brew install aginex-ci/release/aginex
+          brew test aginex-ci/release/aginex
+
+  tap:
+    needs: brew
+    if: ${{ always() && needs.brew.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: aginex-homebrew-tap
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cli/go.sum
+      - name: Update Homebrew tap
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          [[ "$RELEASE_TAG" == *-* ]] && exit 0
+          : "${GH_TOKEN:?Configure HOMEBREW_TAP_TOKEN with Contents write access to xgtian-root/homebrew-tap}"
+          go -C cli run ./cmd/release tap --version "${RELEASE_TAG#cli/}"
