@@ -376,7 +376,7 @@ func verifyInstall(version string) error {
 		return err
 	}
 	projectDir := filepath.Join(dir, "installed-project", "server")
-	if _, err = command(projectDir, hostEnv(), nil, "go", "mod", "download"); err != nil {
+	if _, err = command(projectDir, hostEnv(), nil, "go", "mod", "download", "all"); err != nil {
 		return err
 	}
 	if _, err = command(projectDir, hostEnv(), nil, "go", "build", "-mod=readonly", "./..."); err != nil {

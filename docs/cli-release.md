@@ -143,7 +143,8 @@ Pushing the selected `cli/vX.Y.Z` tag triggers `CLI build and release`:
    Existing assets are downloaded and compared before any upload on a retry.
 4. Install the exact version using `go install ...@vX.Y.Z`, check its reported
    version, and create a project outside the source checkout. Download that
-   project's dependencies and compile its backend. Go proxy delays
+   project's complete dependency graph with `go mod download all` and compile
+   its backend. Go proxy delays
    receive bounded retries; persistent failure leaves the job failed.
 5. For stable versions, install and test the release's Homebrew formula in
    temporary CI taps on macOS and Linux, then update the public tap.

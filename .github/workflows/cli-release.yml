@@ -43,7 +43,13 @@ jobs:
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: cli/go.sum
+          cache-dependency-path: |
+            cli/go.sum
+            server/go.sum
+      - name: Download dependencies for offline scaffold tests
+        run: |
+          go -C cli mod download all
+          go -C server mod download all
       - name: Test CLI and verify scaffold
         run: |
           go -C cli test ./...
