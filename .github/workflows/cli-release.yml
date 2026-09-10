@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: "1.25.12"
+  GO_VERSION: "1.25.13"
   GOTOOLCHAIN: local
   GOWORK: "off"
   RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/cli/') && github.ref_name || github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
@@ -60,6 +60,8 @@ jobs:
           go -C cli test ./...
           go -C cli vet ./...
           go -C cli run ./cmd/sync-templates -root .. -check
+      - name: Check CLI vulnerabilities
+        run: go -C cli run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
       - name: Build six platforms
         shell: bash
         run: |

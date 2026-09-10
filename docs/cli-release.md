@@ -2,7 +2,9 @@
 
 The CLI is an independent Go module. Local builds and GitHub Actions use the
 same `cli/build.sh` entrypoint and Go distribution helper; GoReleaser is not
-required. Release builds use the existing CI toolchain baseline, Go 1.25.12.
+required. CLI release builds use Go 1.25.13 and run a vulnerability check before
+packaging. This patch release fixes standard-library findings reached by the
+development supervisor; use the same toolchain when reproducing release assets.
 
 The next planned CLI release is **`v0.1.1-dev`**, with Git tag
 **`cli/v0.1.1-dev`**. Only the CLI is in scope for publication; no separate
