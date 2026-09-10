@@ -114,11 +114,11 @@ type State struct {
 
 // ConfigFilePath resolves the installation file without inspecting it.
 func ConfigFilePath() string {
-	path := strings.TrimSpace(os.Getenv("AGINEX_CONFIG_FILE"))
-	if path == "" {
-		path = DefaultConfigFile
+	env, err := RuntimeEnvironment()
+	if err != nil {
+		return filepath.Clean(InstallationPath(map[string]string{"AGINEX_CONFIG_FILE": os.Getenv("AGINEX_CONFIG_FILE")}))
 	}
-	return filepath.Clean(path)
+	return filepath.Clean(InstallationPath(env))
 }
 
 // Load is the configured-only compatibility entry point for callers which must
@@ -138,26 +138,43 @@ func Load() (Config, error) {
 // LoadState resolves environment and durable installation configuration into
 // one of three mutually exclusive states: setup, configured, or invalid. Any
 // evidence of a previous/attempted installation fails closed.
+// LoadState resolves the server dotenv file afresh on every load (including worker polls).
 func LoadState() (State, error) {
-	state := State{
-		Status:     StatusInvalidConfigured,
-		ConfigFile: ConfigFilePath(),
+	env, err := RuntimeEnvironment()
+	if err != nil {
+		return State{Status: StatusInvalidConfigured}, err
 	}
+	path := InstallationPath(env)
+	installation, present, err := readInstallationIfPresent(path)
+	if err != nil {
+		return State{Status: StatusInvalidConfigured, ConfigFile: path}, err
+	}
+	var stored *Installation
+	if present {
+		stored = &installation
+	}
+	return ResolveState(env, path, stored)
+}
 
-	cfg, err := loadEnvironmentConfig()
+// ResolveState validates a candidate without writing files or changing process environment.
+func ResolveState(env map[string]string, path string, stored *Installation) (State, error) {
+	state := State{Status: StatusInvalidConfigured, ConfigFile: path}
+	cfg, err := environmentValues(env).load()
 	if err != nil {
 		return state, fmt.Errorf("load runtime configuration: %w", err)
 	}
 	state.Config = cfg
-
 	environmentDatabase, environmentPresent, err := databaseFromEnvironment(cfg.Database)
 	if err != nil {
 		return state, err
 	}
-
-	installation, installationPresent, err := readInstallationIfPresent(state.ConfigFile)
-	if err != nil {
-		return state, err
+	installationPresent := stored != nil
+	var installation Installation
+	if stored != nil {
+		installation = *stored
+		if err := ValidateInstallation(installation); err != nil {
+			return state, err
+		}
 	}
 
 	if !installationPresent && !environmentPresent {

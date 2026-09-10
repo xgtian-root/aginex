@@ -204,7 +204,7 @@ missing or the driver changes.
 
 ## Production configuration
 
-Start from [`.env.example`](../.env.example), keep the deployed copy outside the
+Start from [`server/.env.example`](../server/.env.example) and [`admin/.env.example`](../admin/.env.example), keep the deployed copy outside the
 source tree, and supply secrets through the platform's secret mechanism. A
 typical same-origin PostgreSQL deployment includes:
 

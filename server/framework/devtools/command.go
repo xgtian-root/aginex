@@ -12,6 +12,7 @@ func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	root := &cobra.Command{Use: "aginex-tool", SilenceUsage: true, SilenceErrors: true}
 	root.AddCommand(newReinitializeCommand(reinitializeDependencies{}))
 	root.AddCommand(newReconcileStoragePresentationCommand(reconcileStorageDependencies{}))
+	root.AddCommand(newConfigProtocolCommand())
 	root.SetArgs(args)
 	root.SetIn(stdin)
 	root.SetOut(stdout)

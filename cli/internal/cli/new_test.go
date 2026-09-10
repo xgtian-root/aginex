@@ -680,7 +680,8 @@ func TestNewCommandGeneratesCompleteScaffoldWithoutLocalState(t *testing.T) {
 	for _, relative := range []string{
 		".aginex/project.json",
 		".agents/skills/create-aginex-project/SKILL.md",
-		".env.example",
+		"server/.env.example",
+		"admin/.env.example",
 		".gitignore",
 		"AGENTS.md",
 		"LICENSE",
@@ -754,7 +755,7 @@ func TestNewCommandGeneratesCompleteScaffoldWithoutLocalState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	environmentExample := string(readTestFile(t, filepath.Join(target, ".env.example")))
+	environmentExample := string(readTestFile(t, filepath.Join(target, "server", ".env.example")))
 	for _, emptySetting := range []string{
 		"AGINEX_DATABASE_DSN=",
 		"AGINEX_SESSION_SECRET=",

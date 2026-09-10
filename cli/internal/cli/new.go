@@ -909,7 +909,12 @@ This application was created with Aginex {{.FrameworkVersion}}.
 3. Open http://localhost:3000 and complete browser Setup.
 
 The API listens on http://localhost:8080 by default. Configuration examples
-live in ` + "`.env.example`" + `; real environment files and credentials are ignored by Git.
+live in ` + "`server/.env.example` and `admin/.env.example`" + `; copy them to each service's
+` + "`.env`" + ` to customize startup. Process environment overrides those files.
+Use ` + "`aginex config list`" + ` to inspect settings and ` + "`aginex config set admin PORT=3001`" + `
+to save and apply changes to a running development session. Database connection
+changes are tested first and require interactive confirmation before saving.
+Real environment files and credentials are ignored by Git.
 
 ## Verify and generate contracts
 

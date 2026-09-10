@@ -9,7 +9,7 @@ description: Create and initialize an Aginex application with a chosen database 
 
 1. Confirm the target directory is empty or resolve every collision without overwriting.
 2. Run `aginex new` to initialize the empty current directory, or `aginex new <name>` to create a new child directory. Supply `--module <path>` when the publishable Go module path is known. For an unpublished source-built CLI only, explicitly supply `--aginex-path <checkout>` and treat its local `replace` directive as development-only.
-3. Copy `.env.example` to local environment configuration without committing secrets; project creation itself never writes `.env` or credentials.
+3. Copy `server/.env.example` to `server/.env` and `admin/.env.example` to `admin/.env` when local configuration is needed; both services load their own file, with process environment taking precedence. Use `aginex config` to inspect or update startup settings without committing secrets; project creation itself never writes `.env` or credentials.
 4. Set a cryptographically random session secret and a strong, non-empty administrator password.
 5. Start the selected database and storage services, apply migrations, and create the administrator.
 6. Run `aginex doctor`, `go -C server test ./...` (and `go -C cli test ./...` in the framework source repository), `pnpm check:admin`, and a production web build.

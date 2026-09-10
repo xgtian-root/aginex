@@ -319,7 +319,8 @@ then start it with `aginex dev` and complete browser Setup.
 ```bash
 git clone https://github.com/xgtian-root/aginex.git
 cd aginex
-cp .env.example .env
+cp server/.env.example server/.env
+cp admin/.env.example admin/.env
 ```
 
 The example leaves the database and administrator unset so the first API start
@@ -335,9 +336,6 @@ pnpm install
 ### 3. Start the API and web app
 
 ```bash
-set -a
-source .env
-set +a
 go run ./cli/cmd/aginex dev
 ```
 
@@ -388,6 +386,15 @@ Sign in with the administrator credentials entered in Setup.
 | `pnpm dev:admin` | Run only the Next.js development server |
 | `pnpm e2e` | Run Chromium workflows against automatically initialized API/web processes |
 
+`aginex dev` selects an available admin port starting at 3000 (or the `PORT`
+environment variable), passes it explicitly to Next.js on `localhost`, and prints
+the resulting browser URL. When neither `AGINEX_WEB_ORIGINS` nor
+`AGINEX_WEB_ORIGIN` is explicitly configured, it sets those values for its API
+and worker children so browser Setup and authenticated writes use the same origin. It does not change configuration files
+or production startup. If another process takes the selected port during startup,
+Next.js exits instead of silently switching ports. Standalone `pnpm dev:admin`
+still requires configuring the API origin allowlist yourself.
+
 Run individual checks when narrowing down a failure:
 
 ```bash
@@ -413,8 +420,9 @@ must begin in Setup mode. Install Chromium with
 
 ## Configuration
 
-Aginex reads runtime configuration from environment variables. The CLI does
-not load `.env` automatically, so export it before starting a process. Durable
+The server loads `server/.env` (or `.env` when started from the backend directory).
+Admin loads `admin/.env` through Next. Explicit process environment values take
+precedence. The project-root `.env` is not automatically loaded. Durable
 installation state lives in `AGINEX_CONFIG_FILE`: browser Setup accepts
 driver-specific fields, then the backend assembles and stores the managed
 database DSN and session secret there (generating the secret when it is not
@@ -457,7 +465,7 @@ file.
 | `AGINEX_API_INTERNAL_URL` | `http://127.0.0.1:8080` | Server-only API URL used by the Next runtime; inject a reachable service URL such as `http://api:8080` into a separate web container; it is not a browser variable or build argument |
 | `NEXT_PUBLIC_API_URL` | empty | Browser-facing API origin compiled into the web build; empty uses same-origin `/api/v1` routing |
 
-See [`.env.example`](.env.example) for HTTP limits, CSRF, rate-limit, job,
+See [`server/.env.example`](server/.env.example) and [`admin/.env.example`](admin/.env.example) for HTTP limits, CSRF, rate-limit, job,
 idempotency, and storage settings. Production rollout and read-only container
 examples are in the [operations guide](docs/operations.md).
 
@@ -599,3 +607,51 @@ Before handing a change back to the requester or opening a pull request:
 Copyright 2026 Aginex contributors.
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+
+### Inspect and change startup configuration
+
+```sh
+aginex config list
+aginex config list --target admin --json
+aginex config get server AGINEX_DATABASE_DSN
+aginex config set server AGINEX_HTTP_ADDRESS=:8081 AGINEX_API_PUBLIC_URL=http://localhost:8081
+aginex config set admin PORT=3001
+aginex config unset admin NEXT_PUBLIC_API_URL
+```
+
+All config commands accept `-C <project-directory>`. The default list shows only
+target, setting name and current value, one setting per line. Use `config get` or
+`config list --json` for defaults, requirements, real read/write sources, restart
+effects and running values. Secrets and DSNs are redacted.
+Omit `=value` to enter a value interactively, with hidden input for secrets. Batch
+assignments are validated together before writing. Unknown keys, invalid values,
+process-environment overrides and higher-priority Next dotenv overrides fail without
+changing files. The supported dotenv editing syntax is one literal assignment per
+line, optional `export`, single/double quotes and comments. Variable interpolation
+in admin dotenv files must be replaced by literal values (escape literal `$`).
+
+Settings are written to the owning service's `.env`. Installed managed database
+connections and session secrets are written back to the private installation file;
+configuration commands do not read or manage business records. Changing database
+DSN or driver tests the complete candidate first, displays the target without
+credentials, and requires interactive confirmation (default: cancel). A successful
+connection test does not prove that application initialization will succeed. No
+migrations or data transfer happen during the test. SQLite tests require an existing
+persistent database and never create one. Environment-owned installations update
+their driver marker together with `server/.env` when switching database type.
+
+An active `aginex dev` session on Unix receives changes through a private, project-bound
+local socket. It reloads settings, restarts affected API/admin/worker processes and
+waits for readiness. Explicit browser origins take precedence over automatic local
+origins. `PORT` selects the first available admin port from that value. Saved and
+running values are shown separately in `config get` and `config list --json`. If startup fails, the CLI reports “saved, not
+applied” and the supervisor stays available for a corrective command. Without a
+development session, changes take effect on the next startup. Production processes
+are not controlled; `NEXT_PUBLIC_API_URL` still requires a production rebuild.
+
+File writes preserve unrelated assignments and comments, detect concurrent edits,
+and create private, redacted audit records under `.cache/aginex/config-audit/`.
+For an interrupted multi-file write, run `aginex config recover`; recovery refuses
+to overwrite subsequent user edits. Do not commit real dotenv, installation or
+recovery files. Existing root `.env` files are never moved or modified automatically.

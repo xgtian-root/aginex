@@ -110,10 +110,7 @@ describe("SettingsPage OSS profile editor", () => {
     });
     expect(input).toBeRequired();
     expect(input).toHaveAttribute("type", "url");
-    expect(input).toHaveAttribute(
-      "placeholder",
-      "https://files.example.com",
-    );
+    expect(input).toHaveAttribute("placeholder", "https://files.example.com");
   });
 });
 

@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -106,110 +105,122 @@ type Storage struct {
 // entirely unconfigured database can be represented without an implicit
 // SQLite fallback.
 func loadEnvironmentConfig() (Config, error) {
-	sessionTTL, err := durationValue("AGINEX_SESSION_TTL", "24h")
+	env, err := RuntimeEnvironment()
+	if err != nil {
+		return Config{}, err
+	}
+	return environmentValues(env).load()
+}
+
+type environmentValues map[string]string
+
+func (e environmentValues) get(key string) string            { return e[key] }
+func (e environmentValues) lookup(key string) (string, bool) { v, ok := e[key]; return v, ok }
+func (e environmentValues) load() (Config, error) {
+	sessionTTL, err := e.durationValue("AGINEX_SESSION_TTL", "24h")
 	if err != nil {
 		return Config{}, err
 	}
 
-	secureCookie, err := strconv.ParseBool(value("AGINEX_SESSION_SECURE", "false"))
+	secureCookie, err := strconv.ParseBool(e.value("AGINEX_SESSION_SECURE", "false"))
 	if err != nil {
 		return Config{}, fmt.Errorf("AGINEX_SESSION_SECURE: %w", err)
 	}
-	sameSite, err := parseSameSite(value("AGINEX_SESSION_SAME_SITE", "lax"))
+	sameSite, err := parseSameSite(e.value("AGINEX_SESSION_SAME_SITE", "lax"))
 	if err != nil {
 		return Config{}, err
 	}
-	maxBodyBytes, err := int64Value("AGINEX_HTTP_MAX_BODY_BYTES", 12<<20)
+	maxBodyBytes, err := e.int64Value("AGINEX_HTTP_MAX_BODY_BYTES", 12<<20)
 	if err != nil {
 		return Config{}, err
 	}
-	maxHeaderBytes, err := intValue("AGINEX_HTTP_MAX_HEADER_BYTES", 1<<20)
+	maxHeaderBytes, err := e.intValue("AGINEX_HTTP_MAX_HEADER_BYTES", 1<<20)
 	if err != nil {
 		return Config{}, err
 	}
-	maxHeaderCount, err := intValue("AGINEX_HTTP_MAX_HEADER_COUNT", 100)
+	maxHeaderCount, err := e.intValue("AGINEX_HTTP_MAX_HEADER_COUNT", 100)
 	if err != nil {
 		return Config{}, err
 	}
-	readHeaderTimeout, err := durationValue("AGINEX_HTTP_READ_HEADER_TIMEOUT", "5s")
+	readHeaderTimeout, err := e.durationValue("AGINEX_HTTP_READ_HEADER_TIMEOUT", "5s")
 	if err != nil {
 		return Config{}, err
 	}
-	readTimeout, err := durationValue("AGINEX_HTTP_READ_TIMEOUT", "15s")
+	readTimeout, err := e.durationValue("AGINEX_HTTP_READ_TIMEOUT", "15s")
 	if err != nil {
 		return Config{}, err
 	}
-	writeTimeout, err := durationValue("AGINEX_HTTP_WRITE_TIMEOUT", "30s")
+	writeTimeout, err := e.durationValue("AGINEX_HTTP_WRITE_TIMEOUT", "30s")
 	if err != nil {
 		return Config{}, err
 	}
-	idleTimeout, err := durationValue("AGINEX_HTTP_IDLE_TIMEOUT", "60s")
+	idleTimeout, err := e.durationValue("AGINEX_HTTP_IDLE_TIMEOUT", "60s")
 	if err != nil {
 		return Config{}, err
 	}
-	shutdownGracePeriod, err := durationValue("AGINEX_HTTP_SHUTDOWN_GRACE_PERIOD", "10s")
+	shutdownGracePeriod, err := e.durationValue("AGINEX_HTTP_SHUTDOWN_GRACE_PERIOD", "10s")
 	if err != nil {
 		return Config{}, err
 	}
-	webOrigins := csvValue("AGINEX_WEB_ORIGINS")
+	webOrigins := e.csvValue("AGINEX_WEB_ORIGINS")
 	if len(webOrigins) == 0 {
-		webOrigins = []string{value("AGINEX_WEB_ORIGIN", "http://localhost:3000")}
+		webOrigins = []string{e.value("AGINEX_WEB_ORIGIN", "http://localhost:3000")}
 	}
-	loginLimit, err := uint64Value("AGINEX_RATE_LIMIT_LOGIN_LIMIT", 10)
+	loginLimit, err := e.uint64Value("AGINEX_RATE_LIMIT_LOGIN_LIMIT", 10)
 	if err != nil {
 		return Config{}, err
 	}
-	loginWindow, err := durationValue("AGINEX_RATE_LIMIT_LOGIN_WINDOW", "5m")
+	loginWindow, err := e.durationValue("AGINEX_RATE_LIMIT_LOGIN_WINDOW", "5m")
 	if err != nil {
 		return Config{}, err
 	}
-	uploadLimit, err := uint64Value("AGINEX_RATE_LIMIT_UPLOAD_LIMIT", 120)
+	uploadLimit, err := e.uint64Value("AGINEX_RATE_LIMIT_UPLOAD_LIMIT", 120)
 	if err != nil {
 		return Config{}, err
 	}
-	uploadWindow, err := durationValue("AGINEX_RATE_LIMIT_UPLOAD_WINDOW", "1m")
+	uploadWindow, err := e.durationValue("AGINEX_RATE_LIMIT_UPLOAD_WINDOW", "1m")
 	if err != nil {
 		return Config{}, err
 	}
-	sensitiveLimit, err := uint64Value("AGINEX_RATE_LIMIT_SENSITIVE_LIMIT", 300)
+	sensitiveLimit, err := e.uint64Value("AGINEX_RATE_LIMIT_SENSITIVE_LIMIT", 300)
 	if err != nil {
 		return Config{}, err
 	}
-	sensitiveWindow, err := durationValue("AGINEX_RATE_LIMIT_SENSITIVE_WINDOW", "1m")
+	sensitiveWindow, err := e.durationValue("AGINEX_RATE_LIMIT_SENSITIVE_WINDOW", "1m")
 	if err != nil {
 		return Config{}, err
 	}
-	idempotencyLeaseDuration, err := durationValue(
+	idempotencyLeaseDuration, err := e.durationValue(
 		"AGINEX_IDEMPOTENCY_LEASE_DURATION",
 		"30s",
 	)
 	if err != nil {
 		return Config{}, err
 	}
-	idempotencyTTL, err := durationValue("AGINEX_IDEMPOTENCY_TTL", "24h")
+	idempotencyTTL, err := e.durationValue("AGINEX_IDEMPOTENCY_TTL", "24h")
 	if err != nil {
 		return Config{}, err
 	}
-	jobPollInterval, err := durationValue("AGINEX_JOBS_POLL_INTERVAL", "1s")
+	jobPollInterval, err := e.durationValue("AGINEX_JOBS_POLL_INTERVAL", "1s")
 	if err != nil {
 		return Config{}, err
 	}
-	jobLeaseDuration, err := durationValue("AGINEX_JOBS_LEASE_DURATION", "1m")
+	jobLeaseDuration, err := e.durationValue("AGINEX_JOBS_LEASE_DURATION", "1m")
 	if err != nil {
 		return Config{}, err
 	}
-	jobConcurrency, err := intValue("AGINEX_JOBS_CONCURRENCY", 4)
+	jobConcurrency, err := e.intValue("AGINEX_JOBS_CONCURRENCY", 4)
 	if err != nil {
 		return Config{}, err
 	}
 
-	_, storageDriverExplicit := os.LookupEnv("AGINEX_STORAGE_DRIVER")
+	_, storageDriverExplicit := e.lookup("AGINEX_STORAGE_DRIVER")
 	cfg := Config{
-		Environment: value("AGINEX_ENV", "development"),
+		Environment: e.value("AGINEX_ENV", "development"),
 		HTTP: HTTP{
-			Address:             value("AGINEX_HTTP_ADDRESS", ":8080"),
-			PublicURL:           value("AGINEX_API_PUBLIC_URL", "http://localhost:8080"),
-			TrustedProxies:      csvValue("AGINEX_TRUSTED_PROXIES"),
+			Address:             e.value("AGINEX_HTTP_ADDRESS", ":8080"),
+			PublicURL:           e.value("AGINEX_API_PUBLIC_URL", "http://localhost:8080"),
+			TrustedProxies:      e.csvValue("AGINEX_TRUSTED_PROXIES"),
 			MaxBodyBytes:        maxBodyBytes,
 			MaxHeaderBytes:      maxHeaderBytes,
 			MaxHeaderCount:      maxHeaderCount,
@@ -220,23 +231,23 @@ func loadEnvironmentConfig() (Config, error) {
 			ShutdownGracePeriod: shutdownGracePeriod,
 		},
 		Database: Database{
-			Driver: strings.ToLower(strings.TrimSpace(os.Getenv("AGINEX_DATABASE_DRIVER"))),
-			DSN:    strings.TrimSpace(os.Getenv("AGINEX_DATABASE_DSN")),
+			Driver: strings.ToLower(strings.TrimSpace(e.get("AGINEX_DATABASE_DRIVER"))),
+			DSN:    strings.TrimSpace(e.get("AGINEX_DATABASE_DSN")),
 		},
 		Session: Session{
-			CookieName: value(
+			CookieName: e.value(
 				"AGINEX_SESSION_COOKIE",
 				httpx.SessionCookieName,
 			),
-			Secret:   os.Getenv("AGINEX_SESSION_SECRET"),
+			Secret:   e.get("AGINEX_SESSION_SECRET"),
 			Secure:   secureCookie,
 			TTL:      sessionTTL,
 			SameSite: sameSite,
-			CSRFCookie: value(
+			CSRFCookie: e.value(
 				"AGINEX_CSRF_COOKIE",
 				httpx.CSRFCookieName,
 			),
-			CSRFHeader: value(
+			CSRFHeader: e.value(
 				"AGINEX_CSRF_HEADER",
 				httpx.CSRFHeaderName,
 			),
@@ -250,31 +261,31 @@ func loadEnvironmentConfig() (Config, error) {
 			SensitiveWindow: sensitiveWindow,
 		},
 		Idempotency: Idempotency{
-			Driver:        strings.ToLower(value("AGINEX_IDEMPOTENCY_DRIVER", "database")),
+			Driver:        strings.ToLower(e.value("AGINEX_IDEMPOTENCY_DRIVER", "database")),
 			LeaseDuration: idempotencyLeaseDuration,
 			TTL:           idempotencyTTL,
 		},
 		Jobs: Jobs{
-			Driver:        strings.ToLower(value("AGINEX_JOBS_DRIVER", "disabled")),
-			WorkerID:      value("AGINEX_JOBS_WORKER_ID", "aginex-worker"),
+			Driver:        strings.ToLower(e.value("AGINEX_JOBS_DRIVER", "disabled")),
+			WorkerID:      e.value("AGINEX_JOBS_WORKER_ID", "aginex-worker"),
 			PollInterval:  jobPollInterval,
 			LeaseDuration: jobLeaseDuration,
 			Concurrency:   jobConcurrency,
 		},
 		Bootstrap: Bootstrap{
-			AdminEmail:    strings.TrimSpace(strings.ToLower(os.Getenv("AGINEX_BOOTSTRAP_ADMIN_EMAIL"))),
-			AdminPassword: os.Getenv("AGINEX_BOOTSTRAP_ADMIN_PASSWORD"),
+			AdminEmail:    strings.TrimSpace(strings.ToLower(e.get("AGINEX_BOOTSTRAP_ADMIN_EMAIL"))),
+			AdminPassword: e.get("AGINEX_BOOTSTRAP_ADMIN_PASSWORD"),
 		},
 		Storage: Storage{
-			Driver:            strings.ToLower(value("AGINEX_STORAGE_DRIVER", "local")),
-			LocalRoot:         value("AGINEX_STORAGE_LOCAL_ROOT", "data/uploads"),
-			Bucket:            os.Getenv("AGINEX_STORAGE_BUCKET"),
-			Region:            os.Getenv("AGINEX_STORAGE_REGION"),
-			Endpoint:          os.Getenv("AGINEX_STORAGE_ENDPOINT"),
-			AccessBaseURL:     os.Getenv("AGINEX_STORAGE_ACCESS_BASE_URL"),
-			AccessKeyID:       os.Getenv("AGINEX_STORAGE_ACCESS_KEY_ID"),
-			AccessKeySecret:   os.Getenv("AGINEX_STORAGE_ACCESS_KEY_SECRET"),
-			EndpointAllowlist: csvValue("AGINEX_STORAGE_ENDPOINT_ALLOWLIST"),
+			Driver:            strings.ToLower(e.value("AGINEX_STORAGE_DRIVER", "local")),
+			LocalRoot:         e.value("AGINEX_STORAGE_LOCAL_ROOT", "data/uploads"),
+			Bucket:            e.get("AGINEX_STORAGE_BUCKET"),
+			Region:            e.get("AGINEX_STORAGE_REGION"),
+			Endpoint:          e.get("AGINEX_STORAGE_ENDPOINT"),
+			AccessBaseURL:     e.get("AGINEX_STORAGE_ACCESS_BASE_URL"),
+			AccessKeyID:       e.get("AGINEX_STORAGE_ACCESS_KEY_ID"),
+			AccessKeySecret:   e.get("AGINEX_STORAGE_ACCESS_KEY_SECRET"),
+			EndpointAllowlist: e.csvValue("AGINEX_STORAGE_ENDPOINT_ALLOWLIST"),
 		},
 		WebOrigin:  webOrigins[0],
 		WebOrigins: webOrigins,
@@ -621,40 +632,40 @@ func parseSameSite(input string) (http.SameSite, error) {
 	}
 }
 
-func durationValue(key, fallback string) (time.Duration, error) {
-	parsed, err := time.ParseDuration(value(key, fallback))
+func (e environmentValues) durationValue(key, fallback string) (time.Duration, error) {
+	parsed, err := time.ParseDuration(e.value(key, fallback))
 	if err != nil || parsed <= 0 {
 		return 0, fmt.Errorf("%s must be a positive duration", key)
 	}
 	return parsed, nil
 }
 
-func intValue(key string, fallback int) (int, error) {
-	parsed, err := strconv.Atoi(value(key, strconv.Itoa(fallback)))
+func (e environmentValues) intValue(key string, fallback int) (int, error) {
+	parsed, err := strconv.Atoi(e.value(key, strconv.Itoa(fallback)))
 	if err != nil || parsed <= 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", key)
 	}
 	return parsed, nil
 }
 
-func int64Value(key string, fallback int64) (int64, error) {
-	parsed, err := strconv.ParseInt(value(key, strconv.FormatInt(fallback, 10)), 10, 64)
+func (e environmentValues) int64Value(key string, fallback int64) (int64, error) {
+	parsed, err := strconv.ParseInt(e.value(key, strconv.FormatInt(fallback, 10)), 10, 64)
 	if err != nil || parsed <= 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", key)
 	}
 	return parsed, nil
 }
 
-func uint64Value(key string, fallback uint64) (uint64, error) {
-	parsed, err := strconv.ParseUint(value(key, strconv.FormatUint(fallback, 10)), 10, 64)
+func (e environmentValues) uint64Value(key string, fallback uint64) (uint64, error) {
+	parsed, err := strconv.ParseUint(e.value(key, strconv.FormatUint(fallback, 10)), 10, 64)
 	if err != nil || parsed == 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", key)
 	}
 	return parsed, nil
 }
 
-func csvValue(key string) []string {
-	raw := strings.TrimSpace(os.Getenv(key))
+func (e environmentValues) csvValue(key string) []string {
+	raw := strings.TrimSpace(e.get(key))
 	if raw == "" {
 		return nil
 	}
@@ -668,8 +679,8 @@ func csvValue(key string) []string {
 	return values
 }
 
-func value(key, fallback string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+func (e environmentValues) value(key, fallback string) string {
+	if v := strings.TrimSpace(e.get(key)); v != "" {
 		return v
 	}
 	return fallback

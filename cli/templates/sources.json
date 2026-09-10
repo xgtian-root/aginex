@@ -22,6 +22,7 @@
   "AGENTS.md",
   "LICENSE",
   "NOTICE",
+  "admin/.env.example",
   "admin/app/(workspace)/audit/page.tsx",
   "admin/app/(workspace)/dashboard/dashboard.css",
   "admin/app/(workspace)/dashboard/page.tsx",
@@ -93,14 +94,16 @@
   "admin/next.config.ts",
   "admin/package.json",
   "admin/postcss.config.mjs",
+  "admin/scripts/next.mjs",
   "admin/tsconfig.json",
   "admin/vitest.config.ts",
-  "server/go.mod",
-  "server/go.sum",
   "compose.yaml",
   "docs/openapi.json",
   "package.json",
   "playwright.config.ts",
   "pnpm-lock.yaml",
-  "pnpm-workspace.yaml"
+  "pnpm-workspace.yaml",
+  "server/.env.example",
+  "server/go.mod",
+  "server/go.sum"
 ]

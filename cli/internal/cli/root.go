@@ -27,64 +27,14 @@ func Execute() error {
 func newRootCommand() *cobra.Command {
 	root := &cobra.Command{Use: "aginex", Short: "Build and verify Aginex admin applications", SilenceUsage: true, SilenceErrors: true}
 	root.Version = buildinfo.String()
-	root.AddCommand(newProjectCommand(newProjectDependencies{}), doctorCommand(), checkCommand(), devCommand(), generateCommand(), skillsCommand())
+	root.AddCommand(newProjectCommand(newProjectDependencies{}), doctorCommand(), checkCommand(), devCommand(), generateCommand(), skillsCommand(), configCommand())
 	return root
 }
 
 func devCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use: "dev", Short: "Run the API and admin development servers together",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			root, err := projectRoot(".")
-			if err != nil {
-				return err
-			}
-			ctx, cancel := context.WithCancel(cmd.Context())
-			defer cancel()
-			server, cleanup, err := backendProcess(ctx, cmd, root, "server")
-			if err != nil {
-				return err
-			}
-			defer cleanup()
-			admin := projectProcess(ctx, cmd, root, "pnpm", "dev:admin")
-			processes := []*exec.Cmd{server, admin}
-			if durableWorkerConfigured() {
-				worker, workerCleanup, err := backendProcess(ctx, cmd, root, "worker")
-				if err != nil {
-					return err
-				}
-				defer workerCleanup()
-				processes = append(processes, worker)
-			}
-			results := make(chan error, len(processes))
-			started := 0
-			for _, process := range processes {
-				if err := process.Start(); err != nil {
-					cancel()
-					for range started {
-						<-results
-					}
-					return err
-				}
-				started++
-				go func(p *exec.Cmd) { results <- p.Wait() }(process)
-			}
-			if len(processes) == 3 {
-				fmt.Fprintln(cmd.OutOrStdout(), "Aginex API, admin, and durable worker are starting. Press Ctrl+C to stop.")
-			} else {
-				fmt.Fprintln(cmd.OutOrStdout(), "Aginex API and admin development servers are starting. Durable jobs are disabled. Press Ctrl+C to stop.")
-			}
-			first := <-results
-			interrupted := cmd.Context().Err() != nil
-			cancel()
-			for i := 1; i < started; i++ {
-				<-results
-			}
-			if interrupted {
-				return nil
-			}
-			return first
-		},
+		RunE: runDev,
 	}
 	command.AddCommand(&cobra.Command{
 		Use: "reinitialize", Short: "Archive stale pre-release local state and return to browser Setup", DisableFlagParsing: true,
