@@ -236,9 +236,9 @@ Aginex provides the boundaries those rules build on.
 
 ## Install the CLI and create an application
 
-The first planned CLI release is `v0.1.0-dev`, using the Git tag
-`cli/v0.1.0-dev`. After it is published, install that exact version with
-`go install github.com/xgtian-root/aginex/cli/cmd/aginex@v0.1.0-dev` or download
+The next planned CLI release is `v0.1.1-dev`, using the Git tag
+`cli/v0.1.1-dev`. After it is published, install that exact version with
+`go install github.com/xgtian-root/aginex/cli/cmd/aginex@v0.1.1-dev` or download
 its binary archive. This prerelease does not update the default Homebrew formula.
 
 Build a native executable from this checkout with `./cli/build.sh`; the output

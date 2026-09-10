@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing CLI tag, initially cli/v0.1.0-dev"
+        description: "Existing CLI tag, for example cli/v0.1.1-dev"
         required: true
         type: string
       tap_only:

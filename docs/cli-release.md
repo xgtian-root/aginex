@@ -4,8 +4,8 @@ The CLI is an independent Go module. Local builds and GitHub Actions use the
 same `cli/build.sh` entrypoint and Go distribution helper; GoReleaser is not
 required. Release builds use the existing CI toolchain baseline, Go 1.25.12.
 
-The first planned CLI release is **`v0.1.0-dev`**, with Git tag
-**`cli/v0.1.0-dev`**. Only the CLI is in scope for publication; no separate
+The next planned CLI release is **`v0.1.1-dev`**, with Git tag
+**`cli/v0.1.1-dev`**. Only the CLI is in scope for publication; no separate
 server tag or server Release is planned. GitHub treats this CLI version as a
 prerelease. The current pipeline publishes its binary archives and verifies
 the exact Go installation version, but does not update the default Homebrew tap.
@@ -13,7 +13,7 @@ the exact Go installation version, but does not update the default Homebrew tap.
 After this version has been published:
 
 ```bash
-go install github.com/xgtian-root/aginex/cli/cmd/aginex@v0.1.0-dev
+go install github.com/xgtian-root/aginex/cli/cmd/aginex@v0.1.1-dev
 ```
 
 ## Local builds
@@ -38,13 +38,13 @@ executable, `LICENSE`, and `NOTICE`. Unix archives are tar.gz; Windows archives
 are zip. For example, a release includes:
 
 ```text
-cli/dist/aginex_0.1.0-dev_darwin_arm64.tar.gz
-cli/dist/aginex_0.1.0-dev_windows_amd64.zip
+cli/dist/aginex_0.1.1-dev_darwin_arm64.tar.gz
+cli/dist/aginex_0.1.1-dev_windows_amd64.zip
 cli/dist/SHA256SUMS
 cli/dist/release.json
 ```
 
-Stable release builds additionally include `aginex.rb`; `v0.1.0-dev` does not.
+Stable release builds additionally include `aginex.rb`; `v0.1.1-dev` does not.
 
 `release.json` records the CLI version, full commit, commit timestamp, bundled
 backend version, platform names, and archive hashes. `SHA256SUMS` covers all
@@ -99,17 +99,22 @@ administrative operations, separate from building the CLI.
 
 ## Preparing a release
 
-The release target is CLI `v0.1.0-dev`. Generated projects retain the existing
+The release target is CLI `v0.1.1-dev`. Generated projects currently retain the existing
 server Go module dependency, pinned in `cli/templates/assets.go` to source
 commit `aa50cf7653440e75622aba46679a5272d4b5033e` through pseudo-version
 `v0.0.0-20260907062300-aa50cf765344`. No separate server tag or Release is needed.
+
+Before publishing `v0.1.1-dev`, push the new configuration-management source
+commit, resolve its server pseudo-version with Go, and update `BackendVersion`
+and the source reference above. The existing pin predates the configuration
+protocol required by the new CLI; changing the CLI version alone is not enough.
 
 1. Push the reviewed source commits so Go can download the pinned framework.
 2. Verify the pin with `go list -m -json` or `go mod download -json` outside the
    source workspace. For future framework updates, resolve the new source commit
    with Go and update `BackendVersion` before committing the CLI release.
 3. Run CLI tests, vet, and scaffold checks; review and commit the release changes.
-4. Create `cli/v0.1.0-dev` on the clean commit, validate the release build, then
+4. Create `cli/v0.1.1-dev` on the clean commit, validate the release build, then
    push that CLI tag to start automatic publication.
 
 Release builds verify that the pinned framework can be downloaded. Unpinned
@@ -120,7 +125,7 @@ installation configuration version.
 To validate and package an existing tag locally, without publishing:
 
 ```bash
-./cli/build.sh --release v0.1.0-dev
+./cli/build.sh --release v0.1.1-dev
 GOWORK=off go -C cli run ./cmd/release verify
 GOWORK=off go -C cli run ./cmd/release smoke
 ```
