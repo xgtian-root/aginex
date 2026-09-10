@@ -99,15 +99,15 @@ administrative operations, separate from building the CLI.
 
 ## Preparing a release
 
-The release target is CLI `v0.1.1-dev`. Generated projects currently retain the existing
+The release target is CLI `v0.1.1-dev`. Generated projects use the
 server Go module dependency, pinned in `cli/templates/assets.go` to source
-commit `aa50cf7653440e75622aba46679a5272d4b5033e` through pseudo-version
-`v0.0.0-20260907062300-aa50cf765344`. No separate server tag or Release is needed.
+commit `f6d57f4fe47fb451c35d19185a32a5504bff67a9` through pseudo-version
+`v0.0.0-20260910062837-f6d57f4fe47f`. No separate server tag or Release is needed.
 
-Before publishing `v0.1.1-dev`, push the new configuration-management source
-commit, resolve its server pseudo-version with Go, and update `BackendVersion`
-and the source reference above. The existing pin predates the configuration
-protocol required by the new CLI; changing the CLI version alone is not enough.
+This source pin includes the configuration protocol required by the new CLI.
+For future backend changes, push the new source commit, resolve its server
+pseudo-version with Go, and update `BackendVersion` and the source reference
+above before publishing. Changing the CLI version alone is not enough.
 
 1. Push the reviewed source commits so Go can download the pinned framework.
 2. Verify the pin with `go list -m -json` or `go mod download -json` outside the

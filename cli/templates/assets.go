@@ -7,8 +7,8 @@ import (
 )
 
 // BackendVersion pins the framework source consumed by generated projects.
-// It resolves commit aa50cf7653440e75622aba46679a5272d4b5033e without a server release tag.
-const BackendVersion = "v0.0.0-20260907062300-aa50cf765344"
+// It resolves commit f6d57f4fe47fb451c35d19185a32a5504bff67a9 without a server release tag.
+const BackendVersion = "v0.0.0-20260910062837-f6d57f4fe47f"
 
 //go:embed all:_project
 var assets embed.FS
