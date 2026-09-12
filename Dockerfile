@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM docker.io/library/golang:1.25.12-alpine3.24@sha256:56961d79ea8129efddcc0b8643fd8a5416b4e6228cfd477e3fd61deb2672c587 AS go-build
+FROM docker.io/library/golang:1.27.1-alpine3.24@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS go-build
 WORKDIR /src
 COPY server/go.mod server/go.sum ./server/
 WORKDIR /src/server
@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
       -o /out/aginex-worker ./cmd/worker \
     && mkdir -p /out/runtime-data/uploads
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS go-runtime
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab AS go-runtime
 WORKDIR /app
 ARG VERSION=0.1.0-dev
 ARG COMMIT=unknown
@@ -55,7 +55,7 @@ FROM go-runtime AS worker
 COPY --from=go-build --chown=65532:65532 /out/aginex-worker /app/aginex-worker
 ENTRYPOINT ["/app/aginex-worker"]
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web-build
+FROM docker.io/library/node:26.8-alpine3.24@sha256:ef24c5053d50fdc3e4e56eb4e7ddb7861874ab0fdc797046ba897581deb8e868 AS web-build
 WORKDIR /src
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
@@ -71,7 +71,7 @@ RUN pnpm --filter @aginex/admin build \
     && test -f /src/admin/.next/standalone/admin/server.js \
     && mkdir -p /runtime/next-cache
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web
+FROM docker.io/library/node:26.8-alpine3.24@sha256:ef24c5053d50fdc3e4e56eb4e7ddb7861874ab0fdc797046ba897581deb8e868 AS web
 WORKDIR /app
 ARG VERSION=0.1.0-dev
 ARG COMMIT=unknown
