@@ -70,6 +70,7 @@
   "admin/components/setup-wizard.test.tsx",
   "admin/components/setup-wizard.tsx",
   "admin/e2e/admin-workflows.e2e.ts",
+  "admin/e2e/fixtures/captcha/main.go",
   "admin/global.d.ts",
   "admin/i18n/config.test.ts",
   "admin/i18n/config.ts",

@@ -50,6 +50,7 @@ func TestLoginRateLimitIsSharedAcrossApplicationInstances(t *testing.T) {
 	}
 
 	firstAttempt := invalidLoginRequest()
+	addTestLoginCaptcha(t, first, firstAttempt)
 	firstRecorder := httptest.NewRecorder()
 	first.Handler().ServeHTTP(firstRecorder, firstAttempt)
 	if firstRecorder.Code != http.StatusUnauthorized {
@@ -60,6 +61,7 @@ func TestLoginRateLimitIsSharedAcrossApplicationInstances(t *testing.T) {
 	}
 
 	secondAttempt := invalidLoginRequest()
+	addTestLoginCaptcha(t, second, secondAttempt)
 	secondRecorder := httptest.NewRecorder()
 	second.Handler().ServeHTTP(secondRecorder, secondAttempt)
 	assertProblemCode(t, secondRecorder, http.StatusTooManyRequests, "RATE_LIMITED")
@@ -112,6 +114,7 @@ func TestLoginAccountRateLimitAppliesAcrossClientIPs(t *testing.T) {
 	}
 
 	first := invalidLoginRequest()
+	addTestLoginCaptcha(t, server, first)
 	first.RemoteAddr = "192.0.2.10:1234"
 	firstRecorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(firstRecorder, first)
@@ -120,6 +123,7 @@ func TestLoginAccountRateLimitAppliesAcrossClientIPs(t *testing.T) {
 	}
 
 	second := invalidLoginRequest()
+	addTestLoginCaptcha(t, server, second)
 	second.RemoteAddr = "198.51.100.20:5678"
 	secondRecorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(secondRecorder, second)

@@ -149,3 +149,20 @@
     padding: 1rem;
   }
 }
+
+.login-captcha-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  min-height: 56px;
+}
+
+.login-captcha-row img {
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+}
+
+.login-captcha-row button {
+  min-height: 44px;
+}

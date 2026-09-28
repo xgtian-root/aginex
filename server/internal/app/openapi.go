@@ -256,10 +256,15 @@ func operationContracts() map[string]operationContract {
 			response: reflect.TypeFor[CSRFTokenResponse](),
 			errors:   []int{http.StatusInternalServerError},
 		},
+		"createCaptcha": {
+			summary: "Create a single-use login image captcha", tag: "Authentication", status: http.StatusOK,
+			response: reflect.TypeFor[CaptchaResponse](),
+			errors:   []int{http.StatusForbidden, http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusInternalServerError},
+		},
 		"login": {
 			summary: "Sign in with a local account", tag: "Authentication", status: http.StatusOK,
 			request: reflect.TypeFor[LoginRequest](), response: reflect.TypeFor[UserResponse](),
-			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusTooManyRequests, http.StatusInternalServerError},
+			errors: []int{http.StatusServiceUnavailable, http.StatusBadRequest, http.StatusUnauthorized, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusTooManyRequests, http.StatusInternalServerError},
 		},
 		"logout": {
 			summary: "Revoke the current session", tag: "Authentication", status: http.StatusNoContent,

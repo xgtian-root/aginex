@@ -190,6 +190,16 @@ async function withIdempotentCSRF<T>(
   );
 }
 
+export async function createCaptcha(): Promise<
+  components["schemas"]["CaptchaResponse"]
+> {
+  return requireData(
+    await withCSRF((header) =>
+      client.POST("/api/v1/auth/captcha", { params: { header } }),
+    ),
+  );
+}
+
 export async function login(
   body: components["schemas"]["LoginRequest"],
 ): Promise<User> {

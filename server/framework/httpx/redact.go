@@ -66,6 +66,7 @@ func sensitiveLogKey(key string) bool {
 		"cookie",
 		"secret",
 		"verificationcode",
+		"captcha",
 		"smscode",
 		"signedurl",
 	} {

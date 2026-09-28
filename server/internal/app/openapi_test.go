@@ -405,3 +405,40 @@ func headerParameter(
 	}
 	return nil
 }
+
+func TestOpenAPICaptchaContract(t *testing.T) {
+	document := BuildOpenAPI()
+	operation := operationAt(document, module.MethodPost, "/api/v1/auth/captcha")
+	if operation == nil || operation.Security == nil || len(operation.Security) != 0 {
+		t.Fatal("captcha must be a public operation")
+	}
+	csrf := false
+	for _, parameter := range operation.Parameters {
+		if parameter.Name == "X-CSRF-Token" && parameter.Required {
+			csrf = true
+		}
+	}
+	if !csrf {
+		t.Fatal("captcha issuance must require CSRF")
+	}
+	for _, status := range []string{"200", "403", "429", "503"} {
+		if operation.Responses[status] == nil {
+			t.Fatalf("captcha response %s missing", status)
+		}
+	}
+	schema := document.Components.Schemas.Map()["LoginRequest"]
+	for _, field := range []string{"captchaId", "captchaCode"} {
+		required := false
+		for _, name := range schema.Required {
+			if name == field {
+				required = true
+			}
+		}
+		if !required {
+			t.Fatalf("%s is not required", field)
+		}
+	}
+	if !schema.Properties["captchaCode"].WriteOnly {
+		t.Fatal("captcha answer must be write-only")
+	}
+}

@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/auth/captcha": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a single-use login image captcha */
+    post: operations["createCaptcha"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/auth/csrf": {
     parameters: {
       query?: never;
@@ -942,6 +959,19 @@ export interface components {
       headerName: string;
       token: string;
     };
+    CaptchaResponse: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/CaptchaResponse.json
+       */
+      readonly $schema?: string;
+      /** Format: uuid */
+      captchaId: string;
+      /** Format: date-time */
+      expiresAt: string;
+      image: string;
+    };
     CreateRoleRequest: {
       /**
        * Format: uri
@@ -1137,6 +1167,9 @@ export interface components {
        * @example https://example.com/schemas/LoginRequest.json
        */
       readonly $schema?: string;
+      captchaCode: string;
+      /** Format: uuid */
+      captchaId: string;
       /** Format: email */
       email: string;
       password: string;
@@ -1820,6 +1853,74 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Problem details response */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  createCaptcha: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Double-submit token obtained from GET /api/v1/auth/csrf. */
+        "X-CSRF-Token": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CaptchaResponse"];
         };
       };
       /** @description Forbidden */

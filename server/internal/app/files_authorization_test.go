@@ -267,7 +267,7 @@ func createFileUser(
 
 func loginCookieAs(t *testing.T, server *App, email, passwordValue string) *http.Cookie {
 	t.Helper()
-	body, err := json.Marshal(map[string]string{"email": email, "password": passwordValue})
+	body, err := json.Marshal(testCaptchaInput(t, server, LoginRequest{Email: email, Password: passwordValue}))
 	if err != nil {
 		t.Fatal(err)
 	}

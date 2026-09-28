@@ -5,6 +5,8 @@ export type KnownProblemCode = keyof typeof messages.Problem.codes;
 export type ProblemMessageKey = `Problem.codes.${KnownProblemCode}`;
 
 export const problemMessageKeyByCode = Object.freeze({
+  CAPTCHA_INVALID: "Problem.codes.CAPTCHA_INVALID",
+  CAPTCHA_UNAVAILABLE: "Problem.codes.CAPTCHA_UNAVAILABLE",
   REQUEST_INVALID: "Problem.codes.REQUEST_INVALID",
   AUTHENTICATION_REQUIRED: "Problem.codes.AUTHENTICATION_REQUIRED",
   RESOURCE_FORBIDDEN: "Problem.codes.RESOURCE_FORBIDDEN",

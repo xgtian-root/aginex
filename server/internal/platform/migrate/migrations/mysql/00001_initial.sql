@@ -60,7 +60,16 @@ CREATE TABLE audit_logs (
     created_at DATETIME(6) NOT NULL,
     INDEX idx_audit_logs_created_at (created_at)
 ) ENGINE=InnoDB;
+CREATE TABLE login_captchas (
+    id VARCHAR(36) PRIMARY KEY,
+    answer_hash VARCHAR(64) NOT NULL,
+    binding_hash VARCHAR(64) NOT NULL,
+    expires_at DATETIME(6) NOT NULL,
+    consumed BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX idx_login_captchas_expires_at ON login_captchas(expires_at);
 -- +goose Down
+DROP TABLE login_captchas;
 DROP TABLE audit_logs;
 DROP TABLE sessions;
 DROP TABLE role_permissions;

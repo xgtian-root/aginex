@@ -55,7 +55,16 @@ CREATE TABLE audit_logs (
     created_at DATETIME NOT NULL
 );
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE TABLE login_captchas (
+    id TEXT PRIMARY KEY,
+    answer_hash TEXT NOT NULL,
+    binding_hash TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    consumed BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX idx_login_captchas_expires_at ON login_captchas(expires_at);
 -- +goose Down
+DROP TABLE login_captchas;
 DROP TABLE audit_logs;
 DROP TABLE sessions;
 DROP TABLE role_permissions;

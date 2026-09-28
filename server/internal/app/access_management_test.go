@@ -573,7 +573,7 @@ func assertAccessManagementLoginRejected(
 		nil,
 		http.MethodPost,
 		"/api/v1/auth/login",
-		LoginRequest{Email: email, Password: password},
+		testCaptchaInput(t, server, LoginRequest{Email: email, Password: password}),
 	)
 	assertProblemCode(t, response, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED")
 }

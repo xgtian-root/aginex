@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -133,7 +134,9 @@ async function fillServerDatabaseFields(page: Page) {
   await page.getByLabel("Port", { exact: true }).fill(setupDatabasePort);
   await page.getByLabel("Database name").fill(setupDatabaseName);
   await page.getByLabel("Username").fill(setupDatabaseUsername);
-  await page.getByLabel("Database password").fill(setupDatabasePassword);
+  await page
+    .getByLabel("Database password", { exact: true })
+    .fill(setupDatabasePassword);
 }
 
 async function assertSetupClosed(page: Page) {
@@ -194,9 +197,19 @@ test("administrator completes audited resource and access workflows", async ({
   const uploadFixtures = genericUploadFixtures(suffix);
   const imageName = uploadFixtures[0].name;
 
+  // Only the disposable E2E database gets a known answer. The production
+  // server has no captcha switch, test endpoint, or fixed answer.
+  await page.route("**/api/v1/auth/captcha", async (route) => {
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    const payload = await response.json();
+    payload.image = await prepareCaptchaFixture(payload.captchaId);
+    await route.fulfill({ response, json: payload });
+  });
   await page.goto("/login?next=%2Fproducts");
   await page.getByLabel("Email address").fill(adminEmail);
   await page.getByLabel("Password").fill(adminPassword);
+  await page.getByLabel("Verification code").fill("A2B3");
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page).toHaveURL(/\/products$/);
@@ -981,4 +994,30 @@ async function expectMobileManagementSurface(
   expect(box.x + box.width).toBeLessThanOrEqual(
     page.viewportSize()?.width ?? 390,
   );
+}
+
+async function prepareCaptchaFixture(id: string): Promise<string> {
+  const program = join(__dirname, "fixtures/captcha/main.go");
+  const server = join(__dirname, "../../server");
+  return new Promise<string>((resolve, reject) => {
+    const child = execFile(
+      "go",
+      ["run", program],
+      { cwd: server, timeout: 60_000 },
+      (error, stdout, stderr) => {
+        if (error)
+          reject(
+            new Error(`Captcha fixture failed: ${stderr || error.message}`),
+          );
+        else {
+          try {
+            resolve(JSON.parse(stdout).image);
+          } catch {
+            reject(new Error("Invalid captcha fixture output"));
+          }
+        }
+      },
+    );
+    child.stdin?.end(JSON.stringify({ id }));
+  });
 }

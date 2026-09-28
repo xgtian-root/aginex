@@ -145,6 +145,32 @@ restore command: stop services and have the database operator reverse the
 recorded archive before restoring the marker. Complete Setup with a new
 administrator after the reset.
 
+## Admin login captcha
+
+Every password login requires a fresh image challenge. Obtain a CSRF token,
+then call `POST /api/v1/auth/captcha` with the CSRF header and cookie. The
+response contains `captchaId`, a PNG Data URL in `image`, and `expiresAt`.
+Submit `captchaId` and `captchaCode` alongside email and password to
+`POST /api/v1/auth/login`. The four characters are case-insensitive and expire
+after five minutes. A challenge can be attempted once, including when the
+answer or password is wrong. Refresh the image after a failed login.
+
+Challenges are bound to the browser CSRF token and stored as keyed hashes in
+`login_captchas`, so API instances sharing the database and session secret can
+issue and consume them interchangeably. Issuance has a separate limit of 20
+requests per client IP per minute. Existing login IP and account limits remain
+in force. Storage or audit failure rejects verification; there is no bypass
+configuration. Responses are not cacheable and answers must never be logged.
+
+This addition updates the unpublished schema baseline without changing
+installation configuration version `1`. Existing draft installations need the
+explicit, recoverable `aginex dev reinitialize` workflow described above;
+restarting the server does not rewrite their schema or reset their data.
+Browser E2E tests use a separate fixture executable under `admin/e2e/fixtures`
+that changes one challenge answer only in an explicitly configured disposable
+test installation (`AGINEX_ENV=test` and absolute `AGINEX_CONFIG_FILE`). This
+helper is never part of the production API.
+
 ## First-run browser Setup
 
 Start the API with an empty `/data` volume and leave both

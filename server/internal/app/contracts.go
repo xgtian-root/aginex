@@ -8,9 +8,17 @@ import (
 
 type Problem = httpx.Problem
 
+type CaptchaResponse struct {
+	CaptchaID string    `json:"captchaId" format:"uuid"`
+	Image     string    `json:"image"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
 type LoginRequest struct {
-	Email    string `json:"email" format:"email" maxLength:"320" binding:"required,email,max=320"`
-	Password string `json:"password" writeOnly:"true" binding:"required"`
+	CaptchaID   string `json:"captchaId" format:"uuid" binding:"required,uuid"`
+	CaptchaCode string `json:"captchaCode" writeOnly:"true" maxLength:"32" binding:"required,max=32"`
+	Email       string `json:"email" format:"email" maxLength:"320" binding:"required,email,max=320"`
+	Password    string `json:"password" writeOnly:"true" binding:"required"`
 }
 
 type CSRFTokenResponse struct {

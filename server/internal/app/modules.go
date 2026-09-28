@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	frameworkauthz "github.com/xgtian-root/aginex/server/framework/authz"
@@ -323,6 +324,7 @@ func coreModules(rateLimits config.RateLimit) []module.Module {
 				{Code: "sessions:read", Description: "Read the current session"},
 			},
 			operations: []module.OperationDefinition{
+				rateLimited(module.OperationDefinition{ID: "createCaptcha", Method: module.MethodPost, Path: "/api/v1/auth/captcha", Public: true}, module.RateLimitPolicy{Namespace: "auth.captcha.ip", Subject: module.RateLimitByIP, Limit: 20, Window: time.Minute}),
 				{ID: "getCSRFToken", Method: module.MethodGet, Path: "/api/v1/auth/csrf", Public: true},
 				rateLimited(module.OperationDefinition{
 					ID: "login", Method: module.MethodPost, Path: "/api/v1/auth/login", Public: true,
@@ -610,6 +612,7 @@ func (a *App) bindBuiltInHTTPRoutes() error {
 		"ready":                   a.ready,
 		"getCSRFToken":            a.csrfToken,
 		"login":                   a.login,
+		"createCaptcha":           a.createCaptcha,
 		"logout":                  a.logout,
 		"revokeAllSessions":       a.revokeAllSessions,
 		"getCurrentUser":          a.me,

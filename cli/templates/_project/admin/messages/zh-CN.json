@@ -86,7 +86,16 @@
       "submit": "登录",
       "note": "不开放公开注册。首位管理员会在一次性设置期间创建。"
     },
-    "loading": "正在准备登录…"
+    "loading": "正在准备登录…",
+    "captcha": {
+      "label": "验证码",
+      "imageAlt": "登录验证码图片",
+      "loading": "正在加载验证码…",
+      "refresh": "换一张",
+      "retry": "重新加载",
+      "hint": "输入图片中的 4 位字符，不区分大小写。",
+      "loadError": "验证码加载失败，请重新加载。"
+    }
   },
   "Setup": {
     "route": {
@@ -867,7 +876,9 @@
       "JOBS_UNAVAILABLE": "未配置持久任务队列，因此任务管理不可用。",
       "RATE_LIMIT_ACTOR_UNAVAILABLE": "无法为请求保护验证已认证操作主体。",
       "RATE_LIMIT_POLICY_INVALID": "操作策略无效，因此请求保护不可用。",
-      "RATE_LIMIT_UNAVAILABLE": "请求保护暂时不可用。"
+      "RATE_LIMIT_UNAVAILABLE": "请求保护暂时不可用。",
+      "CAPTCHA_INVALID": "验证码错误或已过期，请输入新图片中的字符。",
+      "CAPTCHA_UNAVAILABLE": "暂时无法验证，请稍后重试。"
     }
   }
 }

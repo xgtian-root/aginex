@@ -86,7 +86,16 @@
       "submit": "Sign in",
       "note": "No public registration. The first administrator is established during one-time setup."
     },
-    "loading": "Preparing sign in…"
+    "loading": "Preparing sign in…",
+    "captcha": {
+      "label": "Verification code",
+      "imageAlt": "Login verification image",
+      "loading": "Loading verification image…",
+      "refresh": "New image",
+      "retry": "Reload image",
+      "hint": "Enter the 4 characters in the image. Case does not matter.",
+      "loadError": "The verification image could not be loaded. Please reload it."
+    }
   },
   "Setup": {
     "route": {
@@ -867,7 +876,9 @@
       "JOBS_UNAVAILABLE": "Job administration is unavailable because the durable queue is not configured.",
       "RATE_LIMIT_ACTOR_UNAVAILABLE": "The authenticated actor could not be verified for request protection.",
       "RATE_LIMIT_POLICY_INVALID": "Request protection is unavailable because the operation policy is invalid.",
-      "RATE_LIMIT_UNAVAILABLE": "Request protection is temporarily unavailable."
+      "RATE_LIMIT_UNAVAILABLE": "Request protection is temporarily unavailable.",
+      "CAPTCHA_INVALID": "The verification code is incorrect or expired. Enter the characters from the new image.",
+      "CAPTCHA_UNAVAILABLE": "Verification is unavailable. Please try again."
     }
   }
 }

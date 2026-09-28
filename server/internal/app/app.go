@@ -48,6 +48,7 @@ type App struct {
 	db              *gorm.DB
 	sqlDB           *sql.DB
 	auth            *auth.Service
+	captcha         *auth.CaptchaService
 	store           storage.Storage
 	storageRegistry *storage.Registry
 	fileVerifier    *frameworkstorage.FileVerifier
@@ -325,6 +326,7 @@ func newApplication(
 	instance := &App{
 		cfg: cfg, db: db, sqlDB: sqlDB,
 		auth: auth.New(db, cfg.Session), store: store,
+		captcha:         auth.NewCaptchaService(cfg.Session.Secret),
 		storageRegistry: storageRegistry, fileVerifier: fileVerifier,
 		limiter: limiter, idempotency: idempotencyStore, jobs: jobQueue,
 		jobInspector: jobInspector, writes: writes,
@@ -712,6 +714,9 @@ func (a *App) login(c *gin.Context) {
 		return
 	}
 	if !a.enforceLoginAccountRateLimit(c, input.Email) {
+		return
+	}
+	if !a.consumeCaptcha(c, input) {
 		return
 	}
 	var result auth.LoginResult

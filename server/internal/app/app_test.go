@@ -106,6 +106,7 @@ func TestLoginAndProductLifecycle(t *testing.T) {
 	login.Header.Set("Content-Type", "application/json")
 	addTestCSRF(login)
 	loginRecorder := httptest.NewRecorder()
+	addTestLoginCaptcha(t, server, login)
 	server.Handler().ServeHTTP(loginRecorder, login)
 	if loginRecorder.Code != http.StatusOK {
 		t.Fatalf("login status = %d, body = %s", loginRecorder.Code, loginRecorder.Body.String())
@@ -207,6 +208,7 @@ func TestAdministratorCanLoginWithPasswordsWithoutLengthBounds(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			addTestCSRF(request)
 			recorder := httptest.NewRecorder()
+			addTestLoginCaptcha(t, server, request)
 			server.Handler().ServeHTTP(recorder, request)
 			if recorder.Code != http.StatusOK {
 				t.Fatalf(
@@ -288,19 +290,32 @@ func TestLoginRollsBackSessionWhenAuditInsertFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("DROP TABLE audit_logs").Error; err != nil {
+	if err := db.Callback().Create().Before("gorm:create").Register("test:fail-login-audit", func(tx *gorm.DB) {
+		if record, ok := tx.Statement.Dest.(*domain.AuditLog); ok && record.Action == "auth:login" {
+			tx.AddError(errors.New("injected login audit failure"))
+		}
+	}); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = db.Callback().Create().Remove("test:fail-login-audit") })
 
 	body := []byte(`{"email":"admin@example.com","password":"correct horse battery staple"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	addTestCSRF(request)
 	recorder := httptest.NewRecorder()
+	addTestLoginCaptcha(t, server, request)
 	server.Handler().ServeHTTP(recorder, request)
 
 	if recorder.Code < 500 {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var consumed int64
+	if err := db.Table("login_captchas").Where("consumed = ?", true).Count(&consumed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if consumed != 1 {
+		t.Fatalf("captcha consumption rolled back with login: %d", consumed)
 	}
 	var sessionCount int64
 	if err := db.Table("sessions").Count(&sessionCount).Error; err != nil {
@@ -418,6 +433,7 @@ func TestCSRFEndpointProtectsCookieWritesAndRejectsCrossOriginRequests(t *testin
 	valid.RemoteAddr = "192.0.2.50:43123"
 	valid.AddCookie(csrfCookie)
 	validRecorder := httptest.NewRecorder()
+	addTestLoginCaptcha(t, server, valid)
 	server.Handler().ServeHTTP(validRecorder, valid)
 	if validRecorder.Code != http.StatusOK {
 		t.Fatalf("valid login status = %d, body = %s", validRecorder.Code, validRecorder.Body.String())
@@ -657,6 +673,7 @@ func loginCookie(t *testing.T, server *App) *http.Cookie {
 	request.Header.Set("Content-Type", "application/json")
 	addTestCSRF(request)
 	recorder := httptest.NewRecorder()
+	addTestLoginCaptcha(t, server, request)
 	server.Handler().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("login status = %d, body = %s", recorder.Code, recorder.Body.String())

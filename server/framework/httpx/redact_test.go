@@ -14,6 +14,8 @@ func TestRedactValueCoversCredentialsAndSignedURLs(t *testing.T) {
 		"refreshToken":      "refresh-token",
 		"Cookie":            "session=secret",
 		"verification_code": "123456",
+		"captchaCode":       "A2B3",
+		"captcha_image":     "data:image/png;base64,test",
 		"code":              "654321",
 		"signed_url":        "https://storage.example/object?signature=secret",
 		"authorization":     "Bearer secret",

@@ -390,3 +390,46 @@ class FakeXMLHttpRequest {
     if (!this.deferLoad) this.listeners.get("load")?.();
   }
 }
+
+describe("login captcha API", () => {
+  it("uses CSRF for issuing and submitting a challenge", async () => {
+    const challenge = {
+      captchaId: "challenge-id",
+      image: "data:image/png;base64,fixture",
+      expiresAt: "2030-01-01T00:00:00Z",
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ token: "csrf-token", headerName: "X-CSRF-Token" }),
+      )
+      .mockResolvedValueOnce(Response.json(challenge))
+      .mockResolvedValueOnce(Response.json({ id: "user-id" }));
+    vi.stubGlobal("fetch", fetcher);
+    const { createCaptcha, login } = await import("./api");
+    await expect(createCaptcha()).resolves.toEqual(challenge);
+    await login({
+      email: "admin@example.com",
+      password: "secret",
+      captchaId: challenge.captchaId,
+      captchaCode: "A2B3",
+    });
+    expect(requestURL(fetcher.mock.calls[1]).pathname).toBe(
+      "/api/v1/auth/captcha",
+    );
+    expect(requestHeaders(fetcher.mock.calls[1]).get("X-CSRF-Token")).toBe(
+      "csrf-token",
+    );
+    expect(requestURL(fetcher.mock.calls[2]).pathname).toBe(
+      "/api/v1/auth/login",
+    );
+    expect(requestHeaders(fetcher.mock.calls[2]).get("X-CSRF-Token")).toBe(
+      "csrf-token",
+    );
+    const request = fetcher.mock.calls[2][0] as Request;
+    expect(await request.json()).toMatchObject({
+      captchaId: challenge.captchaId,
+      captchaCode: "A2B3",
+    });
+  });
+});
