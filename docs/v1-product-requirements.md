@@ -59,9 +59,9 @@ Aginex 不以“后台中内置 AI 聊天框”为 v1 卖点。其核心价值�
 
 提供单一 `aginex` 命令：
 
-- `aginex new`：在当前空目录生成可运行的 Go/Next.js 项目。
+- `aginex new`：在当前目录生成可运行的 Go/Next.js 项目；允许非空目录，但 `admin`、`server` 任一同名路径存在时拒绝。共有目录递归合并，无关内容保留，冲突项先备份到唯一的 `.aginex-backup-<时间戳>-<随机后缀>/` 再替换，并输出备份位置及冲突项；失败时回滚，保留并发修改及必要的恢复备份。
 - `aginex new <project>`：在当前目录新建 `<project>` 子目录并初始化；
-  `--module` 可独立指定可发布的 Go module path。两种模式都拒绝覆盖已有内容；
+  `--module` 可独立指定可发布的 Go module path。同名目标已存在时拒绝初始化；
   未发布的源码构建可显式使用 `--aginex-path` 写入本地开发 `replace`，否则失败关闭。
 - `aginex dev`：跨平台启动 API、Web 和选定的本地基础设施。
 - `aginex doctor`：检查工具链、配置、数据库、迁移和生成文件。

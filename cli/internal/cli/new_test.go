@@ -445,7 +445,7 @@ func TestNewCommandRejectsInvalidNameWithoutEscapingWorkingDirectory(t *testing.
 	}
 }
 
-func TestNewCommandRejectsNonEmptyCurrentDirectoryWithoutMutation(t *testing.T) {
+func TestNewCommandAcceptsNonEmptyCurrentDirectory(t *testing.T) {
 	parent := t.TempDir()
 	target := filepath.Join(parent, "occupied-project")
 	if err := os.Mkdir(target, 0o755); err != nil {
@@ -462,14 +462,20 @@ func TestNewCommandRejectsNonEmptyCurrentDirectoryWithoutMutation(t *testing.T) 
 		assets:           minimalScaffoldAssets(),
 		frameworkVersion: fixedFrameworkVersion(testFrameworkVersion),
 	})
-	if err == nil || !strings.Contains(err.Error(), "is not empty") {
-		t.Fatalf("non-empty error = %v", err)
+	if err != nil {
+		t.Fatalf("non-empty initialization: %v", err)
 	}
-	if after := snapshotTestTree(t, target); !reflect.DeepEqual(after, before) {
-		t.Fatalf("non-empty directory changed: before=%#v after=%#v", before, after)
+	after := snapshotTestTree(t, target)
+	for name, original := range before {
+		if !reflect.DeepEqual(after[name], original) {
+			t.Fatalf("existing path changed: %s", name)
+		}
 	}
-	if strings.Contains(output, "Created Aginex project") {
-		t.Fatalf("failure output reported success: %q", output)
+	if !strings.Contains(output, "Created Aginex project") {
+		t.Fatalf("missing success output: %q", output)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(target, ".aginex-backup-*")); len(matches) != 0 {
+		t.Fatalf("unexpected backups: %v", matches)
 	}
 	assertNoProjectStagingDirectories(t, parent)
 }

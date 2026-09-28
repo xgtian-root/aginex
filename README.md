@@ -288,7 +288,7 @@ a project whose framework version cannot be downloaded.
 There are two initialization modes:
 
 ```bash
-# Initialize an existing empty current directory.
+# Initialize the current directory (admin and server must not exist).
 mkdir my-app && cd my-app
 aginex new
 
@@ -299,8 +299,17 @@ aginex new testproject
 aginex new testproject --module github.com/example/testproject
 ```
 
-The command refuses non-empty current directories and every pre-existing named
-target; it never silently overwrites files. It writes source, `.env.example`,
+The current directory may contain existing files, but neither an `admin` nor a
+`server` path may exist (including files and symlinks). Every pre-existing named
+target is still refused. Shared directories are merged, preserving unrelated
+content. Conflicting paths are moved to a unique
+`.aginex-backup-<timestamp>-<random>/` directory before replacement, with their
+relative paths preserved; the command prints the backup location and conflicts.
+Symlinks are backed up without following them. Failed initialization rolls back
+its writes and restores backups unless concurrent changes require manual recovery.
+Backups from successful initialization remain for you to review and remove.
+
+The command writes source, `.env.example`,
 and `.aginex/project.json`, but does not create `.env`, credentials, databases,
 uploads, or install dependencies. Run `pnpm install` in the generated project,
 then start it with `aginex dev` and complete browser Setup.
@@ -373,7 +382,7 @@ Sign in with the administrator credentials entered in Setup.
 
 | Command | Purpose |
 |---|---|
-| `aginex new [name] [--module path] [--aginex-path path]` | Initialize the empty current directory, or create and initialize a named child directory; `--aginex-path` is only for an unreleased local checkout |
+| `aginex new [name] [--module path] [--aginex-path path]` | Initialize the current directory without admin/server paths, backing up conflicts, or create and initialize a new named child directory; `--aginex-path` is only for an unreleased local checkout |
 | `go run ./cli/cmd/aginex dev` | Run API and web together; also supervise the worker when `AGINEX_JOBS_DRIVER=postgres` |
 | `go run ./cli/cmd/aginex dev reinitialize` | Dry-run a recoverable reset of stale local pre-release configuration/database state; execute only with the exact printed `--confirm` target |
 | `go run ./cli/cmd/aginex dev reconcile-storage-presentation` | Reconcile verified MIME metadata and ETags for existing ready OSS files; safe to rerun |

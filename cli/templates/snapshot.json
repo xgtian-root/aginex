@@ -11,7 +11,7 @@
   ".agents/skills/change-database-schema/agents/openai.yaml": "613e2503d6410bc86960fd642ab017a52434658f3dc753043789313b499a0fb8",
   ".agents/skills/configure-rbac/SKILL.md": "195e024abf818e27f057b427d474ac792e29ef7d3c0541f40beaeb63c29ec3dc",
   ".agents/skills/configure-rbac/agents/openai.yaml": "611ac9b94fb0b4c67fe68ac0b4cfea53145acfe9519b053ea7a9e3da16412a30",
-  ".agents/skills/create-aginex-project/SKILL.md": "00274683bc99596b24862bf2f806b325cb634c59e10c8496fe0eb4cf78578a5a",
+  ".agents/skills/create-aginex-project/SKILL.md": "b9e127275e4ca1e48518cb60a3b3ca0dd69f02c5250c652925dd391b966ffb16",
   ".agents/skills/create-aginex-project/agents/openai.yaml": "236000dec9c2b06a43923f56893ac0ecf5713e25b7603aca1f93a6b9d2206341",
   ".agents/skills/test-and-debug/SKILL.md": "bf1abfe64722a21c02cb55e2faa9db30d42873503c6e3c39282987632ba35476",
   ".agents/skills/test-and-debug/agents/openai.yaml": "f7b8ea85fc78814f9a003461b70ea659eb6b8ee897e60dfde511f03a9a993827",

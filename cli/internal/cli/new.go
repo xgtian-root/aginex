@@ -70,7 +70,9 @@ func newProjectCommand(dependencies newProjectDependencies) *cobra.Command {
 		Use:   "new [name]",
 		Short: "Initialize a new Aginex application",
 		Long: "Initialize the current directory when no name is supplied, or " +
-			"create and initialize a new child directory when a name is supplied.",
+			"create and initialize a new child directory when a name is supplied. " +
+			"The current directory must not contain admin or server paths. " +
+			"Conflicting scaffold files are backed up before replacement.",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(command *cobra.Command, args []string) error {
@@ -107,7 +109,7 @@ func newProjectCommand(dependencies newProjectDependencies) *cobra.Command {
 				if err := requireMissingTarget(target); err != nil {
 					return err
 				}
-			} else if err := requireEmptyDirectory(target); err != nil {
+			} else if err := requireInitializableDirectory(target); err != nil {
 				return err
 			}
 
@@ -153,6 +155,7 @@ func newProjectCommand(dependencies newProjectDependencies) *cobra.Command {
 					stage,
 					target,
 					dependencies.publishPath,
+					command.OutOrStdout(),
 				); err != nil {
 					return err
 				}
@@ -313,7 +316,7 @@ func requireMissingTarget(target string) error {
 	_, err := os.Lstat(target)
 	if err == nil {
 		return fmt.Errorf(
-			"target directory %q already exists; enter an empty directory and run `aginex new` instead",
+			"target directory %q already exists; enter that directory without admin or server paths and run `aginex new` instead",
 			target,
 		)
 	}
@@ -323,7 +326,7 @@ func requireMissingTarget(target string) error {
 	return nil
 }
 
-func requireEmptyDirectory(target string) error {
+func requireInitializableDirectory(target string) error {
 	info, err := os.Lstat(target)
 	if err != nil {
 		return fmt.Errorf("inspect current directory %q: %w", target, err)
@@ -331,12 +334,12 @@ func requireEmptyDirectory(target string) error {
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return fmt.Errorf("current target %q must be a real directory", target)
 	}
-	entries, err := os.ReadDir(target)
-	if err != nil {
-		return fmt.Errorf("read current directory %q: %w", target, err)
-	}
-	if len(entries) != 0 {
-		return fmt.Errorf("current directory %q is not empty", target)
+	for _, name := range []string{"admin", "server"} {
+		if _, err := os.Lstat(filepath.Join(target, name)); err == nil {
+			return fmt.Errorf("current directory %q contains reserved path %q", target, name)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("inspect reserved path %q: %w", name, err)
+		}
 	}
 	return nil
 }
@@ -623,82 +626,6 @@ func scaffoldFileManifest(root string) ([]manifestFile, error) {
 		return result[left].Path < result[right].Path
 	})
 	return result, nil
-}
-
-func publishIntoCurrentDirectory(
-	stage string,
-	target string,
-	publish func(string, string) error,
-) error {
-	if err := requireEmptyDirectory(target); err != nil {
-		return fmt.Errorf("publish into current directory: %w", err)
-	}
-	entries, err := os.ReadDir(stage)
-	if err != nil {
-		return fmt.Errorf("read rendered project: %w", err)
-	}
-	sort.SliceStable(entries, func(left, right int) bool {
-		if entries[left].Name() == ".aginex" {
-			return false
-		}
-		if entries[right].Name() == ".aginex" {
-			return true
-		}
-		return entries[left].Name() < entries[right].Name()
-	})
-	type publishedPath struct {
-		path        string
-		fingerprint [sha256.Size]byte
-	}
-	published := make([]publishedPath, 0, len(entries))
-	rollback := func() error {
-		var rollbackErrors []error
-		for index := len(published) - 1; index >= 0; index-- {
-			current, err := fingerprintPath(published[index].path)
-			if err != nil {
-				rollbackErrors = append(rollbackErrors, fmt.Errorf(
-					"preserve changed published path %q: %w",
-					published[index].path,
-					err,
-				))
-				continue
-			}
-			if current != published[index].fingerprint {
-				rollbackErrors = append(rollbackErrors, fmt.Errorf(
-					"preserve changed published path %q",
-					published[index].path,
-				))
-				continue
-			}
-			if err := os.RemoveAll(published[index].path); err != nil {
-				rollbackErrors = append(rollbackErrors, err)
-			}
-		}
-		return errors.Join(rollbackErrors...)
-	}
-	for _, entry := range entries {
-		source := filepath.Join(stage, entry.Name())
-		destination := filepath.Join(target, entry.Name())
-		fingerprint, err := fingerprintPath(source)
-		if err != nil {
-			return errors.Join(
-				fmt.Errorf("fingerprint rendered path %q: %w", entry.Name(), err),
-				rollback(),
-			)
-		}
-		if err := publish(source, destination); err != nil {
-			publishErr := fmt.Errorf("publish %q: %w", entry.Name(), err)
-			if errors.Is(err, fs.ErrExist) {
-				publishErr = fmt.Errorf("target path %q appeared while creating the project", destination)
-			}
-			return errors.Join(publishErr, rollback())
-		}
-		published = append(published, publishedPath{
-			path:        destination,
-			fingerprint: fingerprint,
-		})
-	}
-	return nil
 }
 
 func fingerprintPath(root string) ([sha256.Size]byte, error) {
