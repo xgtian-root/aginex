@@ -7,8 +7,12 @@ import (
 )
 
 // BackendVersion pins the framework source consumed by generated projects.
-// It resolves commit f6d57f4fe47fb451c35d19185a32a5504bff67a9 without a server release tag.
-const BackendVersion = "v0.0.0-20260910062837-f6d57f4fe47f"
+// The current scaffold requires unpublished captcha and file-service contracts.
+// This deliberately non-downloadable development marker disables remote project
+// generation and release builds until a reviewed source commit is published and
+// its real server module version is resolved with Go. Local --aginex-path use
+// remains available. See docs/cli-release.md.
+const BackendVersion = "v0.0.0-dev.unpublished"
 
 //go:embed all:_project
 var assets embed.FS

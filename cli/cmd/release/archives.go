@@ -353,12 +353,8 @@ func smoke(o options) error {
 		if _, err = command(dir, nil, nil, path, args...); err != nil {
 			return err
 		}
-		goMod, err := os.ReadFile(filepath.Join(dir, "smoke-project", "server", "go.mod"))
-		if err != nil {
+		if err := verifyScaffold(filepath.Join(dir, "smoke-project"), m, o.root); err != nil {
 			return err
-		}
-		if !strings.Contains(string(goMod), backendModule+" "+m.BackendVersion) {
-			return errors.New("scaffold backend version mismatch")
 		}
 		fmt.Printf("Smoke passed: %s/%s %s\n", a.OS, a.Arch, m.Version)
 		return nil

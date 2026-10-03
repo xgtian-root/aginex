@@ -101,21 +101,41 @@ administrative operations, separate from building the CLI.
 
 ## Preparing a release
 
-The release target is CLI `v0.1.1-dev`. Generated projects use the
-server Go module dependency, pinned in `cli/templates/assets.go` to source
-commit `f6d57f4fe47fb451c35d19185a32a5504bff67a9` through pseudo-version
-`v0.0.0-20260910062837-f6d57f4fe47f`. No separate server tag or Release is needed.
+The release target is CLI `v0.1.1-dev`. `BackendVersion` is currently the
+explicit unpublished marker `v0.0.0-dev.unpublished`. It is not a downloadable
+framework version. Remote project generation and release builds fail closed;
+use `aginex new --aginex-path /absolute/path/to/aginex example-app` for local
+development until the matching source and CLI have been published.
 
-This source pin includes the configuration protocol required by the new CLI.
-For future backend changes, push the new source commit, resolve its server
-pseudo-version with Go, and update `BackendVersion` and the source reference
-above before publishing. Changing the CLI version alone is not enough.
+The previous pin, `v0.0.0-20260910062837-f6d57f4fe47f` (source commit
+`f6d57f4fe47fb451c35d19185a32a5504bff67a9`), lacks the captcha protocol required
+by the current admin. Reusing it produces an incompatible login page. The
+captcha commit `211db268eaf1c620f7e6393b0cdbbbb1998dea15` returned **unknown
+revision** from both the Go proxy and direct Git resolution on 2026-10-03.
+The public file service changes are also unpublished. Neither a successful
+local replacement test nor a fabricated pseudo-version establishes a usable
+remote dependency.
+
+Publishing reviewed framework source and publishing the CLI are separate
+steps. No separate server tag or GitHub Release is required. After publishing
+a source commit containing both captcha and the public file/reference service,
+resolve its version with Go outside the source workspace:
+
+```bash
+cd "$(mktemp -d)"
+GOWORK=off go list -m -json github.com/xgtian-root/aginex/server@<published-full-commit>
+```
+
+Use the returned `Version` verbatim for `BackendVersion`, then replace this
+unpublished status with the resolved commit and version. Changing the CLI
+version alone is not enough.
 
 1. Push the reviewed source commits so Go can download the pinned framework.
 2. Verify the pin with `go list -m -json` or `go mod download -json` outside the
    source workspace. For future framework updates, resolve the new source commit
    with Go and update `BackendVersion` before committing the CLI release.
-3. Run CLI tests, vet, and scaffold checks; review and commit the release changes.
+3. Update canonical assets, run `go run ./cli/cmd/sync-templates`, then run CLI
+   tests, vet, and scaffold checks; review and commit the release changes.
 4. Create `cli/v0.1.1-dev` on the clean commit, validate the release build, then
    push that CLI tag to start automatic publication.
 
@@ -123,6 +143,21 @@ Release builds verify that the pinned framework can be downloaded. Unpinned
 development declarations are rejected; source-commit pseudo-versions are valid
 for both stable and prerelease CLIs. The CLI version does not change the
 installation configuration version.
+
+Release smoke verification generates a disposable project with `GOWORK=off`
+and rejects every `go.mod` replacement. It downloads the declared dependencies,
+builds the generated backend, regenerates OpenAPI from that backend and compares
+it with the admin's scaffold contract, then runs external consumer tests for
+captcha issuance, session login, and public file references/read/delete
+protection. The login fixture sets a known answer only in its disposable test
+database; it adds no production bypass or test HTTP endpoint. A backend that
+merely downloads, but lacks the scaffold's Go or HTTP contracts, fails smoke.
+
+Development smoke and the normal CLI external-consumer test deliberately use
+`--aginex-path`. They validate the same consumer probes against local source and
+must not be reported as successful download verification. Full download and
+matching-version verification remain pending until the new source is published
+and the unpublished marker is replaced with the Go-resolved version.
 
 To validate and package an existing tag locally, without publishing:
 

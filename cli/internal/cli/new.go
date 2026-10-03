@@ -36,7 +36,7 @@ var portableProjectName = regexp.MustCompile(
 )
 
 var errUnpublishedFrameworkBuild = errors.New(
-	"source-built Aginex CLI has no clean, pinned framework version; use --aginex-path with a local Aginex checkout",
+	"Aginex CLI has no clean, published framework pin matching its scaffold; use --aginex-path with a local Aginex checkout or install a CLI release with a published backend pin",
 )
 
 type newProjectDependencies struct {

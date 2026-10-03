@@ -17,6 +17,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/xgtian-root/aginex/cli/internal/scaffoldcheck"
 	"golang.org/x/mod/modfile"
 )
 
@@ -184,6 +185,10 @@ func TestResolveFrameworkBuildVersion(t *testing.T) {
 		{
 			name:        "CLI version cannot supply backend version",
 			mainVersion: "v1.2.3", declaredVersion: "0.1.0-dev", wantSourceError: true,
+		},
+		{
+			name:        "unpublished scaffold blocks remote generation",
+			mainVersion: "v0.1.1", declaredVersion: "v0.0.0-dev.unpublished", wantSourceError: true,
 		},
 		{
 			name:        "independent backend release",
@@ -849,6 +854,20 @@ func TestGeneratedProjectBuildsAsExternalConsumer(t *testing.T) {
 		}
 		if len(output) != 0 && arguments[0] == "mod" {
 			t.Fatalf("go mod tidy reported scaffold drift:\n%s", output)
+		}
+	}
+	if err := scaffoldcheck.Install(filepath.Join(target, "server")); err != nil {
+		t.Fatal(err)
+	}
+	for _, arguments := range [][]string{
+		{"mod", "tidy"},
+		{"test", "-mod=readonly", "-count=1", "./scaffoldcheck"},
+	} {
+		command := exec.Command("go", arguments...)
+		command.Dir = filepath.Join(target, "server")
+		command.Env = append(os.Environ(), "GOPROXY=off", "GOSUMDB=off", "GOWORK=off")
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("local scaffold contract fixture go %s: %v\n%s", strings.Join(arguments, " "), err, output)
 		}
 	}
 }

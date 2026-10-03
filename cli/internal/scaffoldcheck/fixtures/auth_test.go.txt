@@ -1,0 +1,173 @@
+package scaffoldcheck_test
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"image/png"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/xgtian-root/aginex/server/framework/application"
+	"github.com/xgtian-root/aginex/server/framework/module"
+	"gorm.io/gorm"
+)
+
+const testSecret = "scaffold-smoke-disposable-session-secret"
+
+type consumerAPI struct {
+	app     *application.App
+	db      *gorm.DB
+	cookies map[string]*http.Cookie
+	csrf    string
+}
+
+func newConsumerAPI(t *testing.T, filesEnabled bool, extra ...module.Module) *consumerAPI {
+	t.Helper()
+	modules := append([]module.Module(nil), extra...)
+	if filesEnabled {
+		modules = append(modules, application.FilesModule())
+	}
+	definition, err := application.Define(modules...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := application.WithDefaults(application.Config{
+		Environment: "test",
+		Database:    application.DatabaseConfig{Driver: "sqlite", DSN: filepath.Join(t.TempDir(), "consumer.db")},
+		Session:     application.SessionConfig{Secret: testSecret},
+		Bootstrap:   application.BootstrapConfig{AdminEmail: "smoke@example.com", AdminPassword: "scaffold smoke correct password"},
+		Storage:     application.StorageConfig{Driver: "local", LocalRoot: t.TempDir()},
+		WebOrigin:   "http://localhost:3000",
+	})
+	db, err := application.OpenDatabase(cfg.Database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	if err := definition.MigrateUp(t.Context(), sqlDB, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := definition.Bootstrap(t.Context(), db, cfg); err != nil {
+		t.Fatal(err)
+	}
+	app, err := definition.NewAPI(cfg, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := app.Shutdown(ctx); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
+	return &consumerAPI{app: app, db: db, cookies: map[string]*http.Cookie{}}
+}
+
+func (api *consumerAPI) request(method, path string, body []byte, contentType string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, path, bytes.NewReader(body))
+	request.Header.Set("Origin", "http://localhost:3000")
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
+	}
+	if api.csrf != "" {
+		request.Header.Set("X-CSRF-Token", api.csrf)
+	}
+	for _, cookie := range api.cookies {
+		request.AddCookie(cookie)
+	}
+	response := httptest.NewRecorder()
+	api.app.Handler().ServeHTTP(response, request)
+	for _, cookie := range response.Result().Cookies() {
+		api.cookies[cookie.Name] = cookie
+	}
+	return response
+}
+
+func (api *consumerAPI) login(t *testing.T) {
+	t.Helper()
+	response := api.request(http.MethodGet, "/api/v1/auth/csrf", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("csrf: %d %s", response.Code, response.Body.String())
+	}
+	var csrf struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &csrf); err != nil {
+		t.Fatal(err)
+	}
+	if csrf.Token == "" {
+		t.Fatal("missing CSRF token")
+	}
+	api.csrf = csrf.Token
+	response = api.request(http.MethodPost, "/api/v1/auth/captcha", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("captcha: %d %s", response.Code, response.Body.String())
+	}
+	var captcha struct {
+		ID        string    `json:"captchaId"`
+		Image     string    `json:"image"`
+		ExpiresAt time.Time `json:"expiresAt"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &captcha); err != nil {
+		t.Fatal(err)
+	}
+	if captcha.ID == "" || !captcha.ExpiresAt.After(time.Now()) {
+		t.Fatal("invalid captcha response")
+	}
+	encoded, ok := strings.CutPrefix(captcha.Image, "data:image/png;base64,")
+	if !ok {
+		t.Fatal("captcha is not a PNG data URL")
+	}
+	pixels, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := png.Decode(bytes.NewReader(pixels)); err != nil {
+		t.Fatal(err)
+	}
+	// Test-only fixture: set the answer of this real, freshly issued challenge in
+	// this disposable database. No backend test endpoint or bypass is required.
+	mac := hmac.New(sha256.New, []byte(testSecret))
+	mac.Write([]byte("aginex:login-captcha:answer\x00" + captcha.ID + "\x00A2B3"))
+	result := api.db.Table("login_captchas").Where("id = ? AND consumed = ?", captcha.ID, false).Update("answer_hash", hex.EncodeToString(mac.Sum(nil)))
+	if result.Error != nil || result.RowsAffected != 1 {
+		t.Fatalf("prepare disposable captcha: %v (%d rows)", result.Error, result.RowsAffected)
+	}
+	body, err := json.Marshal(map[string]string{"email": "smoke@example.com", "password": "scaffold smoke correct password", "captchaId": captcha.ID, "captchaCode": "A2B3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = api.request(http.MethodPost, "/api/v1/auth/login", body, "application/json")
+	if response.Code != http.StatusOK {
+		t.Fatalf("login: %d %s", response.Code, response.Body.String())
+	}
+	response = api.request(http.MethodGet, "/api/v1/auth/me", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("authenticated session: %d %s", response.Code, response.Body.String())
+	}
+	response = api.request(http.MethodPost, "/api/v1/auth/login", body, "application/json")
+	if response.Code != http.StatusBadRequest || !bytes.Contains(response.Body.Bytes(), []byte("CAPTCHA_INVALID")) {
+		t.Fatalf("captcha reuse was accepted: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestDownloadedBackendSupportsScaffoldLogin(t *testing.T) {
+	newConsumerAPI(t, true).login(t)
+}

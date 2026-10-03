@@ -1,0 +1,185 @@
+package scaffoldcheck_test
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"image"
+	"image/color"
+	"image/png"
+	"io"
+	"net/http"
+	"net/url"
+	"testing"
+
+	"github.com/xgtian-root/aginex/server/framework/audit"
+	"github.com/xgtian-root/aginex/server/framework/files"
+	"github.com/xgtian-root/aginex/server/framework/module"
+	"github.com/xgtian-root/aginex/server/framework/services"
+	"gorm.io/gorm"
+)
+
+type fileConsumer struct{ runtime *services.Runtime }
+
+func (fileConsumer) Name() string { return "scaffold-file-consumer" }
+func (consumer fileConsumer) Register(registry *module.Registry) error {
+	return registry.RegisterLifecycleHook(module.LifecycleHook{
+		Name: "capture-file-services",
+		Start: func(ctx context.Context) error {
+			runtime, ok := services.RuntimeFromContext(ctx)
+			if !ok {
+				return errors.New("missing public runtime")
+			}
+			*consumer.runtime = runtime
+			return nil
+		},
+	})
+}
+
+func TestDownloadedBackendExposesPublicFileService(t *testing.T) {
+	var runtime services.Runtime
+	api := newConsumerAPI(t, true, fileConsumer{runtime: &runtime})
+	if runtime.Files == nil || runtime.Writes == nil {
+		t.Fatal("FilesModule did not inject its public service")
+	}
+	api.login(t)
+	canvas := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	canvas.Set(0, 0, color.RGBA{R: 200, A: 255})
+	var imageData bytes.Buffer
+	if err := png.Encode(&imageData, canvas); err != nil {
+		t.Fatal(err)
+	}
+	data := imageData.Bytes()
+	intent, err := json.Marshal(map[string]any{"filename": "consumer.png", "contentType": "image/png", "size": len(data), "visibility": "private"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := api.request(http.MethodPost, "/api/v1/files/upload-intents", intent, "application/json")
+	if response.Code != http.StatusCreated {
+		t.Fatalf("intent: %d %s", response.Code, response.Body.String())
+	}
+	var prepared struct {
+		File struct {
+			ID string `json:"id"`
+		} `json:"file"`
+		Upload struct {
+			URL string `json:"url"`
+		} `json:"upload"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &prepared); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Files.GetReady(t.Context(), prepared.File.ID); !errors.Is(err, files.ErrNotReady) {
+		t.Fatalf("pending file: %v", err)
+	}
+	upload, err := url.Parse(prepared.Upload.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = api.request(http.MethodPut, upload.RequestURI(), data, "application/octet-stream")
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", response.Code, response.Body.String())
+	}
+	response = api.request(http.MethodPost, "/api/v1/files/"+prepared.File.ID+"/confirm", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("confirm: %d %s", response.Code, response.Body.String())
+	}
+	info, err := runtime.Files.GetReady(t.Context(), prepared.File.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(data)
+	if info.ContentType != "image/png" || info.Width != 2 || info.Height != 2 || info.Size != int64(len(data)) || info.SHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("verified metadata: %#v", info)
+	}
+	if _, err := runtime.Files.Bind(api.db); !errors.Is(err, files.ErrInvalidTransaction) {
+		t.Fatalf("unbound write handle accepted: %v", err)
+	}
+	replace := func(owner string, ids []string) {
+		t.Helper()
+		err := runtime.Writes.Run(t.Context(), func(tx *gorm.DB) (audit.Event, error) {
+			references, err := runtime.Files.Bind(tx)
+			if err != nil {
+				return audit.Event{}, err
+			}
+			infos, err := references.Replace(t.Context(), files.ReferenceOwner{Resource: "articles", ResourceID: owner}, ids)
+			if err != nil {
+				return audit.Event{}, err
+			}
+			if len(ids) > 0 && (len(infos) != 1 || infos[0].ID != prepared.File.ID) {
+				return audit.Event{}, errors.New("reference replacement did not deduplicate")
+			}
+			if len(ids) == 0 && len(infos) != 0 {
+				return audit.Event{}, errors.New("reference clear returned files")
+			}
+			return audit.Event{ActorKind: audit.ActorSystem, Action: "articles:update", Resource: "articles", ResourceID: owner, Result: audit.ResultSuccess, Source: audit.SourceSystem}, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	replace("draft-one", []string{info.ID, info.ID})
+	replace("published-two", []string{info.ID})
+	replace("draft-one", []string{info.ID})
+	replace("draft-one", nil)
+	assertInUse := func() {
+		t.Helper()
+		response := api.request(http.MethodDelete, "/api/v1/files/"+info.ID, nil, "")
+		if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte("FILE_IN_USE")) {
+			t.Fatalf("referenced file deletion: %d %s", response.Code, response.Body.String())
+		}
+	}
+	assertInUse()
+	for _, auditFailure := range []bool{false, true} {
+		err := runtime.Writes.Run(t.Context(), func(tx *gorm.DB) (audit.Event, error) {
+			references, err := runtime.Files.Bind(tx)
+			if err != nil {
+				return audit.Event{}, err
+			}
+			if _, err := references.Replace(t.Context(), files.ReferenceOwner{Resource: "articles", ResourceID: "published-two"}, nil); err != nil {
+				return audit.Event{}, err
+			}
+			if auditFailure {
+				return audit.Event{}, nil
+			}
+			return audit.Event{}, errors.New("business save failed")
+		})
+		if err == nil {
+			t.Fatal("failed business write or invalid audit was committed")
+		}
+		assertInUse()
+	}
+	opened, reader, err := runtime.Files.Open(t.Context(), info.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil || closeErr != nil || opened.ID != info.ID || !bytes.Equal(contents, data) {
+		t.Fatalf("public file read: read=%v close=%v", readErr, closeErr)
+	}
+	replace("published-two", nil)
+	response = api.request(http.MethodDelete, "/api/v1/files/"+info.ID, nil, "")
+	// SQLite has no durable cleanup queue. The reference guard must now allow
+	// this request to reach the existing cleanup-availability check.
+	if response.Code != http.StatusServiceUnavailable || !bytes.Contains(response.Body.Bytes(), []byte("FILE_CLEANUP_UNAVAILABLE")) {
+		t.Fatalf("unreferenced cleanup availability: %d %s", response.Code, response.Body.String())
+	}
+	if _, err := runtime.Files.GetReady(t.Context(), info.ID); err != nil {
+		t.Fatalf("clearing references deleted the file: %v", err)
+	}
+}
+
+func TestFileServiceIsAbsentWithoutFilesModule(t *testing.T) {
+	var runtime services.Runtime
+	api := newConsumerAPI(t, false, fileConsumer{runtime: &runtime})
+	if runtime.Files != nil {
+		t.Fatal("file service available without FilesModule")
+	}
+	if api.db.Migrator().HasTable("file_objects") || api.db.Migrator().HasTable("file_references") {
+		t.Fatal("file tables created without FilesModule")
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xgtian-root/aginex/cli/templates"
 	"golang.org/x/mod/module"
 	modzip "golang.org/x/mod/zip"
 )
@@ -104,9 +105,22 @@ func TestStandaloneGoInstall(t *testing.T) {
 	if !strings.Contains(string(out), "version "+version+"\n") {
 		t.Fatalf("installed version: %s", out)
 	}
-	// A downloaded CLI must render every asset using its pinned framework
-	// dependency without requiring a local Aginex checkout.
-	if _, err = command(temp, nil, nil, binary, "new", "from-module"); err != nil {
+	// Installing a CLI cannot turn an unpublished backend marker into a real
+	// dependency. Verify the same fail-closed behavior after the module boundary.
+	args := []string{"new", "from-module"}
+	if strings.Contains(templates.BackendVersion, "dev") {
+		if _, err := command(temp, nil, nil, binary, args...); err == nil || !strings.Contains(err.Error(), "--aginex-path") {
+			t.Fatalf("unpublished installed CLI accepted remote generation: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(temp, "from-module")); !os.IsNotExist(err) {
+			t.Fatalf("failed generation left a project: %v", err)
+		}
+		local := filepath.Join(temp, "local-framework")
+		writeTestFile(t, filepath.Join(local, "server", "go.mod"), []byte("module "+backendModule+"\n\ngo 1.25.0\n"))
+		args = append(args, "--aginex-path", local)
+	}
+	// Every embedded asset remains usable after installing the standalone CLI.
+	if _, err = command(temp, nil, nil, binary, args...); err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range []string{"AGENTS.md", ".agents/skills/create-aginex-project/SKILL.md", "admin/package.json", "server/go.mod"} {

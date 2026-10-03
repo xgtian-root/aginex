@@ -39,6 +39,7 @@ func TestReleaseValidation(t *testing.T) {
 		{"v0.1.0-dev", "v0.0.0-20260907062300-aa50cf765344", true},
 		{"v0.1.0", "v0.0.0-20260907062300-aa50cf765344", true},
 		{"v0.1.0", "v0.1.0-dev", false}, {"v0.2.0", "v0.2.0-rc.1", false},
+		{"v0.1.1-dev", "v0.0.0-dev.unpublished", false},
 		{"v0.2.0-rc.1", "v0.1.0-dev", false}, {"v0.1.0", "unknown", false},
 	} {
 		if (validateBackend(tc.cli, tc.backend) == nil) != tc.valid {
