@@ -35,6 +35,7 @@ import (
 	"github.com/xgtian-root/aginex/server/internal/domain"
 	"github.com/xgtian-root/aginex/server/internal/platform/auditlog"
 	"github.com/xgtian-root/aginex/server/internal/platform/database"
+	platformfiles "github.com/xgtian-root/aginex/server/internal/platform/files"
 	"github.com/xgtian-root/aginex/server/internal/platform/migrate"
 	"github.com/xgtian-root/aginex/server/internal/platform/multipartcleanup"
 	"github.com/xgtian-root/aginex/server/internal/platform/storage"
@@ -321,6 +322,12 @@ func newApplication(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("configure module runtime services: %w", err)
+	}
+	if registryHasResource(registry, filesResource) {
+		runtimeServices.Files, err = platformfiles.New(db, storageRegistry)
+		if err != nil {
+			return nil, fmt.Errorf("configure public file service: %w", err)
+		}
 	}
 
 	instance := &App{

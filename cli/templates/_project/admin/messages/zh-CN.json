@@ -861,6 +861,7 @@
       "SETUP_CONFIGURATION_COMMIT_FAILED": "无法封存安装配置。",
       "SETUP_INITIALIZATION_FAILED": "安装准备完成前，初始化已停止。",
       "FILE_CLEANUP_UNAVAILABLE": "文件清理不可用。删除已存储对象前，请先配置持久任务提供商。",
+      "FILE_IN_USE": "文件仍被业务内容引用，请先解除全部引用后再删除。",
       "FILE_TOO_LARGE": "图片超过配置的上传大小限制。",
       "FILE_CONTENT_INVALID": "请上传符合尺寸限制的完整 JPEG、PNG 或 WebP 图片。",
       "UPLOAD_INTENT_NOT_PENDING": "此上传已不再等待确认。",

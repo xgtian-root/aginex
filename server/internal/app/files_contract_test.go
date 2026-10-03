@@ -489,3 +489,54 @@ func (*stubTransactionalQueue) Fail(context.Context, string, string, error) (job
 func (*stubTransactionalQueue) RetryDead(context.Context, string) error {
 	return nil
 }
+
+func TestFileDeletionRejectsSharedBusinessReferencesUntilAllUnbound(t *testing.T) {
+	cfg, db, server, cookie := newFileHandlerTestApp(t)
+	image := validPNG(t)
+	prepared, _ := createPendingLocalUpload(t, server, cookie, image)
+	uploadPendingLocalObject(t, server, cookie, cfg, prepared, image)
+	confirmed := serveRequest(server, cookie, http.MethodPost, "/api/v1/files/"+prepared.File.ID+"/confirm", nil, "")
+	if confirmed.Code != http.StatusOK {
+		t.Fatalf("confirm = %d: %s", confirmed.Code, confirmed.Body.String())
+	}
+	for _, owner := range []string{"draft-one", "published-two"} {
+		if err := db.Exec("INSERT INTO file_reference_owners(resource, resource_id, file_ids) VALUES (?, ?, ?)", "articles", owner, `["`+prepared.File.ID+`"]`).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec("INSERT INTO file_references(resource, resource_id, file_id) VALUES (?, ?, ?)", "articles", owner, prepared.File.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	queue := &stubTransactionalQueue{}
+	server.jobs = queue
+	for _, owner := range []string{"draft-one", "published-two"} {
+		deletion := serveRequest(server, cookie, http.MethodDelete, "/api/v1/files/"+prepared.File.ID, nil, "")
+		if deletion.Code != http.StatusConflict || !strings.Contains(deletion.Body.String(), `"code":"FILE_IN_USE"`) {
+			t.Fatalf("referenced delete = %d: %s", deletion.Code, deletion.Body.String())
+		}
+		var file domain.FileObject
+		if err := db.First(&file, "id = ?", prepared.File.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if file.Status != "ready" || len(queue.requests) != 0 {
+			t.Fatalf("referenced delete changed file/queue: %s/%d", file.Status, len(queue.requests))
+		}
+		if _, err := server.store.Stat(t.Context(), file.ObjectKey); err != nil {
+			t.Fatalf("referenced file object disappeared: %v", err)
+		}
+		var auditCount int64
+		if err := db.Model(&domain.AuditLog{}).Where("action = ? AND resource_id = ?", "files:delete-request", file.ID).Count(&auditCount).Error; err != nil {
+			t.Fatal(err)
+		}
+		if auditCount != 0 {
+			t.Fatalf("blocked delete wrote %d successful deletion audits", auditCount)
+		}
+		if err := db.Exec("DELETE FROM file_references WHERE resource = ? AND resource_id = ?", "articles", owner).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	deletion := serveRequest(server, cookie, http.MethodDelete, "/api/v1/files/"+prepared.File.ID, nil, "")
+	if deletion.Code != http.StatusAccepted || len(queue.requests) != 1 {
+		t.Fatalf("fully unbound delete = %d, jobs=%d: %s", deletion.Code, len(queue.requests), deletion.Body.String())
+	}
+}

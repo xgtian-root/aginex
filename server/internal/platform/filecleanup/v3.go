@@ -10,9 +10,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/xgtian-root/aginex/server/internal/domain"
 	"github.com/xgtian-root/aginex/server/internal/platform/storage"
-	"gorm.io/gorm"
 )
 
 type PayloadV3 struct {
@@ -29,32 +27,16 @@ func (handler *Handler) HandleV3(ctx context.Context, raw json.RawMessage) error
 	if err != nil {
 		return err
 	}
-	var file domain.FileObject
-	err = handler.db.WithContext(ctx).First(&file, "id = ?", job.FileID).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if job.Mode == ModePendingExpiry {
-			return nil
-		}
-		jobStore, resolveErr := handler.storageForFile(nil, job.ProfileID, job.Provider, job.Bucket)
-		if resolveErr != nil {
-			return resolveErr
-		}
-		return jobStore.Delete(ctx, job.ObjectKey)
+	if handler == nil {
+		return errors.New("file cleanup handler is required")
 	}
-	if err != nil {
-		return err
+	if handler.registry == nil && job.Provider != handler.provider {
+		return fmt.Errorf("%w: provider %q", ErrObjectChanged, job.Provider)
 	}
-	if file.StorageProfileID == nil || *file.StorageProfileID != job.ProfileID ||
-		file.Provider != job.Provider || file.Bucket != job.Bucket || file.ObjectKey != job.ObjectKey {
-		return ErrObjectChanged
+	if job.Mode == ModePendingExpiry {
+		return handler.expirePendingUpload(ctx, job)
 	}
-	legacy, err := json.Marshal(PayloadV2{
-		FileID: job.FileID, Provider: job.Provider, ObjectKey: job.ObjectKey, Mode: job.Mode,
-	})
-	if err != nil {
-		return err
-	}
-	return handler.HandleV2(ctx, legacy)
+	return handler.deleteFile(ctx, job)
 }
 
 func decodePayloadV3(raw json.RawMessage) (PayloadV3, error) {

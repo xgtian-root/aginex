@@ -90,6 +90,11 @@ jobs:
     env:
       AGINEX_TEST_POSTGRES_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex?sslmode=disable
       AGINEX_TEST_MYSQL_DSN: aginex:aginex@tcp(127.0.0.1:3306)/aginex?parseTime=true
+      # File-service concurrency owns separate databases so core migration
+      # up/down tests cannot remove its fixtures. Worker tests isolate schemas.
+      AGINEX_FILES_TEST_POSTGRES_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex_files?sslmode=disable
+      AGINEX_FILES_TEST_MYSQL_DSN: aginex:aginex@tcp(127.0.0.1:3306)/aginex_files?parseTime=true
+      AGINEX_FILES_WORKER_TEST_POSTGRES_DSN: postgres://aginex:aginex@127.0.0.1:5432/aginex_files?sslmode=disable
       AGINEX_TEST_S3_ENDPOINT: http://127.0.0.1:9000
       AGINEX_TEST_S3_BUCKET: aginex-contract
       AGINEX_TEST_S3_REGION: us-east-1
@@ -137,10 +142,15 @@ jobs:
             --env MC_HOST_contract=http://aginex-ci:aginex-ci-secret-key@127.0.0.1:9000 \
             minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727 \
             mb --ignore-existing contract/aginex-contract
-      - name: Configure MySQL for integration tests
+      - name: Configure isolated integration databases
         run: |
+          docker exec "${{ job.services.postgres.id }}" \
+            psql -v ON_ERROR_STOP=1 -U aginex -d aginex \
+            -c 'CREATE DATABASE aginex_files OWNER aginex;'
           mysql -h 127.0.0.1 -uroot -p'aginex-root' \
             -e "SET GLOBAL log_bin_trust_function_creators = 1;" || true
+          mysql -h 127.0.0.1 -uroot -p'aginex-root' \
+            -e "CREATE DATABASE aginex_files; GRANT ALL ON aginex_files.* TO 'aginex'@'%';"
       - name: Download independent module dependencies
         run: |
           GOWORK=off go -C server mod download all

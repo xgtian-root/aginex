@@ -17,8 +17,10 @@ import (
 	"github.com/xgtian-root/aginex/server/framework/uow"
 	"github.com/xgtian-root/aginex/server/internal/domain"
 	"github.com/xgtian-root/aginex/server/internal/platform/auditlog"
+	"github.com/xgtian-root/aginex/server/internal/platform/filereferences"
 	platformstorage "github.com/xgtian-root/aginex/server/internal/platform/storage"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -118,13 +120,6 @@ func (handler *Handler) Cleanup(
 		session.Status = intermediate
 	}
 
-	multipartStore, upload, err := handler.multipartStore(file, session)
-	if err != nil {
-		return err
-	}
-	if err := multipartStore.AbortMultipart(ctx, upload); err != nil {
-		return fmt.Errorf("abort multipart upload: %w", err)
-	}
 	if err := handler.finish(ctx, sessionID, cause, intermediate, terminal); err != nil {
 		if errors.Is(err, errAlreadyDone) {
 			return nil
@@ -162,11 +157,11 @@ func (handler *Handler) begin(
 ) error {
 	return handler.writes.Run(ctx, func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		var current domain.FileUploadSession
-		if err := tx.First(&current, "id = ?", session.ID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, "id = ?", session.ID).Error; err != nil {
 			return frameworkaudit.Event{}, err
 		}
 		var currentFile domain.FileObject
-		if err := tx.First(&currentFile, "id = ?", current.FileID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&currentFile, "id = ?", current.FileID).Error; err != nil {
 			return frameworkaudit.Event{}, err
 		}
 		if cleanupAlreadyDone(currentFile, current) {
@@ -177,6 +172,9 @@ func (handler *Handler) begin(
 		}
 		if current.FileID != file.ID || currentFile.ObjectKey != file.ObjectKey {
 			return frameworkaudit.Event{}, ErrObjectChanged
+		}
+		if err := filereferences.CheckUnreferenced(ctx, tx, currentFile.ID); err != nil {
+			return frameworkaudit.Event{}, err
 		}
 		before := cleanupAuditFields(currentFile, current, cause)
 		now := handler.clock().UTC()
@@ -204,14 +202,14 @@ func (handler *Handler) finish(
 ) error {
 	return handler.writes.Run(ctx, func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		var session domain.FileUploadSession
-		if err := tx.First(&session, "id = ?", sessionID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&session, "id = ?", sessionID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return frameworkaudit.Event{}, errAlreadyDone
 			}
 			return frameworkaudit.Event{}, err
 		}
 		var file domain.FileObject
-		if err := tx.First(&file, "id = ?", session.FileID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&file, "id = ?", session.FileID).Error; err != nil {
 			return frameworkaudit.Event{}, err
 		}
 		if cleanupAlreadyDone(file, session) {
@@ -222,6 +220,19 @@ func (handler *Handler) finish(
 		}
 		if file.Status != "pending" && file.Status != "invalid" && file.Status != "deleted" {
 			return frameworkaudit.Event{}, fmt.Errorf("%w: file status %q", ErrUnsafeState, file.Status)
+		}
+		if err := filereferences.CheckUnreferenced(ctx, tx, file.ID); err != nil {
+			return frameworkaudit.Event{}, err
+		}
+		// Keep session→file locks while checking references and aborting the
+		// exact upload, including retries that already entered cancelling or
+		// expiring before this delivery.
+		multipartStore, upload, err := handler.multipartStore(file, session)
+		if err != nil {
+			return frameworkaudit.Event{}, err
+		}
+		if err := multipartStore.AbortMultipart(ctx, upload); err != nil {
+			return frameworkaudit.Event{}, fmt.Errorf("abort multipart upload: %w", err)
 		}
 		before := cleanupAuditFields(file, session, cause)
 		now := handler.clock().UTC()

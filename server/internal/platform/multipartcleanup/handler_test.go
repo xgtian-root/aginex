@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/xgtian-root/aginex/server/framework/authz"
+	frameworkfiles "github.com/xgtian-root/aginex/server/framework/files"
 	"github.com/xgtian-root/aginex/server/framework/jobs"
 	"github.com/xgtian-root/aginex/server/framework/observability"
 	frameworkstorage "github.com/xgtian-root/aginex/server/framework/storage"
@@ -324,6 +325,21 @@ func applyMultipartCleanupFixture(db *gorm.DB) error {
 			status TEXT NOT NULL, upload_expires_at DATETIME, created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL, deleted_at DATETIME
 		);
+
+        CREATE TABLE file_reference_owners (
+            resource VARCHAR(120) NOT NULL,
+            resource_id VARCHAR(160) NOT NULL,
+            file_ids TEXT NOT NULL,
+            PRIMARY KEY (resource, resource_id)
+        );
+        CREATE TABLE file_references (
+            resource VARCHAR(120) NOT NULL,
+            resource_id VARCHAR(160) NOT NULL,
+            file_id TEXT NOT NULL REFERENCES file_objects(id),
+            PRIMARY KEY (resource, resource_id, file_id),
+            FOREIGN KEY (resource, resource_id) REFERENCES file_reference_owners(resource, resource_id)
+        );
+        CREATE INDEX idx_file_references_file_id ON file_references(file_id);
 		CREATE TABLE file_upload_sessions (
 			id TEXT PRIMARY KEY, file_id TEXT NOT NULL UNIQUE REFERENCES file_objects(id),
 			provider_upload_id TEXT NOT NULL, resume_fingerprint TEXT NOT NULL,
@@ -339,4 +355,46 @@ func applyMultipartCleanupFixture(db *gorm.DB) error {
 			confirmed_at DATETIME NOT NULL, PRIMARY KEY (session_id, part_number)
 		);
 	`).Error
+}
+
+func TestMultipartCleanupProtectsReferencesBeforeInitialAbortAndRetry(t *testing.T) {
+	for _, status := range []domain.FileUploadSessionStatus{domain.FileUploadSessionStatusActive, domain.FileUploadSessionStatusExpiring, domain.FileUploadSessionStatusCancelling} {
+		t.Run(string(status), func(t *testing.T) {
+			db, registry, profileID := cleanupTestRuntime(t)
+			file, session := seedUploadSession(t, db, registry, profileID, status, cleanupTestNow.Add(-time.Minute), "pending", true)
+			if err := db.Exec("INSERT INTO file_reference_owners(resource, resource_id, file_ids) VALUES (?, ?, ?)", "articles", "one", `["`+file.ID+`"]`).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Exec("INSERT INTO file_references(resource, resource_id, file_id) VALUES (?, ?, ?)", "articles", "one", file.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			cause := CauseExpiry
+			if status == domain.FileUploadSessionStatusCancelling {
+				cause = CauseCancel
+			}
+			err := cleanupTestHandler(t, db, registry).Cleanup(t.Context(), session.ID, cause)
+			if !errors.Is(err, frameworkfiles.ErrInUse) {
+				t.Fatalf("cleanup = %v, want ErrInUse", err)
+			}
+			var storedFile domain.FileObject
+			var storedSession domain.FileUploadSession
+			if err := db.First(&storedFile, "id = ?", file.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.First(&storedSession, "id = ?", session.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if storedFile.Status != "pending" || storedFile.DeletedAt != nil || storedSession.Status != status {
+				t.Fatalf("protected file/session changed: %#v / %#v", storedFile, storedSession)
+			}
+			multipart, err := registry.ResolveMultipart(profileID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := multipart.ListUploadedParts(t.Context(), frameworkstorage.MultipartUpload{Key: file.ObjectKey, ProviderUploadID: session.ProviderUploadID}); err != nil {
+				t.Fatalf("cleanup aborted referenced file multipart upload: %v", err)
+			}
+			assertCleanupAudits(t, db, session.ID, 0)
+		})
+	}
 }

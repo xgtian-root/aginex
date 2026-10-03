@@ -19,11 +19,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	frameworkaudit "github.com/xgtian-root/aginex/server/framework/audit"
+	frameworkfiles "github.com/xgtian-root/aginex/server/framework/files"
 	"github.com/xgtian-root/aginex/server/framework/httpx"
 	frameworkjobs "github.com/xgtian-root/aginex/server/framework/jobs"
 	"github.com/xgtian-root/aginex/server/framework/services"
 	frameworkstorage "github.com/xgtian-root/aginex/server/framework/storage"
 	"github.com/xgtian-root/aginex/server/internal/domain"
+	"github.com/xgtian-root/aginex/server/internal/platform/filereferences"
 	"github.com/xgtian-root/aginex/server/internal/platform/multipartcleanup"
 	"github.com/xgtian-root/aginex/server/internal/platform/storage"
 	"gorm.io/gorm"
@@ -691,6 +693,9 @@ func (a *App) cancelUploadSession(c *gin.Context) {
 			if lockedSession.Status != domain.FileUploadSessionStatusActive {
 				return frameworkaudit.Event{}, errUploadSessionTransitioned
 			}
+			if err := filereferences.CheckUnreferenced(c.Request.Context(), tx, lockedFile.ID); err != nil {
+				return frameworkaudit.Event{}, err
+			}
 			before := uploadSessionAuditFields(lockedFile, lockedSession, 0)
 			lockedSession.Status = domain.FileUploadSessionStatusCancelling
 			lockedSession.UpdatedAt = time.Now().UTC()
@@ -734,11 +739,7 @@ func (a *App) cancelUploadSession(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := multipartStore.AbortMultipart(c.Request.Context(), upload); err != nil {
-		logRequestFailure(c, "storage_abort_multipart", err)
-		writeProblem(c, http.StatusServiceUnavailable, "Upload could not be cancelled", "Retry cancellation after the storage provider becomes available.")
-		return
-	}
+	var abortErr error
 	principal := currentPrincipal(c)
 	err := a.writes.Run(c.Request.Context(), func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		lockedFile, lockedSession, err := lockUploadSession(tx, session.ID)
@@ -753,6 +754,24 @@ func (a *App) cancelUploadSession(c *gin.Context) {
 		}
 		if lockedSession.Status != domain.FileUploadSessionStatusCancelling && lockedSession.Status != domain.FileUploadSessionStatusExpiring {
 			return frameworkaudit.Event{}, errUploadSessionChanged
+		}
+		if err := filereferences.CheckUnreferenced(c.Request.Context(), tx, lockedFile.ID); err != nil {
+			return frameworkaudit.Event{}, err
+		}
+		if lockedFile.Status != "pending" && lockedFile.Status != "invalid" && lockedFile.Status != "deleted" {
+			return frameworkaudit.Event{}, errUploadSessionChanged
+		}
+		if lockedFile.ObjectKey != file.ObjectKey || lockedSession.ProviderUploadID != session.ProviderUploadID ||
+			lockedFile.Provider != file.Provider || lockedFile.Bucket != file.Bucket ||
+			(lockedFile.StorageProfileID == nil) != (file.StorageProfileID == nil) ||
+			(lockedFile.StorageProfileID != nil && *lockedFile.StorageProfileID != *file.StorageProfileID) {
+			return frameworkaudit.Event{}, errUploadSessionChanged
+		}
+		// Session and file locks serialize cancellation with completion and
+		// reference replacement until the provider abort is complete.
+		if err := multipartStore.AbortMultipart(c.Request.Context(), upload); err != nil {
+			abortErr = err
+			return frameworkaudit.Event{}, err
 		}
 		before := uploadSessionAuditFields(lockedFile, lockedSession, 0)
 		now := time.Now().UTC()
@@ -772,6 +791,11 @@ func (a *App) cancelUploadSession(c *gin.Context) {
 		}
 		return successfulAuditEvent(c, &principal.User.ID, "files:cancel-resumable", "file-upload-session", session.ID, "Cancelled resumable upload", before, uploadSessionAuditFields(lockedFile, lockedSession, 0)), nil
 	})
+	if abortErr != nil {
+		logRequestFailure(c, "storage_abort_multipart", abortErr)
+		writeProblem(c, http.StatusServiceUnavailable, "Upload could not be cancelled", "Retry cancellation after the storage provider becomes available.")
+		return
+	}
 	if err != nil && !errors.Is(err, errUploadSessionTransitioned) {
 		writeUploadSessionWriteError(c, "cancel_upload_session", err)
 		return
@@ -1108,6 +1132,10 @@ func writeUploadSessionStateProblem(c *gin.Context, session domain.FileUploadSes
 }
 
 func writeUploadSessionWriteError(c *gin.Context, operation string, err error) {
+	if errors.Is(err, frameworkfiles.ErrInUse) {
+		writeFileInUseProblem(c)
+		return
+	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		notFoundOrInternal(c, "Upload session", err)
 		return

@@ -253,7 +253,7 @@ export interface paths {
     get: operations["getUploadSession"];
     put?: never;
     post?: never;
-    /** Cancel and abort a resumable upload */
+    /** Cancel and abort an unreferenced resumable upload (409 FILE_IN_USE while referenced) */
     delete: operations["cancelUploadSession"];
     options?: never;
     head?: never;
@@ -355,7 +355,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Schedule file deletion */
+    /** Schedule unreferenced file deletion (409 FILE_IN_USE while referenced) */
     delete: operations["deleteFile"];
     options?: never;
     head?: never;
@@ -371,7 +371,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Verify and confirm an uploaded object */
+    /** Verify and confirm an uploaded object (409 FILE_IN_USE prevents quarantining a referenced file) */
     post: operations["confirmUpload"];
     delete?: never;
     options?: never;

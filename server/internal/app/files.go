@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	frameworkaudit "github.com/xgtian-root/aginex/server/framework/audit"
 	frameworkauthz "github.com/xgtian-root/aginex/server/framework/authz"
+	frameworkfiles "github.com/xgtian-root/aginex/server/framework/files"
 	"github.com/xgtian-root/aginex/server/framework/httpx"
 	"github.com/xgtian-root/aginex/server/framework/jobs"
 	"github.com/xgtian-root/aginex/server/framework/module"
@@ -20,6 +21,7 @@ import (
 	frameworkstorage "github.com/xgtian-root/aginex/server/framework/storage"
 	"github.com/xgtian-root/aginex/server/internal/domain"
 	"github.com/xgtian-root/aginex/server/internal/platform/filecleanup"
+	"github.com/xgtian-root/aginex/server/internal/platform/filereferences"
 	"github.com/xgtian-root/aginex/server/internal/platform/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -39,9 +41,10 @@ var filesAuthorizer = newFilesAuthorizer()
 var errUploadIntentChanged = errors.New("upload intent changed during confirmation")
 
 var (
-	errFileCleanupScheduled = errors.New("file cleanup is already scheduled")
-	errFileAlreadyDeleted   = errors.New("file is already deleted")
-	errFileUploadInProgress = errors.New("file has a non-terminal upload session")
+	errFileCleanupScheduled   = errors.New("file cleanup is already scheduled")
+	errFileCleanupUnavailable = errors.New("file cleanup is unavailable")
+	errFileAlreadyDeleted     = errors.New("file is already deleted")
+	errFileUploadInProgress   = errors.New("file has a non-terminal upload session")
 )
 
 type fileCleanupCause uint8
@@ -321,6 +324,14 @@ func (a *App) confirmUpload(c *gin.Context) {
 			return
 		}
 		if err := a.markInvalidUpload(c, verifiedIntent); err != nil {
+			if errors.Is(err, errUploadIntentChanged) {
+				writeProblem(c, http.StatusConflict, "Upload intent changed", "Create a new upload intent and upload the object again.")
+				return
+			}
+			if errors.Is(err, frameworkfiles.ErrInUse) {
+				writeFileInUseProblem(c)
+				return
+			}
 			logRequestFailure(c, "quarantine_invalid_upload", err)
 			writeProblem(c, http.StatusInternalServerError, "Invalid upload could not be quarantined", "The file state could not be committed.")
 			return
@@ -585,28 +596,6 @@ func (a *App) deleteFile(c *gin.Context) {
 	if !found {
 		return
 	}
-	var incompleteSessions int64
-	if err := a.db.WithContext(c.Request.Context()).Model(&domain.FileUploadSession{}).
-		Where("file_id = ? AND status IN ?", file.ID, incompleteUploadSessionStatuses()).
-		Count(&incompleteSessions).Error; err != nil {
-		logRequestFailure(c, "check_file_upload_session_before_delete", err)
-		writeProblem(c, http.StatusInternalServerError, "File deletion could not be prepared", "The file's upload state could not be checked.")
-		return
-	}
-	if incompleteSessions > 0 {
-		writeFileUploadInProgressProblem(c)
-		return
-	}
-	if a.jobs == nil {
-		httpx.WriteProblem(
-			c,
-			http.StatusServiceUnavailable,
-			"FILE_CLEANUP_UNAVAILABLE",
-			"File cleanup is unavailable",
-			"Configure a durable job provider before deleting stored objects.",
-		)
-		return
-	}
 	principal := currentPrincipal(c)
 	err := a.writes.Run(c.Request.Context(), func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		// Multipart transitions lock session then file. Use the same order so
@@ -615,10 +604,7 @@ func (a *App) deleteFile(c *gin.Context) {
 		sessionErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("file_id = ? AND status IN ?", file.ID, incompleteUploadSessionStatuses()).
 			First(&uploadSession).Error
-		if sessionErr == nil {
-			return frameworkaudit.Event{}, errFileUploadInProgress
-		}
-		if !errors.Is(sessionErr, gorm.ErrRecordNotFound) {
+		if sessionErr != nil && !errors.Is(sessionErr, gorm.ErrRecordNotFound) {
 			return frameworkaudit.Event{}, sessionErr
 		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -628,11 +614,20 @@ func (a *App) deleteFile(c *gin.Context) {
 		if err := checkFileAuthorization(c, "files:delete", file); err != nil {
 			return frameworkaudit.Event{}, err
 		}
+		if err := filereferences.CheckUnreferenced(c.Request.Context(), tx, file.ID); err != nil {
+			return frameworkaudit.Event{}, err
+		}
+		if sessionErr == nil {
+			return frameworkaudit.Event{}, errFileUploadInProgress
+		}
 		switch file.Status {
 		case "deleted":
 			return frameworkaudit.Event{}, errFileAlreadyDeleted
 		case "deleting":
 			return frameworkaudit.Event{}, errFileCleanupScheduled
+		}
+		if a.jobs == nil {
+			return frameworkaudit.Event{}, errFileCleanupUnavailable
 		}
 		cleanupAt := time.Time{}
 		if file.Status == "pending" && file.UploadExpiresAt != nil {
@@ -673,6 +668,14 @@ func (a *App) deleteFile(c *gin.Context) {
 			fileAuditFields(file),
 		), nil
 	})
+	if errors.Is(err, errFileCleanupUnavailable) {
+		httpx.WriteProblem(c, http.StatusServiceUnavailable, "FILE_CLEANUP_UNAVAILABLE", "File cleanup is unavailable", "Configure a durable job provider before deleting stored objects.")
+		return
+	}
+	if errors.Is(err, frameworkfiles.ErrInUse) {
+		writeFileInUseProblem(c)
+		return
+	}
 	if errors.Is(err, errFileAlreadyDeleted) {
 		c.Status(http.StatusNoContent)
 		return
@@ -695,6 +698,10 @@ func (a *App) deleteFile(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusAccepted)
+}
+
+func writeFileInUseProblem(c *gin.Context) {
+	httpx.WriteProblem(c, http.StatusConflict, "FILE_IN_USE", "File is still in use", "Remove all business references before deleting this file.")
 }
 
 func writeFileUploadInProgressProblem(c *gin.Context) {
@@ -912,14 +919,21 @@ func (a *App) markInvalidUpload(c *gin.Context, expected domain.FileObject) erro
 	principal := currentPrincipal(c)
 	return a.writes.Run(c.Request.Context(), func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		var file domain.FileObject
-		if err := tx.First(&file, "id = ? AND status = ?", expected.ID, "pending").Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&file, "id = ?", expected.ID).Error; err != nil {
 			return frameworkaudit.Event{}, err
+		}
+		if file.Status != "pending" {
+			return frameworkaudit.Event{}, errUploadIntentChanged
 		}
 		if err := checkFileAuthorization(c, "files:create", file); err != nil {
 			return frameworkaudit.Event{}, err
 		}
 		if file.ObjectKey != expected.ObjectKey {
 			return frameworkaudit.Event{}, errUploadIntentChanged
+		}
+		if err := filereferences.CheckUnreferenced(c.Request.Context(), tx, file.ID); err != nil {
+			return frameworkaudit.Event{}, err
 		}
 		before := fileAuditFields(file)
 		file.Status = "invalid"

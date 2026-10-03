@@ -861,6 +861,7 @@
       "SETUP_CONFIGURATION_COMMIT_FAILED": "The installation configuration could not be sealed.",
       "SETUP_INITIALIZATION_FAILED": "Initialization stopped before the installation was ready.",
       "FILE_CLEANUP_UNAVAILABLE": "File cleanup is unavailable. Configure a durable job provider before deleting stored objects.",
+      "FILE_IN_USE": "This file is still used by business content. Remove all references before deleting it.",
       "FILE_TOO_LARGE": "The image exceeds the configured upload limit.",
       "FILE_CONTENT_INVALID": "Upload a complete JPEG, PNG, or WebP image within the configured dimension limits.",
       "UPLOAD_INTENT_NOT_PENDING": "This upload is no longer waiting for confirmation.",

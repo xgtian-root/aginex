@@ -132,6 +132,34 @@ afterEach(() => {
 });
 
 describe("FilesPage transfer workbench", () => {
+  it("explains a referenced-file conflict and keeps the file visible", async () => {
+    mocks.listFiles.mockResolvedValue({
+      items: [fileRecord("shared-file", "shared.png", "image", "image/png")],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+    });
+    mocks.deleteFile.mockRejectedValue(
+      Object.assign(new mocks.ApiError(), {
+        status: 409,
+        problem: { code: "FILE_IN_USE" },
+      }),
+    );
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete shared.png" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete file" }));
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        messages.Problem.codes.FILE_IN_USE,
+      );
+    });
+    expect(screen.getByText("shared.png")).toBeVisible();
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(mocks.deleteFile).toHaveBeenCalledTimes(1);
+  });
+
   it("stages multiple arbitrary files and waits for explicit confirmation", async () => {
     renderPage();
     const input = await findFileInput();

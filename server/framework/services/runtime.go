@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	frameworkaudit "github.com/xgtian-root/aginex/server/framework/audit"
+	frameworkfiles "github.com/xgtian-root/aginex/server/framework/files"
 	"github.com/xgtian-root/aginex/server/framework/jobs"
 	"github.com/xgtian-root/aginex/server/framework/module"
 	"github.com/xgtian-root/aginex/server/framework/observability"
@@ -33,9 +34,11 @@ type UnitOfWork interface {
 // modules publish business-specific telemetry through the same
 // deployment-owned sink as framework instrumentation.
 type Runtime struct {
-	Database      *module.QueryDatabase
-	Writes        UnitOfWork
-	Storage       frameworkstorage.ObjectStore
+	Database *module.QueryDatabase
+	Writes   UnitOfWork
+	Storage  frameworkstorage.ObjectStore
+	// Files manages verified uploaded files. It is nil unless FilesModule is enabled.
+	Files         frameworkfiles.Service
 	Jobs          jobs.TransactionalQueue
 	Observability *observability.Recorder
 	database      *gorm.DB
@@ -81,6 +84,7 @@ func ContextWithRuntime(
 		runtime.Database == nil ||
 		runtime.database == nil ||
 		nilInterface(runtime.Storage) ||
+		(runtime.Files != nil && nilInterface(runtime.Files)) ||
 		runtime.Observability == nil {
 		return nil, ErrInvalidRuntime
 	}
@@ -99,6 +103,7 @@ func RuntimeFromContext(
 		runtime.Database == nil ||
 		runtime.database == nil ||
 		nilInterface(runtime.Storage) ||
+		(runtime.Files != nil && nilInterface(runtime.Files)) ||
 		runtime.Observability == nil {
 		return Runtime{}, false
 	}

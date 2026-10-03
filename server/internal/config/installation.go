@@ -227,7 +227,6 @@ func ResolveState(env map[string]string, path string, stored *Installation) (Sta
 				ActiveProfileID: installation.ActiveProfileID,
 				Profiles:        cloneStorageProfiles(installation.Profiles),
 			}
-			applyEnvironmentLocalRoot(&set, cfg.Storage.LocalRoot)
 			if err := validateInstalledStorageEndpoints(cfg.Environment, cfg.Storage.EndpointAllowlist, set); err != nil {
 				return state, err
 			}
@@ -259,7 +258,6 @@ func ResolveState(env map[string]string, path string, stored *Installation) (Sta
 			if !replaced {
 				set.Profiles = append(set.Profiles, environmentProfile)
 			}
-			applyEnvironmentLocalRoot(&set, cfg.Storage.LocalRoot)
 			if err := validateInstalledStorageEndpoints(cfg.Environment, cfg.Storage.EndpointAllowlist, set); err != nil {
 				return state, err
 			}
@@ -295,17 +293,6 @@ func ResolveState(env map[string]string, path string, stored *Installation) (Sta
 	}
 	state.Status = StatusConfigured
 	return state, nil
-}
-
-func applyEnvironmentLocalRoot(set *StorageProfileSet, localRoot string) {
-	if set == nil || strings.TrimSpace(localRoot) == "" {
-		return
-	}
-	for index := range set.Profiles {
-		if set.Profiles[index].Provider == StorageProviderLocal {
-			set.Profiles[index].LocalRoot = localRoot
-		}
-	}
 }
 
 func validateInstalledStorageEndpoints(environment string, allowlist []string, set StorageProfileSet) error {

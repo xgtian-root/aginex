@@ -18,6 +18,7 @@ import (
 	"github.com/xgtian-root/aginex/server/framework/uow"
 	"github.com/xgtian-root/aginex/server/internal/domain"
 	"github.com/xgtian-root/aginex/server/internal/platform/auditlog"
+	"github.com/xgtian-root/aginex/server/internal/platform/filereferences"
 	"github.com/xgtian-root/aginex/server/internal/platform/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -148,55 +149,66 @@ func (handler *Handler) Handle(ctx context.Context, raw json.RawMessage) error {
 		return fmt.Errorf("%w: object key", ErrInvalidPayload)
 	}
 
-	var file domain.FileObject
-	err = handler.db.WithContext(ctx).First(&file, "id = ?", job.FileID).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		jobStore, resolveErr := handler.storageForFile(nil, "", job.Provider, "")
-		if resolveErr != nil {
-			return resolveErr
-		}
-		return jobStore.Delete(ctx, job.ObjectKey)
-	}
-	if err != nil {
-		return err
-	}
-	if file.Provider != job.Provider || file.ObjectKey != job.ObjectKey {
-		return ErrObjectChanged
-	}
-	jobStore, err := handler.storageForFile(&file, "", job.Provider, file.Bucket)
-	if err != nil {
-		return err
-	}
-	if file.Status == "deleted" {
-		return nil
-	}
-	if file.Status != "deleting" && file.Status != "invalid" && file.Status != "delete_failed" {
-		return fmt.Errorf("%w: status %q", ErrUnsafeState, file.Status)
-	}
-	if err := jobStore.Delete(ctx, job.ObjectKey); err != nil {
-		return fmt.Errorf("delete stored object: %w", err)
-	}
+	return handler.deleteFile(ctx, PayloadV3{FileID: job.FileID, Provider: job.Provider, ObjectKey: job.ObjectKey, Mode: ModeExplicitDelete})
+}
 
-	now := handler.clock().UTC()
-	err = handler.writes.Run(ctx, func(tx *gorm.DB) (frameworkaudit.Event, error) {
+// deleteFile holds the same file lock used by reference replacement through the
+// final safety check and physical deletion. No ready file can gain a reference
+// between that check and storage.Delete, including stale/retried job deliveries.
+func (handler *Handler) deleteFile(ctx context.Context, job PayloadV3) error {
+	err := handler.writes.Run(ctx, func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		var locked domain.FileObject
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			First(&locked, "id = ?", job.FileID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return frameworkaudit.Event{}, errMetadataMissing
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return frameworkaudit.Event{}, err
 			}
+			// Old orphan deliveries must never delete a different file which
+			// owns this key. Also fail closed on dangling references in damaged
+			// databases before resolving the payload's original storage.
+			var owner domain.FileObject
+			ownerErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("object_key = ?", job.ObjectKey).First(&owner).Error
+			if ownerErr == nil {
+				return frameworkaudit.Event{}, ErrObjectChanged
+			}
+			if !errors.Is(ownerErr, gorm.ErrRecordNotFound) {
+				return frameworkaudit.Event{}, ownerErr
+			}
+			if err := filereferences.CheckUnreferenced(ctx, tx, job.FileID); err != nil {
+				return frameworkaudit.Event{}, err
+			}
+			jobStore, err := handler.storageForFile(nil, job.ProfileID, job.Provider, job.Bucket)
+			if err != nil {
+				return frameworkaudit.Event{}, err
+			}
+			if err := jobStore.Delete(ctx, job.ObjectKey); err != nil {
+				return frameworkaudit.Event{}, fmt.Errorf("delete orphan stored object: %w", err)
+			}
+			return frameworkaudit.Event{}, errMetadataMissing
+		}
+		if locked.Provider != job.Provider || locked.ObjectKey != job.ObjectKey ||
+			(job.ProfileID != "" && (locked.StorageProfileID == nil || *locked.StorageProfileID != job.ProfileID || locked.Bucket != job.Bucket)) {
+			return frameworkaudit.Event{}, ErrObjectChanged
+		}
+		if err := filereferences.CheckUnreferenced(ctx, tx, locked.ID); err != nil {
 			return frameworkaudit.Event{}, err
 		}
 		if locked.Status == "deleted" {
 			return frameworkaudit.Event{}, errAlreadyCompleted
 		}
-		if locked.Provider != job.Provider || locked.ObjectKey != job.ObjectKey {
-			return frameworkaudit.Event{}, ErrObjectChanged
-		}
 		if locked.Status != "deleting" && locked.Status != "invalid" && locked.Status != "delete_failed" {
 			return frameworkaudit.Event{}, fmt.Errorf("%w: status %q", ErrUnsafeState, locked.Status)
 		}
+		jobStore, err := handler.storageForFile(&locked, job.ProfileID, job.Provider, locked.Bucket)
+		if err != nil {
+			return frameworkaudit.Event{}, err
+		}
+		if err := jobStore.Delete(ctx, job.ObjectKey); err != nil {
+			return frameworkaudit.Event{}, fmt.Errorf("delete stored object: %w", err)
+		}
 		before := auditFields(locked)
+		now := handler.clock().UTC()
 		locked.Status = "deleted"
 		locked.DeletedAt = &now
 		locked.UpdatedAt = now

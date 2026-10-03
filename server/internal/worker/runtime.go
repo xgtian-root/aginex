@@ -21,6 +21,7 @@ import (
 	"github.com/xgtian-root/aginex/server/internal/platform/auditlog"
 	"github.com/xgtian-root/aginex/server/internal/platform/database"
 	"github.com/xgtian-root/aginex/server/internal/platform/filecleanup"
+	platformfiles "github.com/xgtian-root/aginex/server/internal/platform/files"
 	"github.com/xgtian-root/aginex/server/internal/platform/migrate"
 	"github.com/xgtian-root/aginex/server/internal/platform/multipartcleanup"
 	"github.com/xgtian-root/aginex/server/internal/platform/storage"
@@ -218,6 +219,12 @@ func NewWithModulesAndObservability(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("configure module runtime services: %w", err)
+	}
+	if filesEnabled {
+		runtimeServices.Files, err = platformfiles.New(db, storageRegistry)
+		if err != nil {
+			return nil, fmt.Errorf("configure public file service: %w", err)
+		}
 	}
 	runner, err := jobs.NewRunner(observedQueue, registry, jobs.RunnerConfig{
 		WorkerID:          cfg.Jobs.WorkerID,

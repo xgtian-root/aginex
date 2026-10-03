@@ -506,7 +506,7 @@
     "target": "server",
     "type": "string",
     "default": "data/uploads",
-    "description": "storage local root",
+    "description": "root for initial or environment-managed Local profile; saved profiles retain their original roots",
     "allowed": [],
     "secret": false,
     "fixed": false,

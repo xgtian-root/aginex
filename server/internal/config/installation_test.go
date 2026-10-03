@@ -78,6 +78,58 @@ func TestStorageEnvironmentManagementRequiresExplicitDriver(t *testing.T) {
 	})
 }
 
+func TestResolveStatePreservesOriginalLocalProfileRoots(t *testing.T) {
+	rootA := filepath.Join(t.TempDir(), "original")
+	rootB := filepath.Join(t.TempDir(), "active")
+	rootC := filepath.Join(t.TempDir(), "environment")
+	installation, err := NewManagedInstallationWithStorage(
+		Database{Driver: "sqlite", DSN: filepath.Join(t.TempDir(), "test.db")},
+		strings.Repeat("s", 32), Storage{Driver: "local", LocalRoot: rootA},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileA := installation.Profiles[0]
+	profileB := SynthesizeStorageProfile(Storage{Driver: "local", LocalRoot: rootB})
+	installation.Profiles = append(installation.Profiles, profileB)
+	installation.ActiveProfileID = profileB.ID
+	for _, test := range []struct {
+		name      string
+		env       map[string]string
+		wantRoot  string
+		wantCount int
+	}{
+		{name: "defaults", env: map[string]string{}, wantRoot: rootB, wantCount: 2},
+		{name: "root alone", env: map[string]string{"AGINEX_STORAGE_LOCAL_ROOT": rootC}, wantRoot: rootB, wantCount: 2},
+		{name: "explicit environment profile", env: map[string]string{"AGINEX_STORAGE_DRIVER": "local", "AGINEX_STORAGE_LOCAL_ROOT": rootC}, wantRoot: rootC, wantCount: 3},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state, err := ResolveState(test.env, filepath.Join(t.TempDir(), "installation.json"), &installation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runtime := state.Config.StorageRuntime()
+			if len(runtime.Profiles) != test.wantCount || state.Config.Storage.LocalRoot != test.wantRoot {
+				t.Fatalf("profile count/root = %d/%q", len(runtime.Profiles), state.Config.Storage.LocalRoot)
+			}
+			for _, original := range []StorageProfile{profileA, profileB} {
+				found := false
+				for _, got := range runtime.Profiles {
+					if got.ID == original.ID {
+						found = true
+						if got.LocalRoot != original.LocalRoot {
+							t.Fatalf("profile %s root = %q, want %q", original.ID, got.LocalRoot, original.LocalRoot)
+						}
+					}
+				}
+				if !found {
+					t.Fatalf("original profile %s was lost", original.ID)
+				}
+			}
+		})
+	}
+}
+
 func TestLoadStateCreatesEnvironmentMarkerWithoutDSN(t *testing.T) {
 	path := isolatedInstallationEnvironment(t)
 	t.Setenv("AGINEX_DATABASE_DRIVER", "POSTGRES")

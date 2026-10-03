@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	frameworkaudit "github.com/xgtian-root/aginex/server/framework/audit"
 	"github.com/xgtian-root/aginex/server/internal/domain"
+	"github.com/xgtian-root/aginex/server/internal/platform/filereferences"
 	"github.com/xgtian-root/aginex/server/internal/platform/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -68,13 +69,13 @@ func (handler *Handler) HandleV2(ctx context.Context, raw json.RawMessage) error
 		}
 		return handler.Handle(ctx, legacy)
 	case ModePendingExpiry:
-		return handler.expirePendingUpload(ctx, job)
+		return handler.expirePendingUpload(ctx, PayloadV3{FileID: job.FileID, Provider: job.Provider, ObjectKey: job.ObjectKey, Mode: job.Mode})
 	default:
 		return ErrInvalidPayload
 	}
 }
 
-func (handler *Handler) expirePendingUpload(ctx context.Context, job PayloadV2) error {
+func (handler *Handler) expirePendingUpload(ctx context.Context, job PayloadV3) error {
 	err := handler.writes.Run(ctx, func(tx *gorm.DB) (frameworkaudit.Event, error) {
 		var file domain.FileObject
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -84,15 +85,20 @@ func (handler *Handler) expirePendingUpload(ctx context.Context, job PayloadV2) 
 			}
 			return frameworkaudit.Event{}, err
 		}
-		if file.Provider != job.Provider || file.ObjectKey != job.ObjectKey {
+		if file.Provider != job.Provider || file.ObjectKey != job.ObjectKey ||
+			(job.ProfileID != "" && (file.StorageProfileID == nil || *file.StorageProfileID != job.ProfileID || file.Bucket != job.Bucket)) {
 			return frameworkaudit.Event{}, ErrObjectChanged
 		}
 		if file.Status != "pending" {
 			return frameworkaudit.Event{}, errAlreadyCompleted
 		}
 
+		if err := filereferences.CheckUnreferenced(ctx, tx, file.ID); err != nil {
+			return frameworkaudit.Event{}, err
+		}
+
 		before := auditFields(file)
-		jobStore, err := handler.storageForFile(&file, "", job.Provider, file.Bucket)
+		jobStore, err := handler.storageForFile(&file, job.ProfileID, job.Provider, file.Bucket)
 		if err != nil {
 			return frameworkaudit.Event{}, err
 		}

@@ -494,7 +494,7 @@ func operationContracts() map[string]operationContract {
 			errors:   []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusNotFound, http.StatusConflict, http.StatusGone, http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusTooManyRequests, http.StatusInternalServerError},
 		},
 		"cancelUploadSession": {
-			summary: "Cancel and abort a resumable upload", tag: "Files", status: http.StatusNoContent,
+			summary: "Cancel and abort an unreferenced resumable upload (409 FILE_IN_USE while referenced)", tag: "Files", status: http.StatusNoContent,
 			errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusTooManyRequests, http.StatusInternalServerError},
 		},
 		"localUpload": {
@@ -508,7 +508,7 @@ func operationContracts() map[string]operationContract {
 			errors: []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 		},
 		"confirmUpload": {
-			summary: "Verify and confirm an uploaded object", tag: "Files", status: http.StatusOK,
+			summary: "Verify and confirm an uploaded object (409 FILE_IN_USE prevents quarantining a referenced file)", tag: "Files", status: http.StatusOK,
 			response: reflect.TypeFor[FileResponse](),
 			errors:   []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusNotFound, http.StatusConflict, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity, http.StatusInternalServerError},
 		},
@@ -519,7 +519,7 @@ func operationContracts() map[string]operationContract {
 			errors:     []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 		},
 		"deleteFile": {
-			summary: "Schedule file deletion", tag: "Files", status: http.StatusAccepted,
+			summary: "Schedule unreferenced file deletion (409 FILE_IN_USE while referenced)", tag: "Files", status: http.StatusAccepted,
 			errors: []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable, http.StatusInternalServerError},
 		},
 	}

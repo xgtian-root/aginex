@@ -4170,7 +4170,7 @@
             "cookieSession": []
           }
         ],
-        "summary": "Cancel and abort a resumable upload",
+        "summary": "Cancel and abort an unreferenced resumable upload (409 FILE_IN_USE while referenced)",
         "tags": [
           "Files"
         ]
@@ -5279,7 +5279,7 @@
             "cookieSession": []
           }
         ],
-        "summary": "Schedule file deletion",
+        "summary": "Schedule unreferenced file deletion (409 FILE_IN_USE while referenced)",
         "tags": [
           "Files"
         ]
@@ -5456,7 +5456,7 @@
             "cookieSession": []
           }
         ],
-        "summary": "Verify and confirm an uploaded object",
+        "summary": "Verify and confirm an uploaded object (409 FILE_IN_USE prevents quarantining a referenced file)",
         "tags": [
           "Files"
         ]

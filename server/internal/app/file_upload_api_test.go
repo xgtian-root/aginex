@@ -937,3 +937,54 @@ func mustJSONForTest(t *testing.T, value any) []byte {
 	}
 	return encoded
 }
+
+func TestResumableCancellationCannotBypassBusinessReferenceProtection(t *testing.T) {
+	for _, status := range []domain.FileUploadSessionStatus{domain.FileUploadSessionStatusActive, domain.FileUploadSessionStatusCancelling} {
+		t.Run(string(status), func(t *testing.T) {
+			fixture := newUploadPolicyAppFixture(t, config.FileUploadPolicy{MaxUploadBytes: 64 << 20, ResumableUploadsEnabled: true})
+			prepared, response := createUploadIntentForTest(t, fixture.server, fixture.cookie, map[string]any{
+				"filename": "protected.bin", "contentType": "application/octet-stream",
+				"size": multipartThresholdBytes + 1, "visibility": "private",
+				"strategy": "resumable", "resumeFingerprint": strings.Repeat("a", 64),
+			}, "")
+			if response.Code != http.StatusCreated || prepared.Session == nil {
+				t.Fatalf("intent = %d: %s", response.Code, response.Body.String())
+			}
+			if err := fixture.db.Model(&domain.FileUploadSession{}).Where("id = ?", prepared.Session.ID).Update("status", status).Error; err != nil {
+				t.Fatal(err)
+			}
+			// Simulate a stale cleanup session in an inconsistent imported draft.
+			// Every destructive path must still fail closed on existing references.
+			if err := fixture.db.Exec("INSERT INTO file_reference_owners(resource, resource_id, file_ids) VALUES (?, ?, ?)", "articles", "one", `["`+prepared.File.ID+`"]`).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := fixture.db.Exec("INSERT INTO file_references(resource, resource_id, file_id) VALUES (?, ?, ?)", "articles", "one", prepared.File.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			cancel := serveRequest(fixture.server, fixture.cookie, http.MethodDelete, "/api/v1/files/upload-sessions/"+prepared.Session.ID, nil, "")
+			assertProblemCode(t, cancel, http.StatusConflict, "FILE_IN_USE")
+			var session domain.FileUploadSession
+			if err := fixture.db.First(&session, "id = ?", prepared.Session.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if session.Status != status {
+				t.Fatalf("blocked cancellation changed session status: %s", session.Status)
+			}
+			var file domain.FileObject
+			if err := fixture.db.First(&file, "id = ?", prepared.File.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			store, err := fixture.server.storeForFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			multipart, ok := platformstorage.AsMultipart(store)
+			if !ok {
+				t.Fatal("test storage lacks multipart support")
+			}
+			if _, err := multipart.ListUploadedParts(t.Context(), frameworkstorage.MultipartUpload{Key: file.ObjectKey, ProviderUploadID: session.ProviderUploadID}); err != nil {
+				t.Fatalf("blocked cancellation aborted provider upload: %v", err)
+			}
+		})
+	}
+}

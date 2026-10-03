@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/xgtian-root/aginex/server/framework/authz"
+	frameworkfiles "github.com/xgtian-root/aginex/server/framework/files"
 	"github.com/xgtian-root/aginex/server/framework/jobs"
 	"github.com/xgtian-root/aginex/server/framework/module"
 	"github.com/xgtian-root/aginex/server/internal/config"
@@ -241,20 +242,18 @@ func TestHandlerTreatsConcurrentCompletionAsIdempotent(t *testing.T) {
 	db := openCleanupDatabase(t)
 	local := newCleanupStore(t)
 	file := seedCleanupFile(t, db, local, "deleting")
-	competingHandler := newCleanupHandler(t, db, local)
-	store := deleteOverrideStorage{
-		Storage: local,
-		delete: func(ctx context.Context, key string) error {
-			if err := local.Delete(ctx, key); err != nil {
-				return err
-			}
-			return competingHandler.Handle(ctx, cleanupPayload(t, file))
-		},
+	handler := newCleanupHandler(t, db, local)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	raw := cleanupPayload(t, file)
+	for range 2 {
+		go func() { <-start; results <- handler.Handle(context.Background(), raw) }()
 	}
-	handler := newCleanupHandler(t, db, store)
-
-	if err := handler.Handle(context.Background(), cleanupPayload(t, file)); err != nil {
-		t.Fatalf("concurrent completion error = %v", err)
+	close(start)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("concurrent completion error = %v", err)
+		}
 	}
 	assertCleanupState(t, db, file.ID, "deleted")
 	assertAuditCount(t, db, 1)
@@ -264,21 +263,24 @@ func TestHandlerTreatsConcurrentMetadataRemovalAsIdempotent(t *testing.T) {
 	db := openCleanupDatabase(t)
 	local := newCleanupStore(t)
 	file := seedCleanupFile(t, db, local, "deleting")
+	removed := make(chan error, 1)
 	store := deleteOverrideStorage{
 		Storage: local,
 		delete: func(ctx context.Context, key string) error {
-			if err := local.Delete(ctx, key); err != nil {
-				return err
-			}
-			return db.WithContext(ctx).Delete(&domain.FileObject{}, "id = ?", file.ID).Error
+			// Concurrent metadata removal waits for the cleanup's file lock.
+			go func() { removed <- db.WithContext(ctx).Delete(&domain.FileObject{}, "id = ?", file.ID).Error }()
+			return local.Delete(ctx, key)
 		},
 	}
 	handler := newCleanupHandler(t, db, store)
-
 	if err := handler.Handle(context.Background(), cleanupPayload(t, file)); err != nil {
 		t.Fatalf("concurrent metadata removal error = %v", err)
 	}
-	if err := handler.Handle(context.Background(), cleanupPayload(t, file)); err != nil {
+	if err := <-removed; err != nil {
+		t.Fatal(err)
+	}
+	orphanHandler := newCleanupHandler(t, db, local)
+	if err := orphanHandler.Handle(context.Background(), cleanupPayload(t, file)); err != nil {
 		t.Fatalf("repeat orphan cleanup error = %v", err)
 	}
 	var count int64
@@ -288,7 +290,105 @@ func TestHandlerTreatsConcurrentMetadataRemovalAsIdempotent(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("file row count = %d, want 0", count)
 	}
-	assertAuditCount(t, db, 0)
+	assertAuditCount(t, db, 1)
+}
+
+func TestEveryCleanupDeliveryProtectsReferencedFiles(t *testing.T) {
+	cases := []struct {
+		name, status string
+		version      int
+		mode         Mode
+	}{
+		{"v1 deleting", "deleting", 1, ModeExplicitDelete},
+		{"v1 retry", "delete_failed", 1, ModeExplicitDelete},
+		{"v1 invalid", "invalid", 1, ModeExplicitDelete},
+		{"v2 explicit", "deleting", 2, ModeExplicitDelete},
+		{"v2 pending expiry", "pending", 2, ModePendingExpiry},
+		{"v3 explicit", "deleting", 3, ModeExplicitDelete},
+		{"v3 pending expiry", "pending", 3, ModePendingExpiry},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			db := openCleanupDatabase(t)
+			store := newCleanupStore(t)
+			file := seedCleanupFile(t, db, store, test.status)
+			profileID := uuid.NewString()
+			file.StorageProfileID = &profileID
+			if err := db.Model(&file).Update("storage_profile_id", profileID).Error; err != nil {
+				t.Fatal(err)
+			}
+			seedCleanupReference(t, db, file.ID)
+			handler := newCleanupHandler(t, db, store)
+			var err error
+			switch test.version {
+			case 1:
+				err = handler.Handle(t.Context(), cleanupPayload(t, file))
+			case 2:
+				raw, marshalErr := json.Marshal(PayloadV2{FileID: file.ID, Provider: file.Provider, ObjectKey: file.ObjectKey, Mode: test.mode})
+				if marshalErr != nil {
+					t.Fatal(marshalErr)
+				}
+				err = handler.HandleV2(t.Context(), raw)
+			case 3:
+				raw, marshalErr := json.Marshal(PayloadV3{FileID: file.ID, ProfileID: profileID, Provider: file.Provider, ObjectKey: file.ObjectKey, Mode: test.mode})
+				if marshalErr != nil {
+					t.Fatal(marshalErr)
+				}
+				err = handler.HandleV3(t.Context(), raw)
+			}
+			if !errors.Is(err, frameworkfiles.ErrInUse) {
+				t.Fatalf("cleanup error = %v, want ErrInUse", err)
+			}
+			assertCleanupState(t, db, file.ID, test.status)
+			if _, err := store.Stat(t.Context(), file.ObjectKey); err != nil {
+				t.Fatalf("referenced object changed: %v", err)
+			}
+			assertAuditCount(t, db, 0)
+		})
+	}
+}
+
+func TestOrphanCleanupCannotDeleteAnotherReferencedFilesObject(t *testing.T) {
+	for _, version := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			db := openCleanupDatabase(t)
+			store := newCleanupStore(t)
+			file := seedCleanupFile(t, db, store, "ready")
+			seedCleanupReference(t, db, file.ID)
+			handler := newCleanupHandler(t, db, store)
+			missingID := uuid.NewString()
+			var err error
+			switch version {
+			case 1:
+				other := file
+				other.ID = missingID
+				err = handler.Handle(t.Context(), cleanupPayload(t, other))
+			case 2:
+				raw, _ := json.Marshal(PayloadV2{FileID: missingID, Provider: file.Provider, ObjectKey: file.ObjectKey, Mode: ModeExplicitDelete})
+				err = handler.HandleV2(t.Context(), raw)
+			case 3:
+				raw, _ := json.Marshal(PayloadV3{FileID: missingID, ProfileID: uuid.NewString(), Provider: file.Provider, ObjectKey: file.ObjectKey, Mode: ModeExplicitDelete})
+				err = handler.HandleV3(t.Context(), raw)
+			}
+			if !errors.Is(err, ErrObjectChanged) {
+				t.Fatalf("orphan cleanup error = %v", err)
+			}
+			if _, err := store.Stat(t.Context(), file.ObjectKey); err != nil {
+				t.Fatalf("referenced object changed: %v", err)
+			}
+			assertAuditCount(t, db, 0)
+		})
+	}
+}
+
+func seedCleanupReference(t *testing.T, db *gorm.DB, fileID string) {
+	t.Helper()
+	if err := db.Exec("INSERT INTO file_reference_owners(resource, resource_id, file_ids) VALUES (?, ?, ?)", "articles", "article-one", `["`+fileID+`"]`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO file_references(resource, resource_id, file_id) VALUES (?, ?, ?)", "articles", "article-one", fileID).Error; err != nil {
+		t.Fatal(err)
+	}
 }
 
 type deleteOverrideStorage struct {
@@ -353,6 +453,21 @@ func applyFileObjectModuleFixture(db *gorm.DB) error {
 			updated_at DATETIME NOT NULL,
 			deleted_at DATETIME
 		);
+
+        CREATE TABLE file_reference_owners (
+            resource VARCHAR(120) NOT NULL,
+            resource_id VARCHAR(160) NOT NULL,
+            file_ids TEXT NOT NULL,
+            PRIMARY KEY (resource, resource_id)
+        );
+        CREATE TABLE file_references (
+            resource VARCHAR(120) NOT NULL,
+            resource_id VARCHAR(160) NOT NULL,
+            file_id TEXT NOT NULL REFERENCES file_objects(id),
+            PRIMARY KEY (resource, resource_id, file_id),
+            FOREIGN KEY (resource, resource_id) REFERENCES file_reference_owners(resource, resource_id)
+        );
+        CREATE INDEX idx_file_references_file_id ON file_references(file_id);
 		CREATE INDEX idx_file_objects_owner_id ON file_objects(owner_id);
 		CREATE INDEX idx_file_objects_storage_profile_id ON file_objects(storage_profile_id);
 		CREATE INDEX idx_file_objects_status ON file_objects(status);

@@ -45,7 +45,17 @@ func (u *UnitOfWork) Run(
 	if mutation == nil {
 		return ErrMutationRequired
 	}
+	database, err := u.db.DB()
+	if err != nil {
+		return err
+	}
 	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		scope := &transactionScope{database: database, pool: tx.Statement.ConnPool}
+		scope.active.Store(true)
+		defer scope.active.Store(false)
+		// Set returns a statement-owned handle. Restore GORM's reusable session
+		// semantics so one query's model/conditions cannot leak into the next.
+		tx = tx.Set(transactionSetting, scope).Session(&gorm.Session{})
 		event, err := mutation(tx)
 		if err != nil {
 			return err

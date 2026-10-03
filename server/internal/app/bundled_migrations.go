@@ -151,6 +151,14 @@ func bundledMigrationSpecification(
 					},
 				},
 				{
+					name:    "file_reference_owners",
+					columns: []string{"resource", "resource_id", "file_ids"},
+				},
+				{
+					name:    "file_references",
+					columns: []string{"resource", "resource_id", "file_id"},
+				},
+				{
 					name: "file_upload_sessions",
 					columns: []string{
 						"id",
@@ -408,6 +416,10 @@ func bundledTableColumns(
 		switch table {
 		case "file_objects":
 			query = "SELECT name FROM pragma_table_info('file_objects')"
+		case "file_reference_owners":
+			query = "SELECT name FROM pragma_table_info('file_reference_owners')"
+		case "file_references":
+			query = "SELECT name FROM pragma_table_info('file_references')"
 		case "file_upload_sessions":
 			query = "SELECT name FROM pragma_table_info('file_upload_sessions')"
 		case "file_upload_parts":

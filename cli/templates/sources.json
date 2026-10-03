@@ -100,6 +100,7 @@
   "admin/vitest.config.ts",
   "compose.yaml",
   "docs/openapi.json",
+  "docs/public-files.md",
   "package.json",
   "playwright.config.ts",
   "pnpm-lock.yaml",

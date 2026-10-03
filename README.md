@@ -225,6 +225,9 @@ the declared `all`, `actor`, object, or query authorization mode.
 Module handlers resolve a `services.Runtime` from their context. It contains
 the portable GORM database, atomic `Writes` unit of work, public object-store
 contract, optional transactional job queue, and shared observability recorder.
+With `FilesModule`, `Runtime.Files` also exposes verified files by ID and
+transactional business references that protect files from deletion. See the
+[public file service and module example](docs/public-files.md).
 All business mutations must run through `Runtime.Writes.Run` and return a
 sanitized `audit.Event`; a failed audit insert rolls the business transaction
 back. Raw Gin handlers are therefore a trusted low-level adapter, not an
@@ -463,7 +466,7 @@ file.
 | `AGINEX_BOOTSTRAP_ADMIN_EMAIL` | — | One-time administrator email for an environment-configured first start that bypasses browser Setup |
 | `AGINEX_BOOTSTRAP_ADMIN_PASSWORD` | — | Matching one-time administrator password; insecure and whitespace-padded values are rejected in production |
 | `AGINEX_STORAGE_DRIVER` | `local` | `local`, `s3`, or `oss`; explicitly setting it makes the Object Storage console read-only |
-| `AGINEX_STORAGE_LOCAL_ROOT` | `data/uploads` | Local object root; this setting alone does not disable console-managed cloud profiles |
+| `AGINEX_STORAGE_LOCAL_ROOT` | `data/uploads` | Root for initial Local storage or an explicit environment-managed profile; saved profiles retain their original roots |
 | `AGINEX_STORAGE_BUCKET` | — | Cloud storage bucket |
 | `AGINEX_STORAGE_REGION` | — | Cloud storage region |
 | `AGINEX_STORAGE_ENDPOINT` | — | S3-compatible or OSS endpoint |

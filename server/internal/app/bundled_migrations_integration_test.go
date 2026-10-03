@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -44,7 +46,7 @@ func TestBundledModuleMigrationMatrix(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer db.Close()
+			t.Cleanup(func() { _ = db.Close() })
 			if err := db.PingContext(t.Context()); err != nil {
 				t.Fatal(err)
 			}
@@ -58,6 +60,8 @@ func TestBundledModuleMigrationMatrix(t *testing.T) {
 			}
 			for _, table := range []string{
 				"products",
+				"file_references",
+				"file_reference_owners",
 				"file_upload_parts",
 				"file_upload_sessions",
 				"file_objects",
@@ -94,6 +98,8 @@ func TestBundledModuleMigrationMatrix(t *testing.T) {
 				t.Fatal(err)
 			}
 			for table, required := range map[string][]string{
+				"file_reference_owners": {"resource", "resource_id", "file_ids"},
+				"file_references":       {"resource", "resource_id", "file_id"},
 				"file_objects": {
 					"storage_profile_id",
 					"sha256",
@@ -137,11 +143,16 @@ func resetBundledIntegrationDatabase(
 	driver string,
 ) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	tables := []string{
+		"file_references",
+		"file_reference_owners",
 		"file_upload_parts",
 		"file_upload_sessions",
 		"file_objects",
 		"products",
+		"login_captchas",
 		"user_identities",
 		"sessions",
 		"role_permissions",
@@ -160,7 +171,7 @@ func resetBundledIntegrationDatabase(
 	case "postgres":
 		for _, table := range tables {
 			if _, err := db.ExecContext(
-				t.Context(),
+				ctx,
 				"DROP TABLE IF EXISTS "+table+" CASCADE",
 			); err != nil {
 				t.Fatalf("reset postgres table %s: %v", table, err)
@@ -169,7 +180,7 @@ func resetBundledIntegrationDatabase(
 	case "mysql":
 		for _, table := range tables {
 			if _, err := db.ExecContext(
-				t.Context(),
+				ctx,
 				"DROP TABLE IF EXISTS "+table,
 			); err != nil {
 				t.Fatalf("reset mysql table %s: %v", table, err)

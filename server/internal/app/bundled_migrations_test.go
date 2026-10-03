@@ -31,6 +31,11 @@ func TestBundledFilesUsesSingleCurrentBaselinePerDialect(t *testing.T) {
 		sql := string(payload)
 		for _, fragment := range []string{
 			"storage_profile_id",
+			"CREATE TABLE IF NOT EXISTS file_reference_owners",
+			"CREATE TABLE IF NOT EXISTS file_references",
+			"idx_file_references_file_id",
+			"FOREIGN KEY (resource, resource_id) REFERENCES file_reference_owners(resource, resource_id)",
+			"FOREIGN KEY (file_id) REFERENCES file_objects(id)",
 			"CREATE TABLE IF NOT EXISTS file_upload_sessions",
 			"CREATE TABLE IF NOT EXISTS file_upload_parts",
 			"part_count BETWEEN 2 AND 32",
@@ -65,6 +70,8 @@ func TestBundledSQLiteMigrationsCreateCompleteExplicitModuleTables(
 	}
 
 	for table, columns := range map[string][]string{
+		"file_reference_owners": {"resource", "resource_id", "file_ids"},
+		"file_references":       {"resource", "resource_id", "file_id"},
 		"file_objects": {
 			"id",
 			"storage_profile_id",
@@ -270,6 +277,8 @@ func TestBundledSQLiteFileMigrationDownDropsTablesInDependencyOrder(t *testing.T
 		t.Fatal(err)
 	}
 	for _, table := range []string{
+		"file_references",
+		"file_reference_owners",
 		"file_objects",
 		"file_upload_sessions",
 		"file_upload_parts",
@@ -326,7 +335,9 @@ func TestBundledSQLiteFileMigrationDownRejectsNonTerminalUploadSessions(t *testi
 	if _, err := provider.DownTo(t.Context(), 0); err == nil {
 		t.Fatal("Files down accepted a non-terminal resumable upload")
 	}
-	for _, table := range []string{"file_objects", "file_upload_sessions", "file_upload_parts"} {
+	for _, table := range []string{"file_references",
+		"file_reference_owners",
+		"file_objects", "file_upload_sessions", "file_upload_parts"} {
 		if !bundledSQLiteTableExists(t, db, table) {
 			t.Fatalf("failed guarded Files down removed %s", table)
 		}
@@ -349,6 +360,8 @@ func TestBundledSQLiteEnsureCurrentIsReadOnly(t *testing.T) {
 		t.Fatal("EnsureModulesCurrent succeeded before bundled migrations")
 	}
 	for _, table := range []string{
+		"file_references",
+		"file_reference_owners",
 		"file_objects",
 		"file_upload_sessions",
 		"file_upload_parts",
@@ -455,4 +468,25 @@ func bundledSQLiteColumns(
 		t.Fatal(err)
 	}
 	return columns
+}
+
+func TestBundledSQLiteEnsureCurrentRequiresFileReferenceTables(t *testing.T) {
+	for _, table := range []string{"file_references", "file_reference_owners"} {
+		t.Run(table, func(t *testing.T) {
+			db := openBundledMigrationSQLite(t)
+			if err := coremigrate.Up(db, "sqlite"); err != nil {
+				t.Fatal(err)
+			}
+			if err := MigrateModulesUp(t.Context(), db, "sqlite", FilesModule()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec("DROP TABLE " + table); err != nil {
+				t.Fatal(err)
+			}
+			err := EnsureModulesCurrent(t.Context(), db, "sqlite", FilesModule())
+			if err == nil || !strings.Contains(err.Error(), table) {
+				t.Fatalf("missing reference table error = %v", err)
+			}
+		})
+	}
 }

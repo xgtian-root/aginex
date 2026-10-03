@@ -52,6 +52,25 @@ CREATE TABLE IF NOT EXISTS file_upload_parts (
     PRIMARY KEY (session_id, part_number)
 );
 
+CREATE TABLE IF NOT EXISTS file_reference_owners (
+    resource VARCHAR(120) NOT NULL,
+    resource_id VARCHAR(160) NOT NULL,
+    file_ids TEXT NOT NULL,
+    PRIMARY KEY (resource, resource_id)
+);
+
+CREATE TABLE IF NOT EXISTS file_references (
+    resource VARCHAR(120) NOT NULL,
+    resource_id VARCHAR(160) NOT NULL,
+    file_id TEXT NOT NULL,
+    PRIMARY KEY (resource, resource_id, file_id),
+    CONSTRAINT fk_file_references_owner
+        FOREIGN KEY (resource, resource_id) REFERENCES file_reference_owners(resource, resource_id),
+    CONSTRAINT fk_file_references_file
+        FOREIGN KEY (file_id) REFERENCES file_objects(id)
+);
+CREATE INDEX idx_file_references_file_id ON file_references(file_id);
+
 -- +goose Down
 CREATE TEMP TABLE aginex_files_down_guard (
     active_sessions INTEGER NOT NULL CHECK (active_sessions = 0)
@@ -63,4 +82,6 @@ WHERE status NOT IN ('completed', 'cancelled', 'expired');
 DROP TABLE aginex_files_down_guard;
 DROP TABLE IF EXISTS file_upload_parts;
 DROP TABLE IF EXISTS file_upload_sessions;
+DROP TABLE IF EXISTS file_references;
+DROP TABLE IF EXISTS file_reference_owners;
 DROP TABLE IF EXISTS file_objects;

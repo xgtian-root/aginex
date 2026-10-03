@@ -13,6 +13,7 @@ const stableMappings = [
   ["RESOURCE_FORBIDDEN", "Problem.codes.RESOURCE_FORBIDDEN"],
   ["RESOURCE_NOT_FOUND", "Problem.codes.RESOURCE_NOT_FOUND"],
   ["REQUEST_CONFLICT", "Problem.codes.REQUEST_CONFLICT"],
+  ["FILE_IN_USE", "Problem.codes.FILE_IN_USE"],
   ["REQUEST_TOO_LARGE", "Problem.codes.REQUEST_TOO_LARGE"],
   ["UNSUPPORTED_MEDIA_TYPE", "Problem.codes.UNSUPPORTED_MEDIA_TYPE"],
   ["RATE_LIMITED", "Problem.codes.RATE_LIMITED"],
