@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM docker.io/library/golang:1.25.13-alpine3.24@sha256:1e0126852075c9c60731c8ba49088448b91f63e2aed97ca9d1a9791622a05946 AS go-build
+FROM docker.io/library/golang:1.27.1-alpine3.24@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS go-build
 WORKDIR /src
 COPY server/go.mod server/go.sum ./server/
 WORKDIR /src/server
@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
       -o /out/aginex-worker ./cmd/worker \
     && mkdir -p /out/runtime-data/uploads
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS go-runtime
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab AS go-runtime
 WORKDIR /app
 ARG VERSION=0.1.0-dev
 ARG COMMIT=unknown
@@ -55,7 +55,7 @@ FROM go-runtime AS worker
 COPY --from=go-build --chown=65532:65532 /out/aginex-worker /app/aginex-worker
 ENTRYPOINT ["/app/aginex-worker"]
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS web-build
+FROM docker.io/library/node:26.10.0-alpine3.24@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS web-build
 WORKDIR /src
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
@@ -71,7 +71,7 @@ RUN pnpm --filter @aginex/admin build \
     && test -f /src/admin/.next/standalone/admin/server.js \
     && mkdir -p /runtime/next-cache
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS web
+FROM docker.io/library/node:26.10.0-alpine3.24@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS web
 WORKDIR /app
 # The standalone server runs with Node directly; package managers are build tools.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
