@@ -154,8 +154,13 @@ jobs:
             -e "CREATE DATABASE aginex_files; GRANT ALL ON aginex_files.* TO 'aginex'@'%';"
       - name: Download independent module dependencies
         run: |
-          GOWORK=off go -C server mod download all
-          GOWORK=off go -C cli mod download all
+          dependency_dir="$(mktemp -d)"
+          trap 'rm -rf "$dependency_dir"' EXIT
+          for module in cli server; do
+            mkdir "$dependency_dir/$module"
+            cp "$module/go.mod" "$module/go.sum" "$dependency_dir/$module/"
+            GOWORK=off go -C "$dependency_dir/$module" mod download all
+          done
       - name: Verify module checksums
         run: |
           GOWORK=off go -C cli mod verify
