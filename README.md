@@ -239,12 +239,12 @@ Aginex provides the boundaries those rules build on.
 
 ## Install the CLI and create an application
 
-The CLI release is `v0.1.2-dev`, using the Git tag
-`cli/v0.1.2-dev`. Install that exact version with
-`go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.2-dev` or download
+The CLI release is `v0.1.3-dev`, using the Git tag
+`cli/v0.1.3-dev`. Install that exact version with
+`go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.3-dev` or download
 its binary archive. This prerelease does not update the default Homebrew formula.
 
-Starting with this version, the executable is named `aginex-cli`. Update scripts
+Since `v0.1.2-dev`, the executable is named `aginex-cli`. Update scripts
 and shell completion that used `aginex`; Go installation uses `cli/cmd/aginex-cli`.
 Previously installed `aginex` binaries are not removed automatically.
 
@@ -264,11 +264,11 @@ brew install xgtian-root/tap/aginex-cli
 Install this prerelease with Go:
 
 ```bash
-go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.2-dev
+go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.3-dev
 aginex-cli --version
 ```
 
-Choose another version by replacing `@v0.1.2-dev` with `@vX.Y.Z`; prereleases are
+Choose another version by replacing `@v0.1.3-dev` with `@vX.Y.Z`; prereleases are
 installed with their exact version. Go downloads and compiles the
 CLI module; it does not use the GitHub Release binary archives. Both installation
 routes report the CLI version through `aginex-cli --version`.

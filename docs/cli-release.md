@@ -6,8 +6,8 @@ required. CLI release builds use Go 1.25.13 and run a vulnerability check before
 packaging. Go 1.25.13 fixes standard-library findings reached by the development
 supervisor; use the same toolchain when reproducing release assets.
 
-The CLI release is **`v0.1.2-dev`**, with Git tag
-**`cli/v0.1.2-dev`**. Only the CLI is in scope for publication; no separate
+The CLI release is **`v0.1.3-dev`**, with Git tag
+**`cli/v0.1.3-dev`**. Only the CLI is in scope for publication; no separate
 server tag or server Release is planned. GitHub treats this CLI version as a
 prerelease. The current pipeline publishes its binary archives and verifies
 the exact Go installation version, but does not update the default Homebrew tap.
@@ -15,7 +15,7 @@ the exact Go installation version, but does not update the default Homebrew tap.
 Install this prerelease with Go:
 
 ```bash
-go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.2-dev
+go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.3-dev
 ```
 
 ## Local builds
@@ -40,13 +40,13 @@ executable, `LICENSE`, and `NOTICE`. Unix archives are tar.gz; Windows archives
 are zip. For example, a release includes:
 
 ```text
-cli/dist/aginex-cli_0.1.2-dev_darwin_arm64.tar.gz
-cli/dist/aginex-cli_0.1.2-dev_windows_amd64.zip
+cli/dist/aginex-cli_0.1.3-dev_darwin_arm64.tar.gz
+cli/dist/aginex-cli_0.1.3-dev_windows_amd64.zip
 cli/dist/SHA256SUMS
 cli/dist/release.json
 ```
 
-Stable release builds additionally include `aginex-cli.rb`; `v0.1.2-dev` does not.
+Stable release builds additionally include `aginex-cli.rb`; `v0.1.3-dev` does not.
 
 `release.json` records the CLI version, full commit, commit timestamp, bundled
 backend version, platform names, and archive hashes. `SHA256SUMS` covers all
@@ -101,16 +101,16 @@ administrative operations, separate from building the CLI.
 
 ## Preparing a release
 
-The release target is CLI `v0.1.2-dev`. Its executable, Go command package,
+The release target is CLI `v0.1.3-dev`. Its executable, Go command package,
 archives, and future Homebrew formula use `aginex-cli`. Update existing scripts
 and shell completion; the old `aginex` command is not an alias.
 
-`BackendVersion` is `v0.0.0-20261003124905-16cc6adc6534`, resolved by Go from
-published source commit `16cc6adc65346f0f91666ae1f7cc91667d7f0397`. This source
+`BackendVersion` is `v0.0.0-20261003134841-99a413b6a9e7`, resolved by Go from
+published source commit `99a413b6a9e709bc8569f5289ffe9c55f15b729b`. This source
 contains the CAPTCHA and public file/reference contracts required by the
-current scaffold, the renamed CLI instructions, and the Windows local-upload
-fix. No separate server
-tag or GitHub Release is required.
+current scaffold, the Windows local-upload fix, and patched `golang.org/x/crypto`
+and `golang.org/x/image` dependencies. No separate server tag or GitHub Release
+is required.
 
 Resolve future framework pins outside the source workspace:
 
@@ -129,7 +129,7 @@ Changing the CLI version alone is not enough.
    with Go and update `BackendVersion` before committing the CLI release.
 3. Update canonical assets, run `go run ./cli/cmd/sync-templates`, then run CLI
    tests, vet, and scaffold checks; review and commit the release changes.
-4. Create `cli/v0.1.2-dev` on the clean commit, validate the release build, then
+4. Create `cli/v0.1.3-dev` on the clean commit, validate the release build, then
    push that CLI tag to start automatic publication.
 
 Release builds verify that the pinned framework can be downloaded. Unpinned
@@ -155,7 +155,7 @@ before publication.
 To validate and package an existing tag locally, without publishing:
 
 ```bash
-./cli/build.sh --release v0.1.2-dev
+./cli/build.sh --release v0.1.3-dev
 GOWORK=off go -C cli run ./cmd/release verify
 GOWORK=off go -C cli run ./cmd/release smoke
 ```
