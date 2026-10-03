@@ -12,7 +12,7 @@
     "generate:contracts": "go run ./server/cmd/openapi -output docs/openapi.json && pnpm --filter @aginex/admin generate:client"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1"
+    "@playwright/test": "1.63.0"
   },
   "pnpm": {
     "overrides": {
