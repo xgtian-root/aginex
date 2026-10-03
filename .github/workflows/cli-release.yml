@@ -99,6 +99,8 @@ jobs:
         with:
           name: cli-distribution
           path: cli/dist/
+      - name: Verify native local storage publication
+        run: go -C server test ./internal/platform/storage -run '^TestLocal' -count=1
       - name: Check all architectures and execute native CLI
         run: go -C cli run ./cmd/release smoke
 

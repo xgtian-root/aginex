@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -696,6 +697,20 @@ func syncDirectory(path string) error {
 	directory, err := os.Open(path)
 	if err != nil {
 		return err
+	}
+	info, err := directory.Stat()
+	if err != nil {
+		return errors.Join(err, directory.Close())
+	}
+	if !info.IsDir() {
+		return errors.Join(fmt.Errorf("sync directory %q: not a directory", path), directory.Close())
+	}
+	if runtime.GOOS == "windows" {
+		// Go opens directories read-only on Windows; FlushFileBuffers requires
+		// GENERIC_WRITE and cannot sync this handle. File contents are still
+		// synced before atomic publication, but Windows has no directory-entry
+		// crash-durability guarantee through this operation.
+		return directory.Close()
 	}
 	return errors.Join(directory.Sync(), directory.Close())
 }

@@ -174,6 +174,32 @@ func TestLocalSinglePutNeverOverwritesPublishedBytes(t *testing.T) {
 	if !bytes.Equal(content, first) {
 		t.Fatalf("published content = %q, want %q", content, first)
 	}
+	entries, err := os.ReadDir(filepath.Join(store.root, "files"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "no-replace" {
+		t.Fatalf("successful upload or rejected overwrite left temporary files: %v", entries)
+	}
+}
+
+func TestLocalDirectorySyncValidatesTarget(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	if err := syncDirectory(directory); err != nil {
+		t.Fatalf("sync existing directory: %v", err)
+	}
+	if err := syncDirectory(filepath.Join(directory, "missing")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing directory: %v", err)
+	}
+	file := filepath.Join(directory, "file")
+	if err := os.WriteFile(file, []byte("content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := syncDirectory(file); err == nil {
+		t.Fatal("accepted a regular file as a directory")
+	}
 }
 
 func TestLocalControlledReadCarriesOnlyValidatedPurpose(t *testing.T) {
