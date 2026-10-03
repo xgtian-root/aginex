@@ -105,10 +105,11 @@ The release target is CLI `v0.1.2-dev`. Its executable, Go command package,
 archives, and future Homebrew formula use `aginex-cli`. Update existing scripts
 and shell completion; the old `aginex` command is not an alias.
 
-`BackendVersion` is `v0.0.0-20261003123916-929bc9e71b8e`, resolved by Go from
-published source commit `929bc9e71b8ef3b1ea5291225c9d2d585267b5c4`. This source
+`BackendVersion` is `v0.0.0-20261003124905-16cc6adc6534`, resolved by Go from
+published source commit `16cc6adc65346f0f91666ae1f7cc91667d7f0397`. This source
 contains the CAPTCHA and public file/reference contracts required by the
-current scaffold, including the renamed CLI instructions. No separate server
+current scaffold, the renamed CLI instructions, and the Windows local-upload
+fix. No separate server
 tag or GitHub Release is required.
 
 Resolve future framework pins outside the source workspace:

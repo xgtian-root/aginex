@@ -92,9 +92,10 @@ go -C server test ./internal/worker -run TestFilesWorkerServicesAndReadOnlyMigra
 
 ## Release status
 
-`BackendVersion` is `v0.0.0-20261003123916-929bc9e71b8e`, resolved by Go from
-published source commit `929bc9e71b8ef3b1ea5291225c9d2d585267b5c4`. It includes
-both the CAPTCHA protocol and public Files service required by the scaffold.
+`BackendVersion` is `v0.0.0-20261003124905-16cc6adc6534`, resolved by Go from
+published source commit `16cc6adc65346f0f91666ae1f7cc91667d7f0397`. It includes
+the CAPTCHA protocol and public Files service required by the scaffold, plus
+the Windows local-upload fix discovered by native release smoke.
 
 CLI `v0.1.2-dev` uses the executable and Go command package `aginex-cli`.
 Its release smoke must verify real `GOWORK=off` downloads, backend builds,

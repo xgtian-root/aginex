@@ -9,8 +9,8 @@ import (
 // BackendVersion pins the framework source consumed by generated projects.
 // This published source includes the captcha and public file-service contracts
 // required by the scaffold. The version was resolved by Go from commit
-// 929bc9e71b8ef3b1ea5291225c9d2d585267b5c4. See docs/cli-release.md.
-const BackendVersion = "v0.0.0-20261003123916-929bc9e71b8e"
+// 16cc6adc65346f0f91666ae1f7cc91667d7f0397. See docs/cli-release.md.
+const BackendVersion = "v0.0.0-20261003124905-16cc6adc6534"
 
 //go:embed all:_project
 var assets embed.FS
