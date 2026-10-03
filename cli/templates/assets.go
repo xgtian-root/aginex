@@ -7,12 +7,10 @@ import (
 )
 
 // BackendVersion pins the framework source consumed by generated projects.
-// The current scaffold requires unpublished captcha and file-service contracts.
-// This deliberately non-downloadable development marker disables remote project
-// generation and release builds until a reviewed source commit is published and
-// its real server module version is resolved with Go. Local --aginex-path use
-// remains available. See docs/cli-release.md.
-const BackendVersion = "v0.0.0-dev.unpublished"
+// This published source includes the captcha and public file-service contracts
+// required by the scaffold. The version was resolved by Go from commit
+// 929bc9e71b8ef3b1ea5291225c9d2d585267b5c4. See docs/cli-release.md.
+const BackendVersion = "v0.0.0-20261003123916-929bc9e71b8e"
 
 //go:embed all:_project
 var assets embed.FS

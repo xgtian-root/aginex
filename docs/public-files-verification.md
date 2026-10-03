@@ -1,7 +1,7 @@
 # Public file references: verification and release status
 
-Verified locally on 2026-10-03. Source changes are unpublished; this report
-does not claim that a matching remote backend or CLI release exists.
+Verified locally on 2026-10-03. The matching framework source is published;
+CLI release verification follows the procedure linked below.
 
 ## Completed checks
 
@@ -92,17 +92,15 @@ go -C server test ./internal/worker -run TestFilesWorkerServicesAndReadOnlyMigra
 
 ## Release status
 
-`BackendVersion` is `v0.0.0-dev.unpublished`. Default remote generation and
-release builds reject it; `aginex-cli new --aginex-path /absolute/path/to/aginex`
-supports local development. This replaces the old pin that lacked the admin's
-CAPTCHA protocol. No downloadable version has been invented.
+`BackendVersion` is `v0.0.0-20261003123916-929bc9e71b8e`, resolved by Go from
+published source commit `929bc9e71b8ef3b1ea5291225c9d2d585267b5c4`. It includes
+both the CAPTCHA protocol and public Files service required by the scaffold.
 
-The CAPTCHA HEAD commit could not be resolved by Go through either the proxy
-or direct Git resolution. The new Files changes are also unpublished. True
-`GOWORK=off` download/build/login/Files verification with no local `replace`
-therefore remains pending. After publishing reviewed source, resolve the real
-commit with Go, update the pin, and run the release smoke before publishing the
-CLI, following [the release procedure](cli-release.md).
+CLI `v0.1.2-dev` uses the executable and Go command package `aginex-cli`.
+Its release smoke must verify real `GOWORK=off` downloads, backend builds,
+OpenAPI, CAPTCHA login, and Files contracts without any local `replace`,
+following [the release procedure](cli-release.md). The `--aginex-path` option
+remains available for explicitly testing local source.
 
 See [the public API and derived-module example](public-files.md) for usage,
 authorization, lock ordering, storage, and baseline migration contracts.

@@ -239,10 +239,14 @@ Aginex provides the boundaries those rules build on.
 
 ## Install the CLI and create an application
 
-The next planned CLI release is `v0.1.2-dev`, using the Git tag
-`cli/v0.1.2-dev`. After it is published, install that exact version with
+The CLI release is `v0.1.2-dev`, using the Git tag
+`cli/v0.1.2-dev`. Install that exact version with
 `go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.2-dev` or download
 its binary archive. This prerelease does not update the default Homebrew formula.
+
+Starting with this version, the executable is named `aginex-cli`. Update scripts
+and shell completion that used `aginex`; Go installation uses `cli/cmd/aginex-cli`.
+Previously installed `aginex` binaries are not removed automatically.
 
 Build a native executable from this checkout with `./cli/build.sh`; the output
 is `cli/dist/aginex-cli` (`aginex-cli.exe` on Windows). Use `./cli/build.sh --all` to
@@ -257,15 +261,15 @@ executable with:
 brew install xgtian-root/tap/aginex-cli
 ```
 
-After an Aginex version containing this command is published, install it with Go:
+Install this prerelease with Go:
 
 ```bash
-go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@latest
+go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.2-dev
 aginex-cli --version
 ```
 
-Pin a version by replacing `@latest` with `@vX.Y.Z`; prereleases are installed
-with their exact version, such as `@v0.2.0-rc.1`. Go downloads and compiles the
+Choose another version by replacing `@v0.1.2-dev` with `@vX.Y.Z`; prereleases are
+installed with their exact version. Go downloads and compiles the
 CLI module; it does not use the GitHub Release binary archives. Both installation
 routes report the CLI version through `aginex-cli --version`.
 
@@ -285,8 +289,8 @@ aginex-cli new testproject --aginex-path /absolute/path/to/aginex
 `--aginex-path` is a development-only escape hatch. It writes an explicit local
 `replace` directive to the generated `server/go.mod`; remove that directive and pin a
 downloadable Aginex source-commit version before sharing or releasing the application. A
-source-built development CLI fails closed without this flag instead of creating
-a project whose framework version cannot be downloaded.
+CLI with an unpublished framework pin fails closed without this flag instead
+of creating a project whose framework version cannot be downloaded.
 
 There are two initialization modes:
 
