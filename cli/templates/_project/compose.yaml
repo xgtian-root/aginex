@@ -33,7 +33,9 @@ services:
     profiles: ["mysql"]
 
   minio:
-    image: minio/minio:latest
+    build:
+      context: scripts
+      dockerfile: minio.Dockerfile
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: aginex
@@ -42,4 +44,3 @@ services:
       - "9000:9000"
       - "9001:9001"
     profiles: ["storage"]
-

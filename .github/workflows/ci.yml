@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.12"
+  GO_VERSION: "1.25.13"
   GOTOOLCHAIN: local
   NODE_VERSION: "22.23.2"
   PNPM_VERSION: "10.33.2"
@@ -120,6 +120,8 @@ jobs:
           cache-dependency-path: |
             cli/go.sum
             server/go.sum
+      - name: Build pinned MinIO test service
+        run: docker build --file scripts/minio.Dockerfile --tag aginex-ci-minio scripts
       - name: Start pinned MinIO test service
         run: >-
           docker run --detach --rm
@@ -127,7 +129,7 @@ jobs:
           --publish 127.0.0.1:9000:9000
           --env MINIO_ROOT_USER=aginex-ci
           --env MINIO_ROOT_PASSWORD=aginex-ci-secret-key
-          minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          aginex-ci-minio
           server /data --address :9000
       - name: Wait for MinIO and create contract bucket
         run: |
@@ -138,10 +140,9 @@ jobs:
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null
-          docker run --rm --network host \
+          docker exec \
             --env MC_HOST_contract=http://aginex-ci:aginex-ci-secret-key@127.0.0.1:9000 \
-            minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727 \
-            mb --ignore-existing contract/aginex-contract
+            aginex-ci-minio mc mb --ignore-existing contract/aginex-contract
       - name: Configure isolated integration databases
         run: |
           docker exec "${{ job.services.postgres.id }}" \

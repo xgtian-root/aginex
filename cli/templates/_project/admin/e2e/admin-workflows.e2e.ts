@@ -216,6 +216,8 @@ test("administrator completes audited resource and access workflows", async ({
   await expect(
     page.getByRole("heading", { name: "Products", exact: true }),
   ).toBeVisible();
+  // Release the captcha fixture once sign-in is complete.
+  await page.unrouteAll({ behavior: "wait" });
 
   await page.getByRole("button", { name: "Create product" }).click();
   await page.getByLabel("Product name").fill(productName);

@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/xgtian-root/aginex/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/xgtian-root/aginex/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/xgtian-root/aginex/blob/main/LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="Go 1.25.12+" src="https://img.shields.io/badge/Go-1.25.12%2B-00ADD8?logo=go&logoColor=white">
+  <img alt="Go 1.25.13+" src="https://img.shields.io/badge/Go-1.25.13%2B-00ADD8?logo=go&logoColor=white">
   <img alt="Node.js 22.23.2" src="https://img.shields.io/badge/Node.js-22.23.2-5FA04E?logo=nodedotjs&logoColor=white">
 </p>
 
@@ -325,7 +325,7 @@ then start it with `aginex-cli dev` and complete browser Setup.
 
 ### Prerequisites
 
-- Go 1.25.12 or newer
+- Go 1.25.13 or newer
 - Node.js 22.23.2
 - pnpm 10.33.2
 - Docker (optional, for PostgreSQL, MySQL, or MinIO)
@@ -494,6 +494,11 @@ docker compose --profile postgres up -d
 docker compose --profile mysql up -d
 docker compose --profile storage up -d
 ```
+
+The storage profile and CI build MinIO and its `mc` client from pinned upstream
+source commits with verified archive checksums using `scripts/minio.Dockerfile`.
+The first build downloads and compiles these dependencies; subsequent builds
+reuse Docker's cache. This replaces the unavailable prebuilt community images.
 
 After starting a database, either enter its host, port, database name,
 credentials, and transport mode in browser Setup, or set both database

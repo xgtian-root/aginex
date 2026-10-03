@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM docker.io/library/golang:1.25.12-alpine3.24@sha256:56961d79ea8129efddcc0b8643fd8a5416b4e6228cfd477e3fd61deb2672c587 AS go-build
+FROM docker.io/library/golang:1.25.13-alpine3.24@sha256:1e0126852075c9c60731c8ba49088448b91f63e2aed97ca9d1a9791622a05946 AS go-build
 WORKDIR /src
 COPY server/go.mod server/go.sum ./server/
 WORKDIR /src/server
@@ -55,7 +55,7 @@ FROM go-runtime AS worker
 COPY --from=go-build --chown=65532:65532 /out/aginex-worker /app/aginex-worker
 ENTRYPOINT ["/app/aginex-worker"]
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web-build
+FROM docker.io/library/node:22.23.2-alpine3.24@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS web-build
 WORKDIR /src
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
@@ -71,8 +71,12 @@ RUN pnpm --filter @aginex/admin build \
     && test -f /src/admin/.next/standalone/admin/server.js \
     && mkdir -p /runtime/next-cache
 
-FROM docker.io/library/node:22.23.2-alpine3.24@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web
+FROM docker.io/library/node:22.23.2-alpine3.24@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS web
 WORKDIR /app
+# The standalone server runs with Node directly; package managers are build tools.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 ARG VERSION=0.1.0-dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown

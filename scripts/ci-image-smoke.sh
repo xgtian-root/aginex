@@ -159,12 +159,13 @@ require_setup_closed() {
 stop_and_require_clean_exit() {
   local container="$1"
   local label="$2"
+  local expected_exit_code="${3:-0}"
   docker stop --time 20 "$container" >/dev/null
   local exit_code
   exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$container")"
-  if [[ "$exit_code" != "0" ]]; then
+  if [[ "$exit_code" != "$expected_exit_code" ]]; then
     docker logs "$container" >&2
-    echo "$label exited with status $exit_code after SIGTERM" >&2
+    echo "$label exited with status $exit_code after SIGTERM (expected $expected_exit_code)" >&2
     return 1
   fi
 }
@@ -339,6 +340,7 @@ case "$target" in
       "$image_ref" >/dev/null
     web_address="$(docker port "$runtime_container" 3000/tcp)"
     wait_for_url "$runtime_container" "http://${web_address}/login"
-    stop_and_require_clean_exit "$runtime_container" web
+    # Next.js drains requests and closes its server before exiting with 128 + SIGTERM.
+    stop_and_require_clean_exit "$runtime_container" web 143
     ;;
 esac

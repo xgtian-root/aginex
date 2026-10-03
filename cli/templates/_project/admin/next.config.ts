@@ -5,6 +5,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 const nextConfig: NextConfig = {
+  agentRules: false,
   output: "standalone",
   outputFileTracingRoot: path.resolve(__dirname, ".."),
   reactStrictMode: true,

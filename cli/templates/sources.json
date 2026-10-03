@@ -105,6 +105,7 @@
   "playwright.config.ts",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
+  "scripts/minio.Dockerfile",
   "server/.env.example",
   "server/go.mod",
   "server/go.sum"
