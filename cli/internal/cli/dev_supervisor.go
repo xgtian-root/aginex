@@ -186,7 +186,7 @@ func runDev(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Development startup failed: %v\nSupervisor remains available for config changes.\n", err)
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), "Development supervisor is active. Use aginex config in another terminal; Ctrl+C stops all managed processes.")
+	fmt.Fprintln(cmd.OutOrStdout(), "Development supervisor is active. Use aginex-cli config in another terminal; Ctrl+C stops all managed processes.")
 	select {
 	case <-cmd.Context().Done():
 		return nil

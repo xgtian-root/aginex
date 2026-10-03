@@ -25,7 +25,7 @@ func Execute() error {
 }
 
 func newRootCommand() *cobra.Command {
-	root := &cobra.Command{Use: "aginex", Short: "Build and verify Aginex admin applications", SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "aginex-cli", Short: "Build and verify Aginex admin applications", SilenceUsage: true, SilenceErrors: true}
 	root.Version = buildinfo.String()
 	root.AddCommand(newProjectCommand(newProjectDependencies{}), doctorCommand(), checkCommand(), devCommand(), generateCommand(), skillsCommand(), configCommand())
 	return root
@@ -199,10 +199,10 @@ func checkCommand() *cobra.Command {
 					return fmt.Errorf("%s: %w", strings.Join(step, " "), err)
 				}
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "\n→ aginex skills validate")
+			fmt.Fprintln(cmd.OutOrStdout(), "\n→ aginex-cli skills validate")
 			count, err := validateSkills(filepath.Join(root, ".agents", "skills"))
 			if err != nil {
-				return fmt.Errorf("aginex skills validate: %w", err)
+				return fmt.Errorf("aginex-cli skills validate: %w", err)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Validated %d canonical Agent Skills.\n", count)
 

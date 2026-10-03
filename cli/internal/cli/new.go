@@ -167,7 +167,7 @@ func newProjectCommand(dependencies newProjectDependencies) *cobra.Command {
 			}
 
 			fmt.Fprintf(command.OutOrStdout(), "Created Aginex project %s in %s.\n", projectName, target)
-			fmt.Fprintln(command.OutOrStdout(), "Next: run `pnpm install`, then `aginex dev`.")
+			fmt.Fprintln(command.OutOrStdout(), "Next: run `pnpm install`, then `aginex-cli dev`.")
 			return nil
 		},
 	}
@@ -316,7 +316,7 @@ func requireMissingTarget(target string) error {
 	_, err := os.Lstat(target)
 	if err == nil {
 		return fmt.Errorf(
-			"target directory %q already exists; enter that directory without admin or server paths and run `aginex new` instead",
+			"target directory %q already exists; enter that directory without admin or server paths and run `aginex-cli new` instead",
 			target,
 		)
 	}
@@ -832,27 +832,27 @@ This application was created with Aginex {{.FrameworkVersion}}.
 ## Start development
 
 1. Install Web dependencies with ` + "`pnpm install`" + `.
-2. Run ` + "`aginex dev`" + ` from this directory.
+2. Run ` + "`aginex-cli dev`" + ` from this directory.
 3. Open http://localhost:3000 and complete browser Setup.
 
 The API listens on http://localhost:8080 by default. Configuration examples
 live in ` + "`server/.env.example` and `admin/.env.example`" + `; copy them to each service's
 ` + "`.env`" + ` to customize startup. Process environment overrides those files.
-Use ` + "`aginex config list`" + ` to inspect settings and ` + "`aginex config set admin PORT=3001`" + `
+Use ` + "`aginex-cli config list`" + ` to inspect settings and ` + "`aginex-cli config set admin PORT=3001`" + `
 to save and apply changes to a running development session. Database connection
 changes are tested first and require interactive confirmation before saving.
 Real environment files and credentials are ignored by Git.
 
 ## Verify and generate contracts
 
-- ` + "`aginex doctor`" + ` checks the local toolchain and project shape.
-- ` + "`aginex check`" + ` runs backend and Web verification.
-- ` + "`aginex generate client`" + ` regenerates OpenAPI from this project's
+- ` + "`aginex-cli doctor`" + ` checks the local toolchain and project shape.
+- ` + "`aginex-cli check`" + ` runs backend and Web verification.
+- ` + "`aginex-cli generate client`" + ` regenerates OpenAPI from this project's
   composition and updates the typed Web client.
 
 Development defaults to disabled durable jobs. Set
 ` + "`AGINEX_JOBS_DRIVER=postgres`" + ` when using Files with PostgreSQL;
-` + "`aginex dev`" + ` then starts and supervises the independent worker with the API and admin.
+` + "`aginex-cli dev`" + ` then starts and supervises the independent worker with the API and admin.
 A production Files deployment must run the API and worker as separate services.
 
 Application modules are selected in ` + "`server/internal/composition/definition.go`" + `.

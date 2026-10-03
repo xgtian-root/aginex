@@ -25,7 +25,7 @@ func RuntimeEnvironment() (map[string]string, error) {
 		}
 	}
 	if _, err := os.Stat(filepath.Join(root, ".cache", "aginex", "config-transaction.json")); err == nil {
-		return nil, fmt.Errorf("pending configuration transaction; run aginex config recover before startup")
+		return nil, fmt.Errorf("pending configuration transaction; run aginex-cli config recover before startup")
 	}
 	values, err := envfile.Read(envPath)
 	if err != nil {

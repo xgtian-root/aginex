@@ -117,7 +117,7 @@ MinIO SDK。
 | 工具 | 作用 | 优先级 |
 |---|---|---|
 | Agent Skills `skills-ref` | Skill 格式与 frontmatter 校验 | P0 |
-| 自研 `aginex skills validate` | 断链、版本、eval 和危险命令检查 | P0 |
+| 自研 `aginex-cli skills validate` | 断链、版本、eval 和危险命令检查 | P0 |
 | Fumadocs | 基于 Next.js 的公共文档站候选 | P1 |
 | Markdownlint | Markdown 基础质量检查 | P1 |
 

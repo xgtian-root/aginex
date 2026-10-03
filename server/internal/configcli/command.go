@@ -1,4 +1,4 @@
-// Package configcli implements the private subprocess protocol used by aginex config.
+// Package configcli implements the private subprocess protocol used by aginex-cli config.
 package configcli
 
 import (
@@ -83,7 +83,7 @@ func Execute(ctx context.Context, root string, req Request) (Response, error) {
 		return out, nil
 	}
 	if _, e := os.Stat(filepath.Join(root, ".cache", "aginex", "config-transaction.json")); e == nil {
-		return Response{}, errors.New("pending configuration transaction; run aginex config recover first")
+		return Response{}, errors.New("pending configuration transaction; run aginex-cli config recover first")
 	}
 	env, sources, files, err := readEnvironment(root, req.Target)
 	if err != nil {

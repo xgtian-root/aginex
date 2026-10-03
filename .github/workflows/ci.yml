@@ -174,7 +174,7 @@ jobs:
       - name: Verify scaffold snapshot
         run: go run ./cli/cmd/sync-templates -check
       - name: Validate Agent Skills
-        run: go run ./cli/cmd/aginex skills validate
+        run: go run ./cli/cmd/aginex-cli skills validate
       - name: Stop MinIO test service
         if: always()
         run: docker rm --force aginex-ci-minio 2>/dev/null || true

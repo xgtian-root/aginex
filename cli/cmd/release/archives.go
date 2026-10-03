@@ -28,7 +28,7 @@ func archiveName(version string, p platform) string {
 	if p.OS == "windows" {
 		ext = ".zip"
 	}
-	return fmt.Sprintf("aginex_%s_%s_%s%s", strings.TrimPrefix(version, "v"), p.OS, p.Arch, ext)
+	return fmt.Sprintf("aginex-cli_%s_%s_%s%s", strings.TrimPrefix(version, "v"), p.OS, p.Arch, ext)
 }
 
 func pack(dir, root string, m manifest, p platform, binary string) (artifact, error) {
@@ -105,7 +105,7 @@ func bundleFiles(m manifest) []string {
 		files = append(files, a.Name)
 	}
 	if m.Tag != "" && semver.Prerelease(m.Version) == "" {
-		files = append(files, "aginex.rb")
+		files = append(files, "aginex-cli.rb")
 	}
 	return files
 }
@@ -194,7 +194,7 @@ func verifyBundle(dir string) (manifest, error) {
 		}
 	}
 	if m.Tag != "" && semver.Prerelease(m.Version) == "" {
-		raw, err := os.ReadFile(filepath.Join(dir, "aginex.rb"))
+		raw, err := os.ReadFile(filepath.Join(dir, "aginex-cli.rb"))
 		if err != nil {
 			return m, err
 		}
@@ -207,7 +207,7 @@ func verifyBundle(dir string) (manifest, error) {
 
 // Never extract paths supplied by an archive; only accept three plain files.
 func archiveBinary(raw []byte, goos string) ([]byte, error) {
-	binaryName := "aginex"
+	binaryName := "aginex-cli"
 	if goos == "windows" {
 		binaryName += ".exe"
 	}
@@ -311,7 +311,7 @@ func smoke(o options) error {
 	if err != nil {
 		return err
 	}
-	dir, err := os.MkdirTemp("", "aginex-smoke-")
+	dir, err := os.MkdirTemp("", "aginex-cli-smoke-")
 	if err != nil {
 		return err
 	}
@@ -328,7 +328,7 @@ func smoke(o options) error {
 		if err != nil {
 			return err
 		}
-		name := "aginex"
+		name := "aginex-cli"
 		if a.OS == "windows" {
 			name += ".exe"
 		}

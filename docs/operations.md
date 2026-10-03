@@ -120,7 +120,7 @@ Stop the local API and worker, then inspect the exact target without changing
 anything:
 
 ```bash
-go run ./cli/cmd/aginex dev reinitialize
+go run ./cli/cmd/aginex-cli dev reinitialize
 ```
 
 The dry run prints a sanitized database target, a private backup directory, and
@@ -164,7 +164,7 @@ configuration. Responses are not cacheable and answers must never be logged.
 
 This addition updates the unpublished schema baseline without changing
 installation configuration version `1`. Existing draft installations need the
-explicit, recoverable `aginex dev reinitialize` workflow described above;
+explicit, recoverable `aginex-cli dev reinitialize` workflow described above;
 restarting the server does not rewrite their schema or reset their data.
 Browser E2E tests use a separate fixture executable under `admin/e2e/fixtures`
 that changes one challenge answer only in an explicitly configured disposable
@@ -383,7 +383,7 @@ delivery, so handlers must be idempotent. Claims use database row locking,
 heartbeated leases, retry backoff and jitter, and a terminal `dead` state.
 Production compositions with `FilesModule` must keep at least one worker
 running after the API becomes ready.
-In development, setting the same driver causes `aginex dev` to start and
+In development, setting the same driver causes `aginex-cli dev` to start and
 supervise the independent worker with API and admin. With jobs disabled the
 CLI omits the worker, and file deletion is unavailable by design.
 
@@ -429,7 +429,7 @@ the provider endpoint; private preview/download URLs are signed on the access
 origin. Some official OSS bucket domains force downloads even for signed inline
 responses (`x-oss-force-download: true`); configure a bound custom CNAME when
 browser-inline previews are required. Run
-`aginex dev reconcile-storage-presentation` after introducing or
+`aginex-cli dev reconcile-storage-presentation` after introducing or
 changing this field to align verified MIME and ETag metadata for existing ready
 OSS files; the command is audited and safe to rerun.
 

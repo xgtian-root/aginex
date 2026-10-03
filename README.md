@@ -75,7 +75,7 @@ Start every task from the repository root and follow this sequence:
    the repository completion gate:
 
    ```bash
-   go run ./cli/cmd/aginex check
+   go run ./cli/cmd/aginex-cli check
    ```
 
 6. Report the changed behavior, migrations or generated artifacts, verification
@@ -239,13 +239,13 @@ Aginex provides the boundaries those rules build on.
 
 ## Install the CLI and create an application
 
-The next planned CLI release is `v0.1.1-dev`, using the Git tag
-`cli/v0.1.1-dev`. After it is published, install that exact version with
-`go install github.com/xgtian-root/aginex/cli/cmd/aginex@v0.1.1-dev` or download
+The next planned CLI release is `v0.1.2-dev`, using the Git tag
+`cli/v0.1.2-dev`. After it is published, install that exact version with
+`go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.2-dev` or download
 its binary archive. This prerelease does not update the default Homebrew formula.
 
 Build a native executable from this checkout with `./cli/build.sh`; the output
-is `cli/dist/aginex` (`aginex.exe` on Windows). Use `./cli/build.sh --all` to
+is `cli/dist/aginex-cli` (`aginex-cli.exe` on Windows). Use `./cli/build.sh --all` to
 produce macOS, Linux, and Windows archives for amd64 and arm64, with SHA-256
 checksums. The script can be invoked from any working directory and requires
 the full source checkout and a Go toolchain compatible with `cli/go.mod`.
@@ -254,32 +254,32 @@ After the first stable CLI release and Homebrew tap setup, install a prebuilt
 executable with:
 
 ```bash
-brew install xgtian-root/tap/aginex
+brew install xgtian-root/tap/aginex-cli
 ```
 
 After an Aginex version containing this command is published, install it with Go:
 
 ```bash
-go install github.com/xgtian-root/aginex/cli/cmd/aginex@latest
-aginex --version
+go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@latest
+aginex-cli --version
 ```
 
 Pin a version by replacing `@latest` with `@vX.Y.Z`; prereleases are installed
 with their exact version, such as `@v0.2.0-rc.1`. Go downloads and compiles the
 CLI module; it does not use the GitHub Release binary archives. Both installation
-routes report the CLI version through `aginex --version`.
+routes report the CLI version through `aginex-cli --version`.
 
 See [CLI builds and releases](docs/cli-release.md) for tag-triggered publishing,
 Homebrew credentials, framework source pinning, and retry instructions.
 
 Go installs the executable into `GOBIN`, or into `$(go env GOPATH)/bin` when
 `GOBIN` is unset. Add that directory to `PATH` if your shell cannot find
-`aginex`. When developing Aginex itself, install the exact local checkout and
+`aginex-cli`. When developing Aginex itself, install the exact local checkout and
 explicitly link generated projects back to that checkout:
 
 ```bash
-go install ./cli/cmd/aginex
-aginex new testproject --aginex-path /absolute/path/to/aginex
+go install ./cli/cmd/aginex-cli
+aginex-cli new testproject --aginex-path /absolute/path/to/aginex
 ```
 
 `--aginex-path` is a development-only escape hatch. It writes an explicit local
@@ -293,13 +293,13 @@ There are two initialization modes:
 ```bash
 # Initialize the current directory (admin and server must not exist).
 mkdir my-app && cd my-app
-aginex new
+aginex-cli new
 
 # Or create a new child directory below the current directory.
-aginex new testproject
+aginex-cli new testproject
 
 # Use a publishable Go module path when the repository location is known.
-aginex new testproject --module github.com/example/testproject
+aginex-cli new testproject --module github.com/example/testproject
 ```
 
 The current directory may contain existing files, but neither an `admin` nor a
@@ -315,7 +315,7 @@ Backups from successful initialization remain for you to review and remove.
 The command writes source, `.env.example`,
 and `.aginex/project.json`, but does not create `.env`, credentials, databases,
 uploads, or install dependencies. Run `pnpm install` in the generated project,
-then start it with `aginex dev` and complete browser Setup.
+then start it with `aginex-cli dev` and complete browser Setup.
 
 ## Run the baseline locally
 
@@ -348,7 +348,7 @@ pnpm install
 ### 3. Start the API and web app
 
 ```bash
-go run ./cli/cmd/aginex dev
+go run ./cli/cmd/aginex-cli dev
 ```
 
 ### 4. Complete first-run Setup
@@ -385,20 +385,20 @@ Sign in with the administrator credentials entered in Setup.
 
 | Command | Purpose |
 |---|---|
-| `aginex new [name] [--module path] [--aginex-path path]` | Initialize the current directory without admin/server paths, backing up conflicts, or create and initialize a new named child directory; `--aginex-path` is only for an unreleased local checkout |
-| `go run ./cli/cmd/aginex dev` | Run API and web together; also supervise the worker when `AGINEX_JOBS_DRIVER=postgres` |
-| `go run ./cli/cmd/aginex dev reinitialize` | Dry-run a recoverable reset of stale local pre-release configuration/database state; execute only with the exact printed `--confirm` target |
-| `go run ./cli/cmd/aginex dev reconcile-storage-presentation` | Reconcile verified MIME metadata and ETags for existing ready OSS files; safe to rerun |
-| `go run ./cli/cmd/aginex doctor` | Check the local toolchain and project structure |
-| `go run ./cli/cmd/aginex check` | Run backend tests, Skill validation, frontend checks, tests, and build |
-| `go run ./cli/cmd/aginex check --skip-build` | Run the verification gate without the production web build |
-| `go run ./cli/cmd/aginex generate client` | Regenerate OpenAPI and the TypeScript API client |
-| `go run ./cli/cmd/aginex skills validate` | Validate all canonical Agent Skills |
+| `aginex-cli new [name] [--module path] [--aginex-path path]` | Initialize the current directory without admin/server paths, backing up conflicts, or create and initialize a new named child directory; `--aginex-path` is only for an unreleased local checkout |
+| `go run ./cli/cmd/aginex-cli dev` | Run API and web together; also supervise the worker when `AGINEX_JOBS_DRIVER=postgres` |
+| `go run ./cli/cmd/aginex-cli dev reinitialize` | Dry-run a recoverable reset of stale local pre-release configuration/database state; execute only with the exact printed `--confirm` target |
+| `go run ./cli/cmd/aginex-cli dev reconcile-storage-presentation` | Reconcile verified MIME metadata and ETags for existing ready OSS files; safe to rerun |
+| `go run ./cli/cmd/aginex-cli doctor` | Check the local toolchain and project structure |
+| `go run ./cli/cmd/aginex-cli check` | Run backend tests, Skill validation, frontend checks, tests, and build |
+| `go run ./cli/cmd/aginex-cli check --skip-build` | Run the verification gate without the production web build |
+| `go run ./cli/cmd/aginex-cli generate client` | Regenerate OpenAPI and the TypeScript API client |
+| `go run ./cli/cmd/aginex-cli skills validate` | Validate all canonical Agent Skills |
 | `go run ./server/cmd/worker` | Run the durable PostgreSQL worker |
 | `pnpm dev:admin` | Run only the Next.js development server |
 | `pnpm e2e` | Run Chromium workflows against automatically initialized API/web processes |
 
-`aginex dev` selects an available admin port starting at 3000 (or the `PORT`
+`aginex-cli dev` selects an available admin port starting at 3000 (or the `PORT`
 environment variable), passes it explicitly to Next.js on `localhost`, and prints
 the resulting browser URL. When neither `AGINEX_WEB_ORIGINS` nor
 `AGINEX_WEB_ORIGIN` is explicitly configured, it sets those values for its API
@@ -544,7 +544,7 @@ described in the [operations guide](docs/operations.md#file-upload-policy-and-pr
 
 ```text
 cli/                               Independent Go CLI module
-  cmd/aginex/                      Developer CLI entrypoint
+  cmd/aginex-cli/                   Developer CLI entrypoint
   internal/                        CLI orchestration and scaffolding
   templates/                       Embedded scaffold and source manifest
 server/                            Independent Go backend module
@@ -571,7 +571,7 @@ manifest; the root pnpm workspace and lockfile coordinate frontend tooling.
 Scaffold assets are listed explicitly in `cli/templates/sources.json`. After
 changing a canonical asset, run `go run ./cli/cmd/sync-templates`; use `-check`
 for read-only verification. The synchronizer rejects locally edited snapshots.
-`aginex new` creates `server/`, `admin/`, and a workspace containing only the
+`aginex-cli new` creates `server/`, `admin/`, and a workspace containing only the
 application backend. `--aginex-path` accepts this repository root and references
 its `server/` module. Backend template version metadata lives in
 `cli/templates/assets.go` independently of CLI build metadata. CLI releases
@@ -612,7 +612,7 @@ Before handing a change back to the requester or opening a pull request:
 2. Confirm that database, permission, audit, and API contracts remain intact.
 3. Regenerate OpenAPI and the TypeScript client when API types change.
 4. Include tests for changed behavior.
-5. Run `go run ./cli/cmd/aginex check` and disclose any check you could not run.
+5. Run `go run ./cli/cmd/aginex-cli check` and disclose any check you could not run.
 
 ## License
 
@@ -624,12 +624,12 @@ Licensed under the [Apache License 2.0](LICENSE).
 ### Inspect and change startup configuration
 
 ```sh
-aginex config list
-aginex config list --target admin --json
-aginex config get server AGINEX_DATABASE_DSN
-aginex config set server AGINEX_HTTP_ADDRESS=:8081 AGINEX_API_PUBLIC_URL=http://localhost:8081
-aginex config set admin PORT=3001
-aginex config unset admin NEXT_PUBLIC_API_URL
+aginex-cli config list
+aginex-cli config list --target admin --json
+aginex-cli config get server AGINEX_DATABASE_DSN
+aginex-cli config set server AGINEX_HTTP_ADDRESS=:8081 AGINEX_API_PUBLIC_URL=http://localhost:8081
+aginex-cli config set admin PORT=3001
+aginex-cli config unset admin NEXT_PUBLIC_API_URL
 ```
 
 All config commands accept `-C <project-directory>`. The default list shows only
@@ -653,7 +653,7 @@ migrations or data transfer happen during the test. SQLite tests require an exis
 persistent database and never create one. Environment-owned installations update
 their driver marker together with `server/.env` when switching database type.
 
-An active `aginex dev` session on Unix receives changes through a private, project-bound
+An active `aginex-cli dev` session on Unix receives changes through a private, project-bound
 local socket. It reloads settings, restarts affected API/admin/worker processes and
 waits for readiness. Explicit browser origins take precedence over automatic local
 origins. `PORT` selects the first available admin port from that value. Saved and
@@ -664,6 +664,6 @@ are not controlled; `NEXT_PUBLIC_API_URL` still requires a production rebuild.
 
 File writes preserve unrelated assignments and comments, detect concurrent edits,
 and create private, redacted audit records under `.cache/aginex/config-audit/`.
-For an interrupted multi-file write, run `aginex config recover`; recovery refuses
+For an interrupted multi-file write, run `aginex-cli config recover`; recovery refuses
 to overwrite subsequent user edits. Do not commit real dotenv, installation or
 recovery files. Existing root `.env` files are never moved or modified automatically.

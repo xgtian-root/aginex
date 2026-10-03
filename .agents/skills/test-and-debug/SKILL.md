@@ -24,7 +24,7 @@ Start with the smallest check that exercises the changed behavior. Expand when a
 | Admin UI | Relevant UI tests and `pnpm check:admin`; include `pnpm test:admin` and `pnpm build:admin` when the affected frontend/build surface requires them. |
 | Database schema | Follow `change-database-schema`: review all three dialects and run available disposable-database migration checks. |
 | Auth, storage, API contracts | Exercise the affected boundary and consumers; run the relevant integration/Playwright matrix, including browser behavior when applicable. |
-| Installation or generated projects | Relevant `aginex doctor` / `aginex check` and scaffold verification. |
+| Installation or generated projects | Relevant `aginex-cli doctor` / `aginex-cli check` and scaffold verification. |
 | Documentation/instructions only | Check semantics, links, and affected template synchronization; application suites are not a default prerequisite. |
 
 ## Constraints

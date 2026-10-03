@@ -22,7 +22,7 @@ description: Add safe Aginex image, attachment, and general file uploads through
 - Never trust filename, browser MIME, bucket, key, or claimed size without verification.
 - Never make credentials or private bucket URLs visible to the browser.
 - Aginex is pre-release. Unless compatibility is explicitly requested, update the unpublished API, configuration, migration, generated-client, and UI baseline directly instead of adding legacy branches or version shims.
-- Before an explicit release boundary, installation configuration always reads and writes the one strict version `1`, even when unpublished upload-policy fields change. Any other version and unknown fields fail closed. Do not add `current`/`legacy` migration families, adoption branches, old-client shims, or configuration version readers; keep one files migration family per database dialect. Retire stale local drafts only through the explicit recoverable `aginex dev reinitialize` workflow.
+- Before an explicit release boundary, installation configuration always reads and writes the one strict version `1`, even when unpublished upload-policy fields change. Any other version and unknown fields fail closed. Do not add `current`/`legacy` migration families, adoption branches, old-client shims, or configuration version readers; keep one files migration family per database dialect. Retire stale local drafts only through the explicit recoverable `aginex-cli dev reinitialize` workflow.
 - Keep signed URLs, provider upload IDs, ETags, and file bytes out of logs, audit metadata, idempotency persistence, and browser durable storage.
 
 ## Completion Gate

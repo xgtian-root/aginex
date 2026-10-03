@@ -118,7 +118,7 @@ func build(o options) error {
 	if _, err := command(cliDir, hostEnv(), nil, "go", "run", "./cmd/sync-templates", "-root", o.root, "-check"); err != nil {
 		return err
 	}
-	stage, err := os.MkdirTemp("", "aginex-build-")
+	stage, err := os.MkdirTemp("", "aginex-cli-build-")
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func build(o options) error {
 		targets = platforms
 	}
 	for _, p := range targets {
-		binaryName := "aginex"
+		binaryName := "aginex-cli"
 		if p.OS == "windows" {
 			binaryName += ".exe"
 		}
@@ -143,7 +143,7 @@ func build(o options) error {
 		env["GOAMD64"], env["GOARM64"], env["GOEXPERIMENT"] = "v1", "v8.0", ""
 		flags := "-s -w -X " + cliModule + "/internal/buildinfo.Version=" + m.Version + " -X " + cliModule + "/internal/buildinfo.Commit=" + m.Commit + " -X " + cliModule + "/internal/buildinfo.BuildDate=" + m.BuildDate
 		fmt.Printf("Building %s/%s %s\n", p.OS, p.Arch, m.Version)
-		if _, err := command(cliDir, env, nil, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=auto", "-ldflags", flags, "-o", binary, "./cmd/aginex"); err != nil {
+		if _, err := command(cliDir, env, nil, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=auto", "-ldflags", flags, "-o", binary, "./cmd/aginex-cli"); err != nil {
 			return err
 		}
 		if !o.all {
@@ -171,7 +171,7 @@ func build(o options) error {
 		return err
 	}
 	if m.Tag != "" && semver.Prerelease(m.Version) == "" {
-		if err = os.WriteFile(filepath.Join(stage, "aginex.rb"), formula(m), 0o644); err != nil {
+		if err = os.WriteFile(filepath.Join(stage, "aginex-cli.rb"), formula(m), 0o644); err != nil {
 			return err
 		}
 	}

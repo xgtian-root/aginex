@@ -93,7 +93,7 @@ go -C server test ./internal/worker -run TestFilesWorkerServicesAndReadOnlyMigra
 ## Release status
 
 `BackendVersion` is `v0.0.0-dev.unpublished`. Default remote generation and
-release builds reject it; `aginex new --aginex-path /absolute/path/to/aginex`
+release builds reject it; `aginex-cli new --aginex-path /absolute/path/to/aginex`
 supports local development. This replaces the old pin that lacked the admin's
 CAPTCHA protocol. No downloadable version has been invented.
 

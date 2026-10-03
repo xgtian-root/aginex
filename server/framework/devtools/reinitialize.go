@@ -113,7 +113,7 @@ func newReinitializeCommand(dependencies reinitializeDependencies) *cobra.Comman
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "Reinitialization complete.")
 			fmt.Fprintf(cmd.OutOrStdout(), "Backup: %s\n", plan.backupDirectory)
-			fmt.Fprintln(cmd.OutOrStdout(), "Run `aginex dev` and complete browser Setup with a new administrator.")
+			fmt.Fprintln(cmd.OutOrStdout(), "Run `aginex-cli dev` and complete browser Setup with a new administrator.")
 			return nil
 		},
 	}
@@ -141,7 +141,7 @@ func printReinitializePlan(command *cobra.Command, plan reinitializePlan) {
 	fmt.Fprintln(command.OutOrStdout(), "To execute this recoverable reset, run:")
 	fmt.Fprintf(
 		command.OutOrStdout(),
-		"  aginex dev reinitialize --config %s --confirm %s\n",
+		"  aginex-cli dev reinitialize --config %s --confirm %s\n",
 		strconv.Quote(plan.configPath),
 		strconv.Quote(plan.confirmation),
 	)

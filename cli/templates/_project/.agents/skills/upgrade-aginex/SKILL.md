@@ -11,7 +11,7 @@ description: Upgrade Aginex framework dependencies and conventions while preserv
 2. Read every intermediate release note and migration guide; identify breaking API, config, schema, generated, and Skill changes.
 3. Upgrade one compatibility boundary at a time: Go modules, web packages, database migrations, generated client, then project Skills.
 4. Never overwrite modified application files. Present conflicts with framework and application intent separately.
-5. Run `aginex doctor`, migrations on disposable copies, contract drift checks, backend tests, frontend checks/build, and relevant E2E.
+5. Run `aginex-cli doctor`, migrations on disposable copies, contract drift checks, backend tests, frontend checks/build, and relevant E2E.
 6. Summarize changed defaults, manual steps, rollback point, and skipped provider checks.
 
 ## Constraints

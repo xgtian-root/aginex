@@ -6,8 +6,8 @@ required. CLI release builds use Go 1.25.13 and run a vulnerability check before
 packaging. This patch release fixes standard-library findings reached by the
 development supervisor; use the same toolchain when reproducing release assets.
 
-The next planned CLI release is **`v0.1.1-dev`**, with Git tag
-**`cli/v0.1.1-dev`**. Only the CLI is in scope for publication; no separate
+The next planned CLI release is **`v0.1.2-dev`**, with Git tag
+**`cli/v0.1.2-dev`**. Only the CLI is in scope for publication; no separate
 server tag or server Release is planned. GitHub treats this CLI version as a
 prerelease. The current pipeline publishes its binary archives and verifies
 the exact Go installation version, but does not update the default Homebrew tap.
@@ -15,7 +15,7 @@ the exact Go installation version, but does not update the default Homebrew tap.
 After this version has been published:
 
 ```bash
-go install github.com/xgtian-root/aginex/cli/cmd/aginex@v0.1.1-dev
+go install github.com/xgtian-root/aginex/cli/cmd/aginex-cli@v0.1.2-dev
 ```
 
 ## Local builds
@@ -24,14 +24,14 @@ From the repository root:
 
 ```bash
 ./cli/build.sh
-./cli/dist/aginex --version
+./cli/dist/aginex-cli --version
 ./cli/build.sh --all
 ```
 
 The script resolves its own location, so an absolute path works from another
 directory, including paths containing spaces. Run it with Bash on macOS or
 Linux, or Git Bash on Windows. `--help` lists options. A native Windows build
-produces `cli/dist/aginex.exe`. No root privileges or Node toolchain are needed
+produces `cli/dist/aginex-cli.exe`. No root privileges or Node toolchain are needed
 to build or execute `--help`, `--version`, or `new`; development commands still
 require the application's toolchain.
 
@@ -40,13 +40,13 @@ executable, `LICENSE`, and `NOTICE`. Unix archives are tar.gz; Windows archives
 are zip. For example, a release includes:
 
 ```text
-cli/dist/aginex_0.1.1-dev_darwin_arm64.tar.gz
-cli/dist/aginex_0.1.1-dev_windows_amd64.zip
+cli/dist/aginex-cli_0.1.2-dev_darwin_arm64.tar.gz
+cli/dist/aginex-cli_0.1.2-dev_windows_amd64.zip
 cli/dist/SHA256SUMS
 cli/dist/release.json
 ```
 
-Stable release builds additionally include `aginex.rb`; `v0.1.1-dev` does not.
+Stable release builds additionally include `aginex-cli.rb`; `v0.1.2-dev` does not.
 
 `release.json` records the CLI version, full commit, commit timestamp, bundled
 backend version, platform names, and archive hashes. `SHA256SUMS` covers all
@@ -91,7 +91,7 @@ the primary source.
 
 3. Enable Actions on Aginex. The release job uses its job-scoped `GITHUB_TOKEN`
    for Releases; only the tap job receives the cross-repository token. The tap
-   default branch must allow this token to update `Formula/aginex.rb` through
+   default branch must allow this token to update `Formula/aginex-cli.rb` through
    the Contents API. A policy requiring pull requests will block this direct
    automatic update and must be accounted for when configuring the tap.
 
@@ -101,10 +101,10 @@ administrative operations, separate from building the CLI.
 
 ## Preparing a release
 
-The release target is CLI `v0.1.1-dev`. `BackendVersion` is currently the
+The release target is CLI `v0.1.2-dev`. `BackendVersion` is currently the
 explicit unpublished marker `v0.0.0-dev.unpublished`. It is not a downloadable
 framework version. Remote project generation and release builds fail closed;
-use `aginex new --aginex-path /absolute/path/to/aginex example-app` for local
+use `aginex-cli new --aginex-path /absolute/path/to/aginex example-app` for local
 development until the matching source and CLI have been published.
 
 The previous pin, `v0.0.0-20260910062837-f6d57f4fe47f` (source commit
@@ -136,7 +136,7 @@ version alone is not enough.
    with Go and update `BackendVersion` before committing the CLI release.
 3. Update canonical assets, run `go run ./cli/cmd/sync-templates`, then run CLI
    tests, vet, and scaffold checks; review and commit the release changes.
-4. Create `cli/v0.1.1-dev` on the clean commit, validate the release build, then
+4. Create `cli/v0.1.2-dev` on the clean commit, validate the release build, then
    push that CLI tag to start automatic publication.
 
 Release builds verify that the pinned framework can be downloaded. Unpinned
@@ -162,7 +162,7 @@ and the unpublished marker is replaced with the Go-resolved version.
 To validate and package an existing tag locally, without publishing:
 
 ```bash
-./cli/build.sh --release v0.1.1-dev
+./cli/build.sh --release v0.1.2-dev
 GOWORK=off go -C cli run ./cmd/release verify
 GOWORK=off go -C cli run ./cmd/release smoke
 ```

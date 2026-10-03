@@ -90,7 +90,7 @@ func TestArchivesAreDeterministicAndExecutable(t *testing.T) {
 	m := testManifest("v0.1.0")
 	for _, p := range platforms {
 		t.Run(p.OS+"_"+p.Arch, func(t *testing.T) {
-			name := "aginex"
+			name := "aginex-cli"
 			if p.OS == "windows" {
 				name += ".exe"
 			}
@@ -126,10 +126,10 @@ func TestArchivesAreDeterministicAndExecutable(t *testing.T) {
 }
 
 func TestArchiveRejectsUnsafeEntries(t *testing.T) {
-	for _, name := range []string{"../aginex.exe", "LICENSE", "extra"} {
+	for _, name := range []string{"../aginex-cli.exe", "LICENSE", "extra"} {
 		var b bytes.Buffer
 		w := zip.NewWriter(&b)
-		for _, entry := range []string{"aginex.exe", "LICENSE", "NOTICE", name} {
+		for _, entry := range []string{"aginex-cli.exe", "LICENSE", "NOTICE", name} {
 			h := &zip.FileHeader{Name: entry}
 			h.SetMode(0o755)
 			writer, err := w.CreateHeader(h)
@@ -197,7 +197,7 @@ func TestTapPreservesEditsAndNeverDowngrades(t *testing.T) {
 	if _, err := reconcileFormula(changed, old, next); err == nil {
 		t.Fatal("manual edit overwritten")
 	}
-	if _, err := reconcileFormula([]byte("class Aginex < Formula\nend\n"), old, next); err == nil {
+	if _, err := reconcileFormula([]byte("class AginexCli < Formula\nend\n"), old, next); err == nil {
 		t.Fatal("unmanaged formula overwritten")
 	}
 	if !bytes.Contains(formula(next), []byte("cli%2Fv0.2.0")) {
@@ -213,7 +213,7 @@ func TestFormulaRubySyntax(t *testing.T) {
 	if err != nil {
 		t.Skip("Ruby is unavailable; CI also validates with Homebrew")
 	}
-	path := filepath.Join(t.TempDir(), "aginex.rb")
+	path := filepath.Join(t.TempDir(), "aginex-cli.rb")
 	writeTestFile(t, path, formula(testManifest("v0.1.0")))
 	if _, err = command("", nil, nil, ruby, "-c", path); err != nil {
 		t.Fatal(err)

@@ -90,10 +90,10 @@ func TestStandaloneGoInstall(t *testing.T) {
 	env["GOSUMDB"] = "off"
 	env["GONOPROXY"] = "none"
 	env["GOFLAGS"] = "-modcacherw"
-	if _, err = command(temp, env, nil, "go", "install", cliModule+"/cmd/aginex@"+version); err != nil {
+	if _, err = command(temp, env, nil, "go", "install", cliModule+"/cmd/aginex-cli@"+version); err != nil {
 		t.Fatal(err)
 	}
-	name := "aginex"
+	name := "aginex-cli"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}

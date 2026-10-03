@@ -30,7 +30,7 @@ func commit(root string, c candidate) error {
 		action := func() error {
 			journalPath := filepath.Join(directory, "config-transaction.json")
 			if _, err := os.Stat(journalPath); err == nil {
-				return errors.New("pending configuration transaction; run aginex config recover first")
+				return errors.New("pending configuration transaction; run aginex-cli config recover first")
 			}
 			for _, before := range c.before {
 				now, err := readSnapshot(before.Path)

@@ -65,7 +65,7 @@ binary, installation draft, generated client, or module-migration family can be
 mixed with this baseline. Until publication, the installation loader and writer
 use one strict current document whose `version` is always `1`; unpublished field
 changes replace that baseline without increasing the number. Unknown fields and
-every other version fail closed. Use `aginex dev reinitialize` to archive stale
+every other version fail closed. Use `aginex-cli dev reinitialize` to archive stale
 local state rather than adding normalization or compatibility branches.
 
 The core's reserved historical product/file steps remain no-ops; business
@@ -94,7 +94,7 @@ either bundled history; the checked-in starter definition requires both.
 In production, registering `FilesModule` also requires
 `AGINEX_JOBS_DRIVER=postgres` so file deletion and orphan recovery remain
 durable. A definition without the files module may keep jobs disabled.
-For local development, `aginex dev` automatically supervises the independent
+For local development, `aginex-cli dev` automatically supervises the independent
 worker whenever that PostgreSQL jobs driver is configured.
 
 Saving a storage profile or file-upload policy changes only the pending
@@ -103,7 +103,7 @@ sessions retain their creation-time provider, size, and multipart parameters;
 do not cancel them merely to apply a new default.
 Alibaba OSS profiles must also provide the browser-visible HTTPS
 `accessBaseUrl`. After upgrading an existing OSS profile, run
-`aginex dev reconcile-storage-presentation` once before validating direct
+`aginex-cli dev reconcile-storage-presentation` once before validating direct
 provider previews.
 
 ## Removed behavior

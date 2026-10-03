@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing CLI tag, for example cli/v0.1.1-dev"
+        description: "Existing CLI tag, for example cli/v0.1.2-dev"
         required: true
         type: string
       tap_only:
@@ -168,10 +168,10 @@ jobs:
           fi
           brew tap-new aginex-ci/release
           formula_dir="$(brew --repository aginex-ci/release)/Formula"
-          gh release download "$RELEASE_TAG" --repo xgtian-root/aginex --pattern aginex.rb --dir "$formula_dir"
-          trap 'brew uninstall --force aginex-ci/release/aginex; brew untap aginex-ci/release' EXIT
-          brew install aginex-ci/release/aginex
-          brew test aginex-ci/release/aginex
+          gh release download "$RELEASE_TAG" --repo xgtian-root/aginex --pattern aginex-cli.rb --dir "$formula_dir"
+          trap 'brew uninstall --force aginex-ci/release/aginex-cli; brew untap aginex-ci/release' EXIT
+          brew install aginex-ci/release/aginex-cli
+          brew test aginex-ci/release/aginex-cli
 
   tap:
     needs: brew

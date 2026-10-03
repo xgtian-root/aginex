@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const DevelopmentVersion = "0.1.1-dev"
+const DevelopmentVersion = "0.1.2-dev"
 
 var (
 	Version   = ""

@@ -161,7 +161,7 @@ fail the write and investigate instead of bypassing protection.
 This is an unpublished Files baseline change for SQLite, PostgreSQL, and
 MySQL. API initialization applies migrations; workers only verify them. The
 installation configuration remains strict version 1. Stale local draft schemas
-use the explicit recoverable `aginex dev reinitialize` workflow; runtime code
+use the explicit recoverable `aginex-cli dev reinitialize` workflow; runtime code
 does not adopt or repair them silently.
 
 Local source verification and published dependency verification are distinct.

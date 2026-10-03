@@ -17,7 +17,7 @@ Build the smallest complete vertical slice. Follow `products` as the reference i
 6. Audit every successful write with actor, action, resource ID, summary, IP, and request ID.
 7. Add the permission-aware Next.js list and form experience. Include loading, error, empty, keyboard-focus, narrow-screen, and destructive states.
 8. Add a backend integration test that signs in and exercises the resource. Add frontend tests when behavior is not covered by types.
-9. Run `aginex check` or the commands in the completion gate.
+9. Run `aginex-cli check` or the commands in the completion gate.
 
 ## Constraints
 

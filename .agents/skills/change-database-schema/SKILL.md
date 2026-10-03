@@ -17,7 +17,7 @@ description: Evolve an Aginex database schema safely across SQLite, PostgreSQL, 
 
 - Never use GORM `AutoMigrate` or edit an already released migration.
 - Preserve the strict configuration version and pre-release contract in `AGENTS.md`.
-- Stale local drafts use the explicit recoverable `aginex dev reinitialize` workflow; do not reset data or invoke it just to make a test pass.
+- Stale local drafts use the explicit recoverable `aginex-cli dev reinitialize` workflow; do not reset data or invoke it just to make a test pass.
 - Destructive or narrowing changes to existing user data require an explicit data-preservation or approved loss plan.
 
 ## Completion Gate

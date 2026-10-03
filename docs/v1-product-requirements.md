@@ -57,18 +57,18 @@ Aginex 不以“后台中内置 AI 聊天框”为 v1 卖点。其核心价值�
 
 ### 4.1 项目初始化与 CLI
 
-提供单一 `aginex` 命令：
+提供单一 `aginex-cli` 命令：
 
-- `aginex new`：在当前目录生成可运行的 Go/Next.js 项目；允许非空目录，但 `admin`、`server` 任一同名路径存在时拒绝。共有目录递归合并，无关内容保留，冲突项先备份到唯一的 `.aginex-backup-<时间戳>-<随机后缀>/` 再替换，并输出备份位置及冲突项；失败时回滚，保留并发修改及必要的恢复备份。
-- `aginex new <project>`：在当前目录新建 `<project>` 子目录并初始化；
+- `aginex-cli new`：在当前目录生成可运行的 Go/Next.js 项目；允许非空目录，但 `admin`、`server` 任一同名路径存在时拒绝。共有目录递归合并，无关内容保留，冲突项先备份到唯一的 `.aginex-backup-<时间戳>-<随机后缀>/` 再替换，并输出备份位置及冲突项；失败时回滚，保留并发修改及必要的恢复备份。
+- `aginex-cli new <project>`：在当前目录新建 `<project>` 子目录并初始化；
   `--module` 可独立指定可发布的 Go module path。同名目标已存在时拒绝初始化；
   未发布的源码构建可显式使用 `--aginex-path` 写入本地开发 `replace`，否则失败关闭。
-- `aginex dev`：跨平台启动 API、Web 和选定的本地基础设施。
-- `aginex doctor`：检查工具链、配置、数据库、迁移和生成文件。
-- `aginex generate resource`：生成标准资源的迁移、后端、权限、前端和测试骨架。
-- `aginex generate client`：从 OpenAPI 生成 TypeScript 客户端。
-- `aginex check`：执行格式、静态检查、测试、迁移和契约检查。
-- `aginex skills validate|install`：校验并安装 Agent Skills 兼容入口。
+- `aginex-cli dev`：跨平台启动 API、Web 和选定的本地基础设施。
+- `aginex-cli doctor`：检查工具链、配置、数据库、迁移和生成文件。
+- `aginex-cli generate resource`：生成标准资源的迁移、后端、权限、前端和测试骨架。
+- `aginex-cli generate client`：从 OpenAPI 生成 TypeScript 客户端。
+- `aginex-cli check`：执行格式、静态检查、测试、迁移和契约检查。
+- `aginex-cli skills validate|install`：校验并安装 Agent Skills 兼容入口。
 
 CLI 发布 Linux、macOS、Windows 的 amd64/arm64 二进制。
 
@@ -191,7 +191,7 @@ Aginex 在 v1 发布前仍只维护一个当前 API 与数据库契约：文件�
 PostgreSQL 和 MySQL 中各使用唯一的当前 migration baseline。正式发布边界明确前，
 installation 配置的版本号固定为 `1`：未发布字段可以直接演进，但 reader/writer
 只接受严格的当前 v1 文档，任何其他版本与未知字段均 fail closed。旧本地草稿只可
-通过显式、可恢复的 `aginex dev reinitialize` 流程退役，不增加配置 reader、旧文件
+通过显式、可恢复的 `aginex-cli dev reinitialize` 流程退役，不增加配置 reader、旧文件
 migration 家族或旧生成客户端兼容分支。
 
 ## 6. Agent Skills
@@ -237,7 +237,7 @@ Agent eval 在临时项目中执行新增 CRUD、自定义动作、修改字段�
 
 ### M2：Agent 开发闭环
 
-完成资源生成器、客户端生成、核心 Skills、`aginex check` 和首版 eval。
+完成资源生成器、客户端生成、核心 Skills、`aginex-cli check` 和首版 eval。
 
 ### M3：生产能力
 
